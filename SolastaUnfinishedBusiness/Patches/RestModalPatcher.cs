@@ -10,14 +10,12 @@ namespace SolastaUnfinishedBusiness.Patches;
 [UsedImplicitly]
 public static class RestModalPatcher
 {
-    // a rest the game allows waits for every other player's approval first; a campfire set to rest at once
-    // (skipRestCheck) asks whatever the rest rules say, as the campfire itself skips them
-    private static bool MustWaitForApproval(RestType restType, Action proceed, bool skipRestCheck = false)
+    // a rest the game allows waits for every other player's approval first
+    private static bool MustWaitForApproval(RestType restType, Action proceed)
     {
         var failure = string.Empty;
 
-        if (!skipRestCheck &&
-            ServiceRepository.GetService<IGameRestingService>()?.CanExecuteLocationRest(restType, ref failure, true) !=
+        if (ServiceRepository.GetService<IGameRestingService>()?.CanExecuteLocationRest(restType, ref failure, true) !=
             true)
         {
             return false;
@@ -62,13 +60,11 @@ public static class RestModalPatcher
         {
             GameRestingManagerPatcher.InRestScreen = true;
 
-            // a campfire set to rest at once pressing Start itself, or running it again once approved: no rest checks
-            // and no wait, as the campfire skips them, but the approval still applies
+            // a campfire set to rest at once pressing Start itself: the game's own Start, with no rest checks, no wait
+            // and no approval (user direction, 2026-11-02), as the story puts the party to rest there
             if (CampfireRestContext.IsForcedStart)
             {
-                return CampfireRestContext.IsReplayingStart ||
-                       !MustWaitForApproval(RestType.LongRest, () => CampfireRestContext.ReplayStart(__instance),
-                           true);
+                return true;
             }
 
             // the campfire's walk is over and the rest checks passed (CampfireRestContext): the game's own Start

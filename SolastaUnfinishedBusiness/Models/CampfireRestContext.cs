@@ -13,7 +13,8 @@ namespace SolastaUnfinishedBusiness.Models;
 //    setting that already lets every player start rests from the rest screen (MultiplayerAllowPlayersToStartRests).
 // 2. When the party is too spread out to rest (the game's rule: every two living party members within 10 cells), the
 //    characters further away walk to the campfire first, and the approval says so (setting GatherPartyForCampfireRest).
-// 3. A campfire set to rest at once asks for approval in multiplayer too, whatever else holds (see below).
+// 3. A campfire set to rest at once starts its rest without the multiplayer approval, as in the game (user direction,
+//    2026-11-02; it asked for one in 9b341d45).
 //
 // How the game runs a campfire: the functor runs on every computer (gadget functors are part of the lockstep), but
 // only the computer whose player controls the character that used the campfire opens the rest screen
@@ -46,7 +47,7 @@ internal static class CampfireRestContext
     // set while the rest checks run without the campfire's spread-out allowance (to find out whether a walk is needed)
     private static bool SuppressSpreadOutAllowance { get; set; }
 
-    // set while the game's Start Long Rest runs again after the walk, or after the approval of a rest-at-once campfire
+    // set while the game's Start Long Rest runs again after the walk
     internal static bool IsReplayingStart { get; private set; }
 
     // the walk under way on this computer
@@ -54,9 +55,9 @@ internal static class CampfireRestContext
 
     private static Gather _gather;
 
-    // a campfire set to rest at once pressing Start itself, or that Start running again after its approval: no rest
-    // checks and no "wait until the party can rest" (the campfire skipped them), but still an approval
-    internal static bool IsForcedStart => _campfire is { Forced: true } && (InFunctor || IsReplayingStart);
+    // a campfire set to rest at once pressing Start itself: no rest checks, no "wait until the party can rest" (the
+    // campfire skipped them) and no approval
+    internal static bool IsForcedStart => _campfire is { Forced: true } && InFunctor;
 
     // FunctorStartLongRest.Execute: runs each step of the functor with the campfire known
     internal static IEnumerator WrapFunctor(IEnumerator functor, FunctorParametersDescription parameters)
