@@ -4,16 +4,22 @@ using System.Linq;
 using ExitGames.Client.Photon;
 using Photon.Pun;
 using Photon.Realtime;
-using SolastaUnfinishedBusiness.CustomUI;
 using static RuleDefinitions;
 
 namespace SolastaUnfinishedBusiness.Models;
 
 // Multiplayer approval of actions that pass in-game time (rests, learning or scribing spells, Mark Deity, rituals and
 // spells or powers that take a minute or more). The action waits on the computer that asked for it until every other
-// player approves, then goes through the lockstep as usual. Nobody is asked while a character is in combat or in a
-// cutscene: the asking player is told which character is busy instead. Requests use Photon event code 172. The screens
-// are the game's own travel vote screens (MultiplayerApprovalVote), with message boxes only if those aren't available.
+// player approves, then goes through the lockstep as usual.
+//
+// The approval is the game's own fast travel vote, with only its texts changed (user direction, 2026-11-01): the
+// asking computer calls MultiplayerVoteModal.ShowVote with an encoded parameter (EncodeVoteParameter) and the action
+// as the function to run when the vote passes; the game sends the request, counts the answers and reports the outcome.
+// MultiplayerVoteContext makes that vote work whoever asks, and shows it to every player; this class supplies the
+// approval's texts (DescribeVoteParameter, ShowRequest) and the parts the game's vote doesn't have:
+// - nobody is asked while a character is in combat or in a cutscene: the asking player is told which character is
+//   busy instead (before asking, and when another computer is busy as the request arrives, through Photon event 172);
+// - a fight or cutscene starting while the vote runs cancels it.
 internal static class MultiplayerApprovalContext
 {
     internal enum ApprovalAction : byte
@@ -29,31 +35,29 @@ internal static class MultiplayerApprovalContext
         WaitAndLongRest = 9
     }
 
+    // the busy reply's reasons; the values are those the earlier request/reply messages used
     private enum Answer : byte
     {
-        Approved = 0,
-        Declined = 1,
+        None = 0,
         InCombat = 2,
         InCutscene = 3
     }
 
     private const byte EventCode = 172;
-    private const byte RequestKind = 1;
-    private const byte ReplyKind = 2;
-    private const byte CancelKind = 3;
-    // everyone approved: closes the request screen of players who accepted and are waiting for the others
-    private const byte DoneKind = 4;
+    // a computer that was asked can't take part (a fight or a cutscene): [BusyKind, (byte)Answer, character names]
+    private const byte BusyKind = 2;
+    // marks a vote parameter as an approval (a travel vote's parameter is the destination's name); the parts are
+    // separated by PartSeparator: marker, action, character name, subject definition name, seconds
+    private const string ApprovalMarker = "\u0001FinishingBusinessApproval";
+    private const char PartSeparator = '\u0002';
     // GameCampActivityMarkDeity's duration
     internal const int MarkDeitySeconds = 600;
     // actions up to this long can skip approval (rituals, 1 and 10 minute castings, Mark Deity)
     private const int ShortActionSeconds = 600;
 
     private static bool _eventHandlerRegistered;
-    private static int _nextRequestId;
+    // the approval this computer asked for, while its vote runs
     private static PendingRequest _pending;
-    private static ShownRequest _shown;
-    // a request this player accepted, still on screen until the asking player reports the outcome
-    private static ShownRequest _accepted;
 
     // set while an approved action runs again, so the patches let it through
     internal static bool IsRunningApprovedAction { get; private set; }
@@ -61,11 +65,11 @@ internal static class MultiplayerApprovalContext
     private static bool IsOnlineRoom =>
         Global.IsMultiplayer && PhotonNetwork.InRoom && !PhotonNetwork.OfflineMode;
 
+    // leaving or joining a room: forgets the approval and the vote, closing their screens
     internal static void Reset()
     {
         _pending = null;
-        _shown = null;
-        _accepted = null;
+        MultiplayerVoteContext.Reset();
     }
 
     #region Asking
@@ -86,12 +90,9 @@ internal static class MultiplayerApprovalContext
 
         RegisterEventHandler();
 
-        var description = DescribeAction(action, characterName, subject?.Name ?? string.Empty);
-
-        if (_pending != null)
+        if (_pending != null || MultiplayerVoteContext.IsVoteRunning)
         {
-            Gui.GuiService.ShowAlert(Gui.Localize("Message/&MultiplayerApprovalAlreadyWaiting"), Gui.ColorFailure,
-                5f);
+            Gui.GuiService.ShowAlert(Gui.Localize("Message/&MultiplayerVoteAlreadyRunning"), Gui.ColorFailure, 5f);
 
             return true;
         }
@@ -105,152 +106,41 @@ internal static class MultiplayerApprovalContext
             return true;
         }
 
-        _pending = new PendingRequest
+        var screen = Gui.GuiService.GetScreen<MultiplayerFastTravelVoteModal>();
+
+        // the game checks this when the request arrives on each computer (NetworkingManager.RequestVoteAsync, "nothing
+        // running that blocks saving") and would tell the asking player that fast travel isn't possible; checked here
+        // first so an approval doesn't get the travel message
+        if (!screen || screen.Visible ||
+            ServiceRepository.GetService<IFastTravelService>() is not { CanFastTravel: true })
         {
-            Id = ++_nextRequestId,
-            Description = description,
-            Seconds = seconds,
-            Proceed = proceed,
-            Waiting = PhotonNetwork.PlayerListOthers.Select(x => x.ActorNumber).ToHashSet()
-        };
+            Gui.GuiService.ShowAlert(Gui.Localize("Failure/&FailureGenericTryAgain"), Gui.ColorFailure, 5f);
 
-        PhotonNetwork.RaiseEvent(EventCode,
-            new object[]
-            {
-                RequestKind, _pending.Id, (byte)action, characterName ?? string.Empty, subject?.Name ?? string.Empty,
-                seconds
-            },
-            new RaiseEventOptions { Receivers = ReceiverGroup.Others }, SendOptions.SendReliable);
+            return true;
+        }
 
-        ShowWaiting();
+        var pending = new PendingRequest { Proceed = proceed };
+
+        _pending = pending;
+        // the game's vote: sends the request to everyone (MultiplayerVoteContext swaps in the approval's texts), counts
+        // the answers on this computer and runs one of the two functions
+        screen.ShowVote(NetworkingDefinitions.MultiplayerVoteType.MapWaypointNavigate,
+            EncodeVoteParameter(action, characterName, subject?.Name ?? string.Empty, seconds),
+            () => OnVotePassed(pending),
+            () => OnVoteCanceled(pending));
 
         return true;
     }
 
-    // the game's vote screen, listing every player with their vote; a message box naming who is awaited if that screen
-    // isn't available (it is shown again after each approval to update the names)
-    private static void ShowWaiting()
+    // everyone approved (the game shows its own "everyone accepted" alert): the action runs
+    private static void OnVotePassed(PendingRequest pending)
     {
-        var requestId = _pending.Id;
-
-        if (!_pending.ShowingWaiting &&
-            MultiplayerApprovalVote.ShowWaiting(_pending.Description, FormatDuration(_pending.Seconds),
-                () => CancelPending(requestId)))
-        {
-            _pending.ShowingWaiting = true;
-            _pending.ShowingVote = true;
-
-            return;
-        }
-
-        if (_pending.ShowingVote)
+        if (_pending != pending)
         {
             return;
         }
-
-        var waiting = string.Join(", ", _pending.Waiting
-            .Select(x => PhotonNetwork.CurrentRoom?.GetPlayer(x)?.NickName ?? "?"));
-
-        _pending.ShowingWaiting = true;
-        Gui.GuiService.ShowMessage(MessageModal.Severity.Informative1, "Message/&MultiplayerApprovalWaitingTitle",
-            Gui.Format("Message/&MultiplayerApprovalWaitingDescription", _pending.Description,
-                FormatDuration(_pending.Seconds), waiting),
-            "Message/&MultiplayerApprovalCancelRequest", string.Empty,
-            () => CancelPending(requestId), null);
-    }
-
-    private static void CancelPending(int requestId)
-    {
-        if (_pending == null || _pending.Id != requestId)
-        {
-            return;
-        }
-
-        PhotonNetwork.RaiseEvent(EventCode, new object[] { CancelKind, requestId },
-            new RaiseEventOptions { Receivers = ReceiverGroup.Others }, SendOptions.SendReliable);
-        _pending = null;
-    }
-
-    // ends the request: hides the waiting screen without running its cancel button
-    private static void FinishPending()
-    {
-        var pending = _pending;
 
         _pending = null;
-        HidePendingScreen(pending);
-    }
-
-    private static void HidePendingScreen(PendingRequest pending)
-    {
-        if (pending is { ShowingVote: true })
-        {
-            MultiplayerApprovalVote.HideWaiting();
-        }
-        else if (pending is { ShowingWaiting: true })
-        {
-            HideMessage();
-        }
-    }
-
-    private static void OnReply(int requestId, Player sender, Answer answer, string names)
-    {
-        if (_pending == null || _pending.Id != requestId || sender == null ||
-            !_pending.Waiting.Contains(sender.ActorNumber))
-        {
-            return;
-        }
-
-        var pending = _pending;
-        var description = pending.Description;
-
-        switch (answer)
-        {
-            case Answer.Approved:
-                pending.Waiting.Remove(sender.ActorNumber);
-                MultiplayerApprovalVote.MarkApproved(sender.ActorNumber);
-                CompleteIfEveryoneApproved();
-                break;
-            case Answer.Declined:
-                CancelPending(requestId);
-                HidePendingScreen(pending);
-                Gui.GuiService.ShowAlert(
-                    Gui.Format("Message/&MultiplayerApprovalDeclined", sender.NickName, description),
-                    Gui.ColorFailure, 8f);
-                break;
-            case Answer.InCombat:
-            case Answer.InCutscene:
-                CancelPending(requestId);
-                HidePendingScreen(pending);
-                ShowBusy(Gui.Format(answer == Answer.InCombat
-                    ? "Message/&MultiplayerApprovalInCombat"
-                    : "Message/&MultiplayerApprovalInCutscene", names));
-                break;
-        }
-    }
-
-    private static void CompleteIfEveryoneApproved()
-    {
-        if (_pending == null)
-        {
-            return;
-        }
-
-        // the waiting popup lists who is left
-        if (_pending.Waiting.Count > 0)
-        {
-            ShowWaiting();
-
-            return;
-        }
-
-        var pending = _pending;
-
-        FinishPending();
-        PhotonNetwork.RaiseEvent(EventCode, new object[] { DoneKind, pending.Id },
-            new RaiseEventOptions { Receivers = ReceiverGroup.Others }, SendOptions.SendReliable);
-        Gui.GuiService.ShowAlert(Gui.Format("Message/&MultiplayerApprovalApproved", pending.Description),
-            Gui.ColorBrightBlue, 5f);
-
         IsRunningApprovedAction = true;
 
         try
@@ -263,52 +153,73 @@ internal static class MultiplayerApprovalContext
         }
     }
 
-    // called every network frame: forgets players who left, and stops if a fight or cutscene starts meanwhile
+    // refused, cancelled, or the game closed the vote: the action doesn't run. The game already said who refused;
+    // a refusal for being busy also says which character is busy.
+    private static void OnVoteCanceled(PendingRequest pending)
+    {
+        if (_pending != pending)
+        {
+            return;
+        }
+
+        _pending = null;
+
+        if (pending.BusyReason != null)
+        {
+            ShowBusy(pending.BusyReason);
+        }
+    }
+
+    // another computer can't take part right now: that counts as its refusal, with the reason shown afterwards
+    private static void OnBusyReply(Player sender, Answer answer, string names)
+    {
+        var screen = Gui.GuiService.GetScreen<MultiplayerFastTravelVoteModal>();
+
+        if (_pending == null || sender == null || !screen || !screen.Visible || screen.Hiding)
+        {
+            return;
+        }
+
+        _pending.BusyReason = Gui.Format(answer == Answer.InCombat
+            ? "Message/&MultiplayerApprovalInCombat"
+            : "Message/&MultiplayerApprovalInCutscene", names);
+        // the game's refusal: tells everyone who refused, closes the screens and cancels the vote
+        screen.PlayerVoteReceived(sender.ActorNumber, false);
+    }
+
+    // called every network frame: a fight or cutscene starting while the vote runs ends it
     internal static void Update()
     {
+        MultiplayerVoteContext.Update();
+
+        if (!IsOnlineRoom)
+        {
+            return;
+        }
+
         if (_pending != null)
         {
-            if (!IsOnlineRoom)
-            {
-                _pending = null;
-
-                return;
-            }
-
             var busy = DescribeLocalBusy(out _);
+            var screen = Gui.GuiService.GetScreen<MultiplayerFastTravelVoteModal>();
 
-            if (busy != null)
+            if (busy != null && screen && screen.Visible && !screen.Hiding)
             {
-                var pending = _pending;
-
-                CancelPending(pending.Id);
-                HidePendingScreen(pending);
-                ShowBusy(busy);
-
-                return;
+                _pending.BusyReason = busy;
+                // the vote screen's own Cancel: tells the others, closes it and cancels the approval
+                screen.OnCancelVoteCb();
             }
 
-            var inRoom = PhotonNetwork.PlayerListOthers.Select(x => x.ActorNumber).ToHashSet();
-
-            if (_pending.Waiting.RemoveWhere(x => !inRoom.Contains(x)) > 0)
-            {
-                CompleteIfEveryoneApproved();
-            }
+            return;
         }
 
-        // a request on screen is withdrawn here too if this computer gets busy
-        if (_shown != null && DescribeLocalBusy(out var answer) != null)
+        // a request on screen here, not answered yet, is refused with the reason if this computer gets busy
+        if (MultiplayerVoteContext.IsAwaitingLocalAnswer &&
+            DescribeVoteParameter(MultiplayerVoteContext.RequestParameter) != null &&
+            DescribeLocalBusy(out var answer) != null)
         {
-            Reply(_shown, answer);
-            HideRequestScreen(_shown);
-            _shown = null;
-        }
-
-        // an accepted request waiting for the others closes if the asking player leaves
-        if (_accepted != null && PhotonNetwork.CurrentRoom?.GetPlayer(_accepted.SenderActor) == null)
-        {
-            HideRequestScreen(_accepted);
-            _accepted = null;
+            ReplyBusy(MultiplayerVoteContext.RequestAskerId, answer);
+            HideAnswerModal();
+            MultiplayerVoteContext.Forget();
         }
     }
 
@@ -323,140 +234,99 @@ internal static class MultiplayerApprovalContext
 
     #region Answering
 
-    private static void OnRequest(object[] data, Player sender)
+    // LocalCommandManager.RequestVote for an approval (true; false for a travel vote, which the game shows as usual):
+    // the game's request window with the approval's texts and the game's own Accept and Refuse, or the busy reply
+    internal static bool ShowRequest(LocalCommandManager commandManager, string caller, string parameter, int askerId)
     {
-        if (sender == null || data.Length < 6)
+        if (!TryDecodeVoteParameter(parameter, out var action, out var characterName, out var subjectName,
+                out var seconds))
         {
-            return;
+            return false;
         }
 
-        var request = new ShownRequest { Id = (int)data[1], SenderActor = sender.ActorNumber };
-        var description = DescribeAction((ApprovalAction)(byte)data[2], (string)data[3], (string)data[4]);
-        var seconds = (int)data[5];
+        RegisterEventHandler();
 
-        // only one request is shown at a time; an older one still on screen is declined
-        if (_shown != null)
+        if (DescribeLocalBusy(out var answer) != null)
         {
-            Reply(_shown, Answer.Declined);
-            HideRequestScreen(_shown);
-            _shown = null;
+            ReplyBusy(askerId, answer);
+            MultiplayerVoteContext.Forget();
+
+            return true;
         }
-
-        if (_accepted != null)
-        {
-            HideRequestScreen(_accepted);
-            _accepted = null;
-        }
-
-        if (DescribeLocalBusy(out var busy) != null)
-        {
-            Reply(request, busy);
-
-            return;
-        }
-
-        _shown = request;
 
         var title = Gui.Localize("Message/&MultiplayerApprovalRequestTitle");
-        var text = Gui.Format("Message/&MultiplayerApprovalRequestDescription", sender.NickName, description,
-            FormatDuration(seconds));
+        var text = Gui.Format("Message/&MultiplayerApprovalRequestDescription", caller,
+            DescribeAction(action, characterName, subjectName), FormatDuration(seconds));
 
-        // the game's travel vote request screen (Accept, Refuse, and its timer that refuses when it runs out)
-        if (MultiplayerApprovalVote.ShowRequest(title, text,
-                () => Answered(request, Answer.Approved),
-                () => Answered(request, Answer.Declined)))
-        {
-            request.ShownAsVote = true;
+        // as the game's LocalCommandManager.RequestVote does for travel, with these texts
+        Gui.GuiService.ShowMultiplayerAnswer(title, text, commandManager.VoteAccepted, commandManager.VoteRejected,
+            true);
 
-            return;
-        }
-
-        Gui.GuiService.ShowMessage(MessageModal.Severity.Attention2, title, text,
-            "Message/&MultiplayerApprovalApprove", "Message/&MultiplayerApprovalDecline",
-            () => Answered(request, Answer.Approved),
-            () => Answered(request, Answer.Declined));
+        return true;
     }
 
-    private static void Answered(ShownRequest request, Answer answer)
+    private static void ReplyBusy(int askerId, Answer answer)
     {
-        if (_shown != request)
-        {
-            return;
-        }
+        PhotonNetwork.RaiseEvent(EventCode,
+            new object[] { BusyKind, (byte)answer, DescribeLocalBusyNames(answer) },
+            new RaiseEventOptions { TargetActors = [askerId] }, SendOptions.SendReliable);
+    }
 
-        _shown = null;
-        Reply(request, answer);
+    private static void HideAnswerModal()
+    {
+        var answerModal = Gui.GuiService.GetScreen<MultiplayerAnswerModal>();
 
-        // after Accept the vote screen stays up, showing that the other players are awaited, until the outcome
-        if (answer == Answer.Approved && request.ShownAsVote)
+        if (answerModal && answerModal.Visible && !answerModal.Hiding)
         {
-            _accepted = request;
+            answerModal.Hide();
         }
     }
 
-    private static void HideRequestScreen(ShownRequest request)
+    #endregion
+
+    #region Vote parameter
+
+    private static string EncodeVoteParameter(ApprovalAction action, string characterName, string subjectName,
+        int seconds)
     {
-        if (request.ShownAsVote)
-        {
-            MultiplayerApprovalVote.HideRequest();
-        }
-        else
-        {
-            HideMessage();
-        }
+        return string.Join(PartSeparator.ToString(), ApprovalMarker, ((byte)action).ToString(),
+            characterName ?? string.Empty, subjectName ?? string.Empty, seconds.ToString());
     }
 
-    private static void Reply(ShownRequest request, Answer answer)
+    private static bool TryDecodeVoteParameter(string parameter, out ApprovalAction action, out string characterName,
+        out string subjectName, out int seconds)
     {
-        var names = answer is Answer.InCombat or Answer.InCutscene ? DescribeLocalBusyNames(answer) : string.Empty;
+        action = default;
+        characterName = subjectName = string.Empty;
+        seconds = 0;
 
-        PhotonNetwork.RaiseEvent(EventCode, new object[] { ReplyKind, request.Id, (byte)answer, names },
-            new RaiseEventOptions { TargetActors = [request.SenderActor] }, SendOptions.SendReliable);
+        if (parameter == null || !parameter.StartsWith(ApprovalMarker + PartSeparator))
+        {
+            return false;
+        }
+
+        var parts = parameter.Split(PartSeparator);
+
+        if (parts.Length != 5 || !byte.TryParse(parts[1], out var actionValue) ||
+            !int.TryParse(parts[4], out seconds))
+        {
+            return false;
+        }
+
+        action = (ApprovalAction)actionValue;
+        characterName = parts[2];
+        subjectName = parts[3];
+
+        return true;
     }
 
-    // the asking player withdrew the request (or someone declined it): it closes whether or not it was answered here
-    private static void OnCancel(int requestId, Player sender)
+    // the approval's action with its in-game time, as the vote screen shows it, or null for a travel vote
+    internal static string DescribeVoteParameter(string parameter)
     {
-        var request = Matching(_shown, requestId, sender) ?? Matching(_accepted, requestId, sender);
-
-        if (request == null)
-        {
-            return;
-        }
-
-        if (request == _shown)
-        {
-            _shown = null;
-        }
-        else
-        {
-            _accepted = null;
-        }
-
-        HideRequestScreen(request);
-        Gui.GuiService.ShowAlert(Gui.Format("Message/&MultiplayerApprovalCancelled", sender.NickName),
-            Gui.ColorAlert, 5f);
-    }
-
-    // everyone approved: the accepted request's screen closes
-    private static void OnDone(int requestId, Player sender)
-    {
-        var request = Matching(_accepted, requestId, sender);
-
-        if (request == null)
-        {
-            return;
-        }
-
-        _accepted = null;
-        HideRequestScreen(request);
-    }
-
-    private static ShownRequest Matching(ShownRequest request, int requestId, Player sender)
-    {
-        return request != null && sender != null && request.Id == requestId &&
-               request.SenderActor == sender.ActorNumber
-            ? request
+        return TryDecodeVoteParameter(parameter, out var action, out var characterName, out var subjectName,
+            out var seconds)
+            ? Gui.Format("Message/&MultiplayerApprovalVoteAction", DescribeAction(action, characterName, subjectName),
+                FormatDuration(seconds))
             : null;
     }
 
@@ -481,7 +351,7 @@ internal static class MultiplayerApprovalContext
             return Gui.Format("Message/&MultiplayerApprovalInCutscene", DescribeLocalBusyNames(answer));
         }
 
-        answer = Answer.Approved;
+        answer = Answer.None;
 
         return null;
     }
@@ -621,7 +491,7 @@ internal static class MultiplayerApprovalContext
         _eventHandlerRegistered = true;
     }
 
-    // clients register as soon as they join, so a request isn't missed before they ask for anything themselves
+    // clients register as soon as they join, so a busy reply isn't missed before they ask for anything themselves
     internal static void OnJoinedRoom()
     {
         Reset();
@@ -630,57 +500,23 @@ internal static class MultiplayerApprovalContext
 
     private static void OnEvent(EventData photonEvent)
     {
-        if (photonEvent.Code != EventCode || photonEvent.CustomData is not object[] { Length: > 1 } data)
+        if (photonEvent.Code != EventCode ||
+            photonEvent.CustomData is not object[] { Length: >= 3 } data ||
+            (byte)data[0] != BusyKind)
         {
             return;
         }
 
-        var sender = PhotonNetwork.CurrentRoom?.GetPlayer(photonEvent.Sender);
-
-        switch ((byte)data[0])
-        {
-            case RequestKind:
-                OnRequest(data, sender);
-                break;
-            case ReplyKind when data.Length >= 4:
-                OnReply((int)data[1], sender, (Answer)(byte)data[2], (string)data[3]);
-                break;
-            case CancelKind:
-                OnCancel((int)data[1], sender);
-                break;
-            case DoneKind:
-                OnDone((int)data[1], sender);
-                break;
-        }
-    }
-
-    private static void HideMessage()
-    {
-        var messageModal = Gui.GuiService.GetScreen<MessageModal>();
-
-        if (messageModal && messageModal.Visible)
-        {
-            messageModal.Hide();
-        }
+        OnBusyReply(PhotonNetwork.CurrentRoom?.GetPlayer(photonEvent.Sender), (Answer)(byte)data[1],
+            (string)data[2]);
     }
 
     #endregion
 
     private sealed class PendingRequest
     {
-        internal int Id;
-        internal string Description;
-        internal int Seconds;
         internal Action Proceed;
-        internal HashSet<int> Waiting;
-        internal bool ShowingWaiting;
-        internal bool ShowingVote;
-    }
-
-    private sealed class ShownRequest
-    {
-        internal int Id;
-        internal int SenderActor;
-        internal bool ShownAsVote;
+        // set when the vote ends because a character is busy, shown once it is cancelled
+        internal string BusyReason;
     }
 }
