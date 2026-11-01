@@ -15,16 +15,29 @@ namespace SolastaUnfinishedBusiness.Api.ModKit;
 // searching; every section's state is remembered when the search starts and put back when it ends.
 //
 // IMGUI draws each frame in several passes that must contain the same controls, so the search text, and everything
-// derived from it, only changes at the start of a frame (the Layout pass).
+// derived from it, only changes at the start of a frame (the Layout pass). That includes opening the sections: they
+// are all opened when the search starts, before anything is drawn. Opened only when its header was drawn, a section
+// changed state partway through the Layout pass, after controls above it had already read that state, and the Repaint
+// pass then drew a different number of controls (the Spells page's Expand All row lost or gained Select Displayed,
+// and Unity aborted the menu with "Getting control N's position in a group with only N controls").
 internal static partial class UI
 {
     private static readonly Regex RichTextTags = new("<[^>]+>", RegexOptions.Compiled);
     private static readonly List<string> SearchPath = [];
 
+    // real options whose names also start with Display: they aren't sections, so a search must neither open them nor
+    // put them back when it ends (that undid a change made to them from the search results)
+    private static readonly HashSet<string> DisplayOptionsThatAreNotSections =
+    [
+        nameof(Settings.DisplayAllKnownSpellsDuringLevelUp),
+        nameof(Settings.DisplayPactSlotsOnSpellSelectionPanel)
+    ];
+
     // collapsed or expanded sections are stored in the settings' Display... switches
     private static readonly PropertyInfo[] SectionStateProperties = typeof(Settings)
         .GetProperties(BindingFlags.Instance | BindingFlags.Public)
-        .Where(x => x.PropertyType == typeof(bool) && x.CanRead && x.CanWrite && x.Name.StartsWith("Display"))
+        .Where(x => x.PropertyType == typeof(bool) && x.CanRead && x.CanWrite && x.Name.StartsWith("Display") &&
+                    !DisplayOptionsThatAreNotSections.Contains(x.Name))
         .ToArray();
 
     // per class and per spell list sections are stored in Display... dictionaries
@@ -110,13 +123,14 @@ internal static partial class UI
         {
             SettingsOpenedBySearch.Clear();
             _sectionForcedOpen = false;
-            _boolSettingsAtFrameStart = ReadBoolSettings();
             _sectionStatesBeforeSearch = SectionStateProperties
                 .ToDictionary(x => x, x => (bool)x.GetValue(Main.Settings));
             _sectionDictionariesBeforeSearch = SectionStateDictionaries
                 .Where(x => x.GetValue(Main.Settings) is IDictionary<string, bool>)
                 .ToDictionary(x => x,
                     x => new Dictionary<string, bool>((IDictionary<string, bool>)x.GetValue(Main.Settings)));
+            OpenAllSections();
+            _boolSettingsAtFrameStart = ReadBoolSettings();
         }
         else if (wasSearching && !IsSearching && _sectionStatesBeforeSearch != null)
         {
@@ -149,6 +163,30 @@ internal static partial class UI
             _boolSettingsAtFrameStart = null;
             _sectionStatesBeforeSearch = null;
             _sectionDictionariesBeforeSearch = null;
+        }
+    }
+
+    // opens every section stored in the settings, from the start of the frame the search starts in (called from
+    // SearchBox in the Layout pass, before anything is drawn), so no section changes state partway through a frame.
+    // Sections whose state isn't in the settings are still opened by DisclosureToggle as their header is drawn.
+    private static void OpenAllSections()
+    {
+        foreach (var property in SectionStateProperties)
+        {
+            property.SetValue(Main.Settings, true);
+        }
+
+        foreach (var property in SectionStateDictionaries)
+        {
+            if (property.GetValue(Main.Settings) is not IDictionary<string, bool> states)
+            {
+                continue;
+            }
+
+            foreach (var key in states.Keys.ToList())
+            {
+                states[key] = true;
+            }
         }
     }
 

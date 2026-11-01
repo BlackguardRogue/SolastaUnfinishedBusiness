@@ -31,7 +31,9 @@ internal static class EncountersDisplay
             UI.Label($"{hero.RaceDefinition.FormatTitle()} {hero.ClassesHistory[0].FormatTitle()}".White(),
                 UI.Width(120f));
 
-            var attributesLabel = _showAttributes ? "" : "Attributes";
+            //PATCH: a search opens these sections as their headers are drawn, partway through the frame's Layout pass;
+            //reading the stable search state instead keeps the label the same in every pass of the frame
+            var attributesLabel = _showAttributes || UI.IsSearching ? "" : "Attributes";
 
             UI.DisclosureToggle(attributesLabel, ref _showAttributes, attributesLabel.Length * 12);
 
@@ -51,7 +53,7 @@ internal static class EncountersDisplay
                     UI.Width(48f));
             }
 
-            var statsLabel = _showStats ? "" : "Stats";
+            var statsLabel = _showStats || UI.IsSearching ? "" : "Stats";
 
             UI.DisclosureToggle(statsLabel, ref _showStats, statsLabel.Length * 12);
 
@@ -119,7 +121,9 @@ internal static class EncountersDisplay
             UI.Label($"{monsterDefinition.FormatTitle()}".Orange().Bold(), UI.Width(240f));
             UI.Label($"{monsterDefinition.Alignment.SplitCamelCase()}".White(), UI.Width(120f));
 
-            var attributesLabel = _showAttributes ? "" : "Attributes";
+            //PATCH: a search opens these sections as their headers are drawn, partway through the frame's Layout pass;
+            //reading the stable search state instead keeps the label the same in every pass of the frame
+            var attributesLabel = _showAttributes || UI.IsSearching ? "" : "Attributes";
 
             UI.DisclosureToggle(attributesLabel, ref _showAttributes, attributesLabel.Length * 12);
 
@@ -133,7 +137,7 @@ internal static class EncountersDisplay
                 UI.Label($"Cha: {monsterDefinition.AbilityScores[5]:0#}".Khaki(), UI.Width(48f));
             }
 
-            var statsLabel = _showStats ? "" : "Stats";
+            var statsLabel = _showStats || UI.IsSearching ? "" : "Stats";
 
             UI.DisclosureToggle(statsLabel, ref _showStats, statsLabel.Length * 12);
 
