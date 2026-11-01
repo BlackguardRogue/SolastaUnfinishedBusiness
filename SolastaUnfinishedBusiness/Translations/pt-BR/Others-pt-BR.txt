@@ -713,6 +713,7 @@ Message/&MultiplayerApprovalActionWaitAndLongRest=esperar {0} até o grupo poder
 Message/&MultiplayerApprovalActionCampfireLongRest=levar {0} até a fogueira e depois fazer um descanso longo
 Message/&MultiplayerApprovalActionCampfireWaitAndLongRest=levar {0} até a fogueira, esperar {1} até o grupo poder descansar de novo e então fazer um descanso longo
 Message/&CampfireGatherFailed={0} não conseguiu chegar à fogueira, então o grupo não descansou.
+Screen/&CampfireFastTravelWaypointTitle=Fogueira
 Message/&MultiplayerApprovalBusyDescription=A ação não foi feita: {0}\n\nTente de novo quando terminar.
 Message/&MultiplayerApprovalBusyTitle=Não é possível pedir aprovação
 Message/&MultiplayerApprovalHour=1 hora

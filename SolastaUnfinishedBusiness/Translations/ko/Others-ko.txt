@@ -713,6 +713,7 @@ Message/&MultiplayerApprovalActionWaitAndLongRest=파티가 다시 휴식할 수
 Message/&MultiplayerApprovalActionCampfireLongRest={0}을(를) 모닥불로 데려온 뒤 긴 휴식
 Message/&MultiplayerApprovalActionCampfireWaitAndLongRest={0}을(를) 모닥불로 데려와 파티가 다시 휴식할 수 있을 때까지 {1} 기다린 뒤 긴 휴식
 Message/&CampfireGatherFailed={0}이(가) 모닥불에 도착하지 못해 파티가 휴식하지 않았습니다.
+Screen/&CampfireFastTravelWaypointTitle=모닥불
 Message/&MultiplayerApprovalBusyDescription=행동이 실행되지 않았습니다: {0}\n\n끝난 뒤 다시 시도하세요.
 Message/&MultiplayerApprovalBusyTitle=승인을 요청할 수 없습니다
 Message/&MultiplayerApprovalHour=1시간

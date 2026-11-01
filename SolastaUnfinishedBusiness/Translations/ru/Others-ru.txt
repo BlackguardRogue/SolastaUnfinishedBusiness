@@ -713,6 +713,7 @@ Message/&MultiplayerApprovalActionWaitAndLongRest=подождать {0}, пок
 Message/&MultiplayerApprovalActionCampfireLongRest=привести {0} к костру, а затем совершить долгий отдых
 Message/&MultiplayerApprovalActionCampfireWaitAndLongRest=привести {0} к костру, подождать {1}, пока отряд снова сможет отдохнуть, а затем совершить долгий отдых
 Message/&CampfireGatherFailed={0}: не удалось дойти до костра, поэтому отряд не отдохнул.
+Screen/&CampfireFastTravelWaypointTitle=Костёр
 Message/&MultiplayerApprovalBusyDescription=Действие не выполнено: {0}\n\nПопробуйте снова, когда это закончится.
 Message/&MultiplayerApprovalBusyTitle=Нельзя запросить одобрение
 Message/&MultiplayerApprovalHour=1 час

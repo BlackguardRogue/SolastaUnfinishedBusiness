@@ -712,6 +712,7 @@ Message/&MultiplayerApprovalActionWaitAndLongRest=等待{0}直到队伍可以再
 Message/&MultiplayerApprovalActionCampfireLongRest=让{0}走到营火旁，然后进行长休
 Message/&MultiplayerApprovalActionCampfireWaitAndLongRest=让{0}走到营火旁，等待{1}直到队伍可以再次休息，然后进行长休
 Message/&CampfireGatherFailed={0}无法到达营火，因此队伍没有休息。
+Screen/&CampfireFastTravelWaypointTitle=营火
 Message/&MultiplayerApprovalBusyDescription=行动未执行：{0}\n\n结束后请再试一次。
 Message/&MultiplayerApprovalBusyTitle=无法请求批准
 Message/&MultiplayerApprovalHour=1小时

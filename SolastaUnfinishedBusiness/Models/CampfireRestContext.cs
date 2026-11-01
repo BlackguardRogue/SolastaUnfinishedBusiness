@@ -86,6 +86,18 @@ internal static class CampfireRestContext
         // an earlier campfire's wait prompt that was answered No
         _waitCampfire = null;
 
+        // the campfire's fast travel destination, on every computer (the functor runs on each in the lockstep): an
+        // existing fast travel waypoint next to the campfire, or a temporary one when somebody is beyond the long rest
+        // distance (CampfireFastTravelContext); a campfire that rests at once has no gather
+        if (campfire.Forced)
+        {
+            CampfireFastTravelContext.RemoveDestination();
+        }
+        else
+        {
+            CampfireFastTravelContext.PrepareDestination(campfire.User);
+        }
+
         while (true)
         {
             bool moved;
@@ -322,17 +334,79 @@ internal static class CampfireRestContext
             ServiceRepository.GetService<ICommandService>()?.StartDeferredLongRest(LongRestWaitContext.MissingHours()));
     }
 
-    // the walk to the campfire; arrived runs once everyone is there and the rest rules pass (before a wait, all but
+    // the gather at the campfire; arrived runs once everyone is there and the rest rules pass (before a wait, all but
     // the once-a-day rule). False when it couldn't start.
     private static bool StartGather(
         Campfire campfire, List<GameLocationCharacter> walkers, bool beforeWait, System.Action arrived)
     {
+        if (campfire?.User == null || walkers.Count == 0)
+        {
+            return false;
+        }
+
+        var gather = new Gather
+        {
+            Arrived = arrived, BeforeWait = beforeWait, Walkers = walkers, StartTime = Time.unscaledTime
+        };
+
+        // first the characters beyond the long rest distance fast travel to the campfire (user direction,
+        // 2026-11-02; CampfireFastTravelContext), then the walk covers whatever is left; when the game can't fast
+        // travel now, or nobody is that far, everyone walks
+        if (CampfireFastTravelContext.TryStart(campfire.User, () => AfterFastTravel(gather, campfire)))
+        {
+            _gather = gather;
+
+            return true;
+        }
+
+        return StartWalk(campfire, gather);
+    }
+
+    // the campfire fast travel is over (or the game dropped it): whoever is still too far walks, then the rest
+    private static void AfterFastTravel(Gather gather, Campfire campfire)
+    {
+        // another rest screen opened during the travel, or a reset
+        if (_gather != gather)
+        {
+            return;
+        }
+
+        EndGather();
+
+        // a fight or cutscene (an enemy saw a traveller): the game's own screens explain it
+        if (IsBusy())
+        {
+            return;
+        }
+
+        var walkers = FindWalkers(campfire, gather.BeforeWait);
+
+        if (walkers.Count > 0)
+        {
+            StartWalk(campfire,
+                new Gather
+                {
+                    Arrived = gather.Arrived,
+                    BeforeWait = gather.BeforeWait,
+                    Walkers = walkers,
+                    StartTime = Time.unscaledTime
+                });
+
+            return;
+        }
+
+        FinishGather(gather, []);
+    }
+
+    // the walk to the campfire. False when it couldn't start.
+    private static bool StartWalk(Campfire campfire, Gather gather)
+    {
         var positioning = ServiceRepository.GetService<IGameLocationPositioningService>();
         var characterService = ServiceRepository.GetService<IGameLocationCharacterService>();
         var commands = ServiceRepository.GetService<ICommandService>();
+        var walkers = gather.Walkers;
 
-        if (campfire?.User == null || positioning == null || characterService == null || commands == null ||
-            walkers.Count == 0)
+        if (positioning == null || characterService == null || commands == null)
         {
             return false;
         }
@@ -351,11 +425,6 @@ internal static class CampfireRestContext
 
             return false;
         }
-
-        var gather = new Gather
-        {
-            Arrived = arrived, BeforeWait = beforeWait, Walkers = walkers, StartTime = Time.unscaledTime
-        };
 
         _gather = gather;
 
@@ -397,12 +466,9 @@ internal static class CampfireRestContext
             return false;
         }
 
-        var busy = Gui.Battle != null ||
-                   ServiceRepository.GetService<INarrativeDirectionService>() is { IsSequenceInProgress: true };
-
         // a fight or a cutscene (which stops every character's move itself) ends the walk without a rest; the game's
         // own screens explain them. (The rest screen is closed during the walk, so it no longer counts.)
-        if (busy)
+        if (IsBusy())
         {
             EndGather();
 
@@ -416,34 +482,46 @@ internal static class CampfireRestContext
         }
 
         EndGather();
+        FinishGather(gather,
+            gather.Walkers.Where(x => gather.Failed.Contains(x) || !gather.Done.Contains(x)).ToList());
 
+        return false;
+    }
+
+    // the gather is over: the rest checks, then the rest screen's Start or the wait and rest; notThere are the
+    // characters who didn't get there
+    private static void FinishGather(Gather gather, List<GameLocationCharacter> notThere)
+    {
         // every rest rule again, now with the 10 cells too: the game's Start doesn't check them itself (only with a
-        // gamepad), the rest screen's button did, before the walk. Before a wait, all but the once-a-day rule, which
-        // the wait is for; the game checks every rule again once the wait is over.
+        // gamepad), the rest screen's button did, before the gather. Before a wait, all but the once-a-day rule,
+        // which the wait is for; the game checks every rule again once the wait is over.
         var canRest = CheckLongRest(out var failure, gather.BeforeWait);
 
-        if (gather.Failed.Count > 0 || gather.Done.Count < gather.Walkers.Count ||
-            (!canRest && failure == PartyTooSpreadOut))
+        if (notThere.Count > 0 || (!canRest && failure == PartyTooSpreadOut))
         {
-            var notThere = gather.Walkers.Where(x => gather.Failed.Contains(x) || !gather.Done.Contains(x)).ToList();
-
             ShowGatherFailed(notThere.Count > 0 ? notThere : gather.Walkers);
+            CampfireFastTravelContext.OnGatherAbandoned();
 
-            return false;
+            return;
         }
 
         if (!canRest)
         {
-            // something else changed during the walk (an enemy came near, ...), shown as the game shows it
+            // something else changed during the gather (an enemy came near, ...), shown as the game shows it
             Gui.GuiService.ShowAlert(failure, Gui.ColorFailure, 2.5f);
+            CampfireFastTravelContext.OnGatherAbandoned();
 
-            return false;
+            return;
         }
 
         // everyone is here and every rule passes: the rest screen's Start, or the wait and rest
         gather.Arrived();
+    }
 
-        return false;
+    private static bool IsBusy()
+    {
+        return Gui.Battle != null ||
+               ServiceRepository.GetService<INarrativeDirectionService>() is { IsSequenceInProgress: true };
     }
 
     private static void EndGather()
@@ -464,6 +542,7 @@ internal static class CampfireRestContext
         _campfire = null;
         _waitCampfire = null;
         _gather = null;
+        CampfireFastTravelContext.Reset();
     }
 
     private sealed class Campfire

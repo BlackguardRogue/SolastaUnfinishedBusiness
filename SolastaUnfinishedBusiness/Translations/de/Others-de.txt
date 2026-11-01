@@ -713,6 +713,7 @@ Message/&MultiplayerApprovalActionWaitAndLongRest={0} warten, bis die Gruppe wie
 Message/&MultiplayerApprovalActionCampfireLongRest={0} zum Lagerfeuer holen und dann eine lange Rast einlegen
 Message/&MultiplayerApprovalActionCampfireWaitAndLongRest={0} zum Lagerfeuer holen, {1} warten, bis die Gruppe wieder rasten kann, und dann eine lange Rast einlegen
 Message/&CampfireGatherFailed={0} konnte das Lagerfeuer nicht erreichen, daher hat die Gruppe nicht gerastet.
+Screen/&CampfireFastTravelWaypointTitle=Lagerfeuer
 Message/&MultiplayerApprovalBusyDescription=Die Aktion wurde nicht ausgeführt: {0}\n\nVersuchen Sie es erneut, wenn es vorbei ist.
 Message/&MultiplayerApprovalBusyTitle=Zustimmung kann nicht angefragt werden
 Message/&MultiplayerApprovalHour=1 Stunde

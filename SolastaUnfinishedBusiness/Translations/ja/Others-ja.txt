@@ -713,6 +713,7 @@ Message/&MultiplayerApprovalActionWaitAndLongRest=パーティーが再び休憩
 Message/&MultiplayerApprovalActionCampfireLongRest={0}をキャンプファイアまで連れてきてから大休憩を取る
 Message/&MultiplayerApprovalActionCampfireWaitAndLongRest={0}をキャンプファイアまで連れてきて、パーティーが再び休憩できるまで{1}待ってから大休憩を取る
 Message/&CampfireGatherFailed={0}がキャンプファイアにたどり着けなかったため、パーティーは休憩しなかった。
+Screen/&CampfireFastTravelWaypointTitle=キャンプファイア
 Message/&MultiplayerApprovalBusyDescription=行動は実行されませんでした：{0}\n\n終わってからもう一度試してください。
 Message/&MultiplayerApprovalBusyTitle=承認を求められません
 Message/&MultiplayerApprovalHour=1時間

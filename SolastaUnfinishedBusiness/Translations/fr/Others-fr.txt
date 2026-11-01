@@ -713,6 +713,7 @@ Message/&MultiplayerApprovalActionWaitAndLongRest=attendre {0} jusqu'à ce que l
 Message/&MultiplayerApprovalActionCampfireLongRest=amener {0} au feu de camp, puis prendre un repos long
 Message/&MultiplayerApprovalActionCampfireWaitAndLongRest=amener {0} au feu de camp, attendre {1} jusqu'à ce que le groupe puisse se reposer à nouveau, puis prendre un repos long
 Message/&CampfireGatherFailed={0} n'a pas pu atteindre le feu de camp, le groupe ne s'est donc pas reposé.
+Screen/&CampfireFastTravelWaypointTitle=Feu de camp
 Message/&MultiplayerApprovalBusyDescription=L'action n'a pas été effectuée : {0}\n\nRéessayez une fois que ce sera terminé.
 Message/&MultiplayerApprovalBusyTitle=Impossible de demander l'approbation
 Message/&MultiplayerApprovalHour=1 heure

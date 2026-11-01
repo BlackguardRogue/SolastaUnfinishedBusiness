@@ -713,6 +713,7 @@ Message/&MultiplayerApprovalActionWaitAndLongRest=attendere {0} finché il grupp
 Message/&MultiplayerApprovalActionCampfireLongRest=portare {0} al falò, poi fare un riposo lungo
 Message/&MultiplayerApprovalActionCampfireWaitAndLongRest=portare {0} al falò, attendere {1} finché il gruppo non può riposare di nuovo, poi fare un riposo lungo
 Message/&CampfireGatherFailed={0} non è riuscito a raggiungere il falò, quindi il gruppo non ha riposato.
+Screen/&CampfireFastTravelWaypointTitle=Falò
 Message/&MultiplayerApprovalBusyDescription=L'azione non è stata eseguita: {0}\n\nRiprova quando sarà finita.
 Message/&MultiplayerApprovalBusyTitle=Impossibile chiedere l'approvazione
 Message/&MultiplayerApprovalHour=1 ora

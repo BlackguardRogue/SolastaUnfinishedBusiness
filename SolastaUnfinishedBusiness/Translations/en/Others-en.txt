@@ -819,6 +819,7 @@ Message/&MultiplayerApprovalActionWaitAndLongRest=wait {0} until the party can r
 Message/&MultiplayerApprovalActionCampfireLongRest=bring {0} to the campfire, then take a long rest
 Message/&MultiplayerApprovalActionCampfireWaitAndLongRest=bring {0} to the campfire, wait {1} until the party can rest again, then take a long rest
 Message/&CampfireGatherFailed={0} couldn't reach the campfire, so the party didn't rest.
+Screen/&CampfireFastTravelWaypointTitle=Campfire
 Message/&CraftingStartWarningTitle=Start crafting?
 Message/&CraftingStartWarningDescription=Crafting <b>{0}</b> uses up all its ingredients now.\n\nEach crafting hour rolls a check against DC <b>{1}</b>. A failed roll adds no progress, so it can take longer than <b>{2}</b> hours. Failed rolls never lose the ingredients, but aborting the crafting does.
 Message/&CraftingStartWarningPlainItems=These plain items are used in place of missing Primed ones:\n{0}
