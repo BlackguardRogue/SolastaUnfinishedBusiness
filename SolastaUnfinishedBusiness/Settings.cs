@@ -215,6 +215,7 @@ public class Settings : UnityModManager.ModSettings
     public bool OverrideMinMaxLevel { get; set; }
     public bool AllowShortRestWithPartySpreadOut { get; set; }
     public bool CombineWaitWithLongRest { get; set; } = true;
+    public bool GatherPartyForCampfireRest { get; set; } = true;
     public bool FasterTimeEnemyTurnButton { get; set; } = true;
     public bool EnemyTurnSpeedUpByDefault { get; set; }
     public float FasterTimeModifier { get; set; } = CampaignsDisplay.DefaultFastTimeModifier;

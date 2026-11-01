@@ -18,7 +18,10 @@ namespace SolastaUnfinishedBusiness.Models;
 // - nobody is asked while a character is in combat or in a cutscene: the asking player is told which character is
 //   busy instead (before asking, and when another computer is busy as the request arrives: that computer refuses
 //   with the reason, MultiplayerVoteContext.RefuseAsBusy);
-// - a fight or cutscene starting while the vote runs cancels it.
+// - a fight or cutscene starting while the vote runs cancels it: on the asking computer, and on any other computer,
+//   whether its player answered yet or already accepted (user direction, 2026-11-01), which refuses with the reason;
+//   a vote that passes just as the asking computer gets busy doesn't run its action. The cutscene itself goes on as
+//   the game runs it (it stops every character and places the party), as nothing of the vote holds it up.
 //
 // The request reaches the other computers without the game's travel request step (MultiplayerVoteModalPatcher's
 // RequestVoteRPC patch): that step stops every character's current action and drops the request, without an answer,
@@ -35,7 +38,10 @@ internal static class MultiplayerApprovalContext
         CastSpell = 6,
         CastRitual = 7,
         UsePower = 8,
-        WaitAndLongRest = 9
+        WaitAndLongRest = 9,
+        // characters too far from a campfire walk to it, then the party takes a long rest (CampfireRestContext); the
+        // character name part holds the walkers' names
+        CampfireLongRest = 10
     }
 
     // the busy refusal's reasons (sent as a byte in the vote's answer, 0 for none)
@@ -69,6 +75,7 @@ internal static class MultiplayerApprovalContext
     {
         _pending = null;
         MultiplayerVoteContext.Reset();
+        CampfireRestContext.Reset();
     }
 
     #region Asking
@@ -138,6 +145,17 @@ internal static class MultiplayerApprovalContext
         }
 
         _pending = null;
+
+        // the vote passed in the same frame a fight or cutscene started here, before Update could cancel it
+        var busy = DescribeLocalBusy(out _);
+
+        if (busy != null)
+        {
+            ShowBusy(busy);
+
+            return;
+        }
+
         IsRunningApprovedAction = true;
 
         try
@@ -206,8 +224,9 @@ internal static class MultiplayerApprovalContext
             return;
         }
 
-        // a request on screen here, not answered yet, is refused with the reason if this computer gets busy
-        if (MultiplayerVoteContext.IsAwaitingLocalAnswer &&
+        // an approval this computer was asked for, answered or not, is refused with the reason if this computer gets
+        // busy: a player who already accepted takes the acceptance back, which ends the vote for everyone
+        if (MultiplayerVoteContext.RequestParameter != null &&
             DescribeVoteParameter(MultiplayerVoteContext.RequestParameter) != null &&
             DescribeLocalBusy(out var answer) != null)
         {
@@ -490,6 +509,7 @@ internal static class MultiplayerApprovalContext
     {
         _pending = null;
         MultiplayerVoteContext.OnJoinedRoom();
+        CampfireRestContext.Reset();
     }
 
     private sealed class PendingRequest

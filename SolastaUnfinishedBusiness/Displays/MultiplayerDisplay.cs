@@ -271,6 +271,13 @@ internal static class MultiplayerDisplay
             Main.Settings.AllowShortRestWithPartySpreadOut = toggle;
         }
 
+        // the same setting is also under Campaigns
+        toggle = Main.Settings.GatherPartyForCampfireRest;
+        if (UI.Toggle(Gui.Localize("ModUi/&GatherPartyForCampfireRest"), ref toggle, UI.AutoWidth()))
+        {
+            Main.Settings.GatherPartyForCampfireRest = toggle;
+        }
+
         DisplayVotePreview();
 
         UI.Label();

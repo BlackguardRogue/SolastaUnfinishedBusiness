@@ -73,11 +73,9 @@ internal static class MultiplayerVoteContext
 
     internal static bool IsVoteRunning => _vote != null;
 
-    // the running vote's parameter on a computer that was asked (null when there is none or this computer asked)
+    // the running vote's parameter on a computer that was asked, answered or not (null when there is none or this
+    // computer asked)
     internal static string RequestParameter => _vote is { LocalIsAsker: false } ? _vote.Parameter : null;
-
-    // true while this computer was asked and hasn't answered yet
-    internal static bool IsAwaitingLocalAnswer => _vote is { LocalIsAsker: false, Answered: false };
 
     private static int LocalPlayerNumber =>
         ServiceRepository.GetService<INetworkingService>()?.LocalPlayerNumber ?? PhotonNetwork.LocalPlayer.ActorNumber;
@@ -285,8 +283,8 @@ internal static class MultiplayerVoteContext
         }
     }
 
-    // an approval this computer can't take part in (a fight or a cutscene): refused with the reason, and this
-    // computer leaves the vote
+    // an approval this computer can't take part in (a fight or a cutscene): refused with the reason, also after this
+    // player accepted, and this computer leaves the vote, closing its vote screen if it shows one
     internal static void RefuseAsBusy(byte reason, string names)
     {
         if (_vote is not { LocalIsAsker: false, Preview: false })
@@ -294,8 +292,11 @@ internal static class MultiplayerVoteContext
             return;
         }
 
+        var shownHere = _vote.ShownToLocal;
+
         SendAnswer(_vote.Id, _vote.AskerId, false, reason, names ?? string.Empty);
         _vote = null;
+        HideLocalScreens(shownHere);
     }
 
     // the request window is replaced by the vote screen, which shows who proposed what and everyone's votes so far

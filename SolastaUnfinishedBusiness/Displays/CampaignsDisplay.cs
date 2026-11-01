@@ -48,6 +48,13 @@ internal static class CampaignsDisplay
             Main.Settings.CombineWaitWithLongRest = toggle;
         }
 
+        // the same setting is also under Multiplayer
+        toggle = Main.Settings.GatherPartyForCampfireRest;
+        if (UI.Toggle(Gui.Localize("ModUi/&GatherPartyForCampfireRest"), ref toggle, UI.AutoWidth()))
+        {
+            Main.Settings.GatherPartyForCampfireRest = toggle;
+        }
+
         UI.Label();
 
         toggle = Main.Settings.FasterTimeEnemyTurnButton;
