@@ -55,6 +55,10 @@ public static class GameRestingManagerPatcher
             bool shouldCheckPlayerPrivileges,
             ref bool __result)
         {
+            // a campfire whose check failed on the once-a-day rule offers the game's wait next: kept so the party can
+            // walk to it before that wait (CampfireRestContext)
+            CampfireRestContext.OnRestChecked(restType, failureFlag, __result);
+
             //PATCH: on the rest screen, a long rest the party already took today waits until it can rest again
             if (InRestScreen && restType == RestType.LongRest && !LongRestWaitContext.IgnoreRestFrequency)
             {

@@ -41,7 +41,11 @@ internal static class MultiplayerApprovalContext
         WaitAndLongRest = 9,
         // characters too far from a campfire walk to it, then the party takes a long rest (CampfireRestContext); the
         // character name part holds the walkers' names
-        CampfireLongRest = 10
+        CampfireLongRest = 10,
+        // the party already rested today at a campfire with characters too far away: they walk to it, the party waits
+        // until it can rest again, then takes a long rest (CampfireRestContext); the character name part holds the
+        // walkers' names, the subject part the hours of the wait
+        CampfireWaitAndLongRest = 11
     }
 
     // the busy refusal's reasons (sent as a byte in the vote's answer, 0 for none)
@@ -83,6 +87,14 @@ internal static class MultiplayerApprovalContext
     // true when the action must wait: it then runs through proceed once every other player approves
     internal static bool MustWaitForApproval(
         ApprovalAction action, string characterName, BaseDefinition subject, int seconds, Action proceed)
+    {
+        return MustWaitForApprovalWithSubjectName(action, characterName, subject?.Name ?? string.Empty, seconds,
+            proceed);
+    }
+
+    // the same with the subject part given as text (a definition's name, or a value such as the hours of a wait)
+    internal static bool MustWaitForApprovalWithSubjectName(
+        ApprovalAction action, string characterName, string subjectName, int seconds, Action proceed)
     {
         if (IsRunningApprovedAction ||
             !Main.Settings.MultiplayerRequireApprovalForTimeConsumingActions ||
@@ -129,7 +141,7 @@ internal static class MultiplayerApprovalContext
         // the game's vote: sends the request to everyone (MultiplayerVoteContext swaps in the approval's texts), counts
         // the answers on this computer and runs one of the two functions
         screen.ShowVote(NetworkingDefinitions.MultiplayerVoteType.MapWaypointNavigate,
-            EncodeVoteParameter(action, characterName, subject?.Name ?? string.Empty, seconds),
+            EncodeVoteParameter(action, characterName, subjectName, seconds),
             () => OnVotePassed(pending),
             () => OnVoteCanceled(pending));
 
@@ -165,6 +177,24 @@ internal static class MultiplayerApprovalContext
         finally
         {
             IsRunningApprovedAction = false;
+        }
+    }
+
+    // runs an action that an earlier approval already covered, past the patches that would ask again (the wait and
+    // long rest after a campfire walk, approved with the walk)
+    internal static void RunApproved(Action action)
+    {
+        var wasRunning = IsRunningApprovedAction;
+
+        IsRunningApprovedAction = true;
+
+        try
+        {
+            action();
+        }
+        finally
+        {
+            IsRunningApprovedAction = wasRunning;
         }
     }
 
@@ -414,6 +444,13 @@ internal static class MultiplayerApprovalContext
         if (action == ApprovalAction.WaitAndLongRest && int.TryParse(characterName, out var hours))
         {
             characterName = FormatDuration(hours * 3600);
+        }
+
+        // the walk before a wait: the walkers' names, then the wait, sent in hours too
+        if (action == ApprovalAction.CampfireWaitAndLongRest && int.TryParse(subjectName, out var waitHours))
+        {
+            return Gui.Format($"Message/&MultiplayerApprovalAction{action}", characterName,
+                FormatDuration(waitHours * 3600));
         }
 
         if (DatabaseRepository.GetDatabase<SpellDefinition>().TryGetElement(subjectName, out var spell))

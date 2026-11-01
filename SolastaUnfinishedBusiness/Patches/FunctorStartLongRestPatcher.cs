@@ -22,4 +22,19 @@ public static class FunctorStartLongRestPatcher
             __result = CampfireRestContext.WrapFunctor(__result, functorParameters);
         }
     }
+
+    //PATCH: the campfire's "Waiting to Perform a Long Rest" (the party already rested today): characters too far away
+    //walk to the campfire before the wait, so the long rest after it isn't refused for a spread-out party
+    //(CampfireRestContext)
+    [HarmonyPatch(typeof(FunctorStartLongRest), nameof(FunctorStartLongRest.DoWaitLongRest))]
+    [SuppressMessage("Minor Code Smell", "S101:Types should be named in PascalCase", Justification = "Patch")]
+    [UsedImplicitly]
+    public static class DoWaitLongRest_Patch
+    {
+        [UsedImplicitly]
+        public static bool Prefix()
+        {
+            return !CampfireRestContext.TryGatherBeforeWait();
+        }
+    }
 }

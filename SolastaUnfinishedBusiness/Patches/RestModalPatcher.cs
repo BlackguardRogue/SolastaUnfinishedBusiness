@@ -73,13 +73,8 @@ public static class RestModalPatcher
                 return true;
             }
 
-            // Start pressed again while the party walks to the campfire
-            if (CampfireRestContext.IsGathering)
-            {
-                return false;
-            }
-
-            //PATCH: when the party already rested today, waits until it can rest again, then rests
+            //PATCH: when the party already rested today, waits until it can rest again, then rests (at a campfire, the
+            //characters too far away walk to it before the wait)
             if (LongRestWaitContext.TryWaitThenRest(__instance))
             {
                 return false;
@@ -125,7 +120,8 @@ public static class RestModalPatcher
         }
     }
 
-    //PATCH: a rest screen that isn't a campfire's own forgets the campfire (CampfireRestContext)
+    //PATCH: a rest screen that isn't a campfire's own forgets the campfire, and any rest screen but the one reopened
+    //after a campfire walk ends that walk (CampfireRestContext)
     [HarmonyPatch(typeof(RestModal), nameof(RestModal.OnBeginShow))]
     [SuppressMessage("Minor Code Smell", "S101:Types should be named in PascalCase", Justification = "Patch")]
     [UsedImplicitly]
