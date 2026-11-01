@@ -15,16 +15,17 @@ namespace SolastaUnfinishedBusiness.Patches;
 [UsedImplicitly]
 public static class MultiplayerVoteModalPatcher
 {
-    //PATCH: records the vote this computer starts; refuses a second vote while one runs (MULTIPLAYER)
+    //PATCH: records the vote this computer starts and adds its ID to the request; refuses it while another vote runs
+    //or a player has another build (MULTIPLAYER)
     [HarmonyPatch(typeof(MultiplayerVoteModal), nameof(MultiplayerVoteModal.ShowVote))]
     [SuppressMessage("Minor Code Smell", "S101:Types should be named in PascalCase", Justification = "Patch")]
     [UsedImplicitly]
     public static class ShowVote_Patch
     {
         [UsedImplicitly]
-        public static bool Prefix(string parameter, MultiplayerVoteModal.VoteCanceledHandler voteCanceled)
+        public static bool Prefix(ref string parameter, MultiplayerVoteModal.VoteCanceledHandler voteCanceled)
         {
-            return MultiplayerVoteContext.OnShowVote(parameter, voteCanceled);
+            return MultiplayerVoteContext.OnShowVote(ref parameter, voteCanceled);
         }
     }
 
@@ -153,8 +154,39 @@ public static class MultiplayerVoteModalPatcher
         }
     }
 
-    //PATCH: records a request from another player, refuses it while another vote runs, and shows an approval's
-    //request with its own texts (MULTIPLAYER)
+    //PATCH: an approval request goes straight to the request handling, without the game's travel request step, which
+    //stops every character's action and drops the request unanswered where a script or a save-blocking action runs
+    //(MULTIPLAYER)
+    [HarmonyPatch(typeof(NetworkingManager), nameof(NetworkingManager.RequestVoteRPC))]
+    [SuppressMessage("Minor Code Smell", "S101:Types should be named in PascalCase", Justification = "Patch")]
+    [UsedImplicitly]
+    public static class RequestVoteRPC_Patch
+    {
+        [UsedImplicitly]
+        public static bool Prefix(NetworkingManager __instance, int voteType, string caller, string voteParameter,
+            PhotonMessageInfo info)
+        {
+            MultiplayerVoteContext.TryTakeVoteId(voteParameter, out var original, out _);
+
+            if (!MultiplayerApprovalContext.IsApprovalParameter(original))
+            {
+                return true;
+            }
+
+            var senderId = info.Sender?.ActorNumber ?? 0;
+
+            if (senderId != __instance.LocalPlayerNumber)
+            {
+                __instance.localCommandManager.RequestVote((NetworkingDefinitions.MultiplayerVoteType)voteType,
+                    caller, voteParameter, senderId);
+            }
+
+            return false;
+        }
+    }
+
+    //PATCH: records a request from another player (taking the vote ID out of its parameter), refuses it while another
+    //vote runs, and shows an approval's request with its own texts (MULTIPLAYER)
     [HarmonyPatch(typeof(LocalCommandManager), nameof(LocalCommandManager.RequestVote))]
     [SuppressMessage("Minor Code Smell", "S101:Types should be named in PascalCase", Justification = "Patch")]
     [UsedImplicitly]
@@ -162,26 +194,15 @@ public static class MultiplayerVoteModalPatcher
     {
         [UsedImplicitly]
         public static bool Prefix(
-            LocalCommandManager __instance, string caller, string voteParameter, int actorNumber)
+            LocalCommandManager __instance, string caller, ref string voteParameter, int actorNumber)
         {
-            return MultiplayerVoteContext.OnRequest(caller, voteParameter, actorNumber) &&
-                   !MultiplayerApprovalContext.ShowRequest(__instance, caller, voteParameter, actorNumber);
-        }
-    }
+            var hasVoteId = MultiplayerVoteContext.TryTakeVoteId(voteParameter, out var original, out var voteId);
 
-    //PATCH: an answer is counted by whoever asked (the game counted it on the host only) and shown on every other
-    //player's vote screen (MULTIPLAYER)
-    [HarmonyPatch(typeof(LocalCommandManager), nameof(LocalCommandManager.AnswerVote))]
-    [SuppressMessage("Minor Code Smell", "S101:Types should be named in PascalCase", Justification = "Patch")]
-    [UsedImplicitly]
-    public static class AnswerVote_Patch
-    {
-        [UsedImplicitly]
-        public static bool Prefix(bool accepted, int actorNumber)
-        {
-            MultiplayerVoteContext.OnAnswer(accepted, actorNumber);
+            // the game's travel request then shows the parameter without the ID
+            voteParameter = original;
 
-            return false;
+            return MultiplayerVoteContext.OnRequest(caller, original, voteId, hasVoteId, actorNumber) &&
+                   !MultiplayerApprovalContext.ShowRequest(__instance, caller, original);
         }
     }
 
@@ -211,43 +232,115 @@ public static class MultiplayerVoteModalPatcher
         }
     }
 
-    //PATCH: the vote passed: the other players' vote screens close (MULTIPLAYER)
-    [HarmonyPatch(typeof(LocalCommandManager), nameof(LocalCommandManager.NotifyVoteAccepted))]
+    //PATCH: this player's answer is sent with the vote's ID (MULTIPLAYER)
+    [HarmonyPatch(typeof(NetworkingManager), nameof(NetworkingManager.AnswerVote))]
+    [SuppressMessage("Minor Code Smell", "S101:Types should be named in PascalCase", Justification = "Patch")]
+    [UsedImplicitly]
+    public static class AnswerVote_Patch
+    {
+        [UsedImplicitly]
+        public static bool Prefix(bool accepted)
+        {
+            MultiplayerVoteContext.SendLocalAnswer(accepted);
+
+            return false;
+        }
+    }
+
+    //PATCH: the asking computer's "vote passed" is sent with the vote's ID (MULTIPLAYER)
+    [HarmonyPatch(typeof(NetworkingManager), nameof(NetworkingManager.NotifyVoteAccepted))]
     [SuppressMessage("Minor Code Smell", "S101:Types should be named in PascalCase", Justification = "Patch")]
     [UsedImplicitly]
     public static class NotifyVoteAccepted_Patch
     {
         [UsedImplicitly]
-        public static void Postfix()
+        public static bool Prefix()
         {
-            MultiplayerVoteContext.OnOutcome();
+            MultiplayerVoteContext.SendOutcome(true, 0);
+
+            return false;
         }
     }
 
-    //PATCH: the vote was refused: the other players' vote screens close (MULTIPLAYER)
-    [HarmonyPatch(typeof(LocalCommandManager), nameof(LocalCommandManager.NotifyVoteRejected))]
+    //PATCH: the asking computer's "vote refused" is sent with the vote's ID (MULTIPLAYER)
+    [HarmonyPatch(typeof(NetworkingManager), nameof(NetworkingManager.NotifyVoteRejected))]
     [SuppressMessage("Minor Code Smell", "S101:Types should be named in PascalCase", Justification = "Patch")]
     [UsedImplicitly]
     public static class NotifyVoteRejected_Patch
     {
         [UsedImplicitly]
-        public static void Postfix()
+        public static bool Prefix(int actorNumber)
         {
-            MultiplayerVoteContext.OnOutcome();
+            MultiplayerVoteContext.SendOutcome(false, actorNumber);
+
+            return false;
         }
     }
 
-    //PATCH: the asking player cancelled: the others are told who, and their screens close (MULTIPLAYER)
+    //PATCH: the asking player's cancel is sent with the vote's ID (MULTIPLAYER)
+    [HarmonyPatch(typeof(NetworkingManager), nameof(NetworkingManager.CancelVote))]
+    [SuppressMessage("Minor Code Smell", "S101:Types should be named in PascalCase", Justification = "Patch")]
+    [UsedImplicitly]
+    public static class CancelVote_Patch
+    {
+        [UsedImplicitly]
+        public static bool Prefix()
+        {
+            MultiplayerVoteContext.SendCancel();
+
+            return false;
+        }
+    }
+
+    //PATCH: the game's answer, outcome and cancel messages carry no vote ID; this build no longer sends them, and ignores
+    //them when another build does (MULTIPLAYER)
+    [HarmonyPatch(typeof(NetworkingManager), nameof(NetworkingManager.AnswerVoteRPC))]
+    [SuppressMessage("Minor Code Smell", "S101:Types should be named in PascalCase", Justification = "Patch")]
+    [UsedImplicitly]
+    public static class AnswerVoteRPC_Patch
+    {
+        [UsedImplicitly]
+        public static bool Prefix()
+        {
+            return false;
+        }
+    }
+
+    //PATCH: ignores the game's ID-less "vote passed" message (MULTIPLAYER)
+    [HarmonyPatch(typeof(NetworkingManager), nameof(NetworkingManager.NotifyVoteAcceptedRPC))]
+    [SuppressMessage("Minor Code Smell", "S101:Types should be named in PascalCase", Justification = "Patch")]
+    [UsedImplicitly]
+    public static class NotifyVoteAcceptedRPC_Patch
+    {
+        [UsedImplicitly]
+        public static bool Prefix()
+        {
+            return false;
+        }
+    }
+
+    //PATCH: ignores the game's ID-less "vote refused" message (MULTIPLAYER)
+    [HarmonyPatch(typeof(NetworkingManager), nameof(NetworkingManager.NotifyVoteRejectedRPC))]
+    [SuppressMessage("Minor Code Smell", "S101:Types should be named in PascalCase", Justification = "Patch")]
+    [UsedImplicitly]
+    public static class NotifyVoteRejectedRPC_Patch
+    {
+        [UsedImplicitly]
+        public static bool Prefix()
+        {
+            return false;
+        }
+    }
+
+    //PATCH: ignores the game's ID-less cancel message (MULTIPLAYER)
     [HarmonyPatch(typeof(NetworkingManager), nameof(NetworkingManager.CancelVoteRPC))]
     [SuppressMessage("Minor Code Smell", "S101:Types should be named in PascalCase", Justification = "Patch")]
     [UsedImplicitly]
     public static class CancelVoteRPC_Patch
     {
         [UsedImplicitly]
-        public static bool Prefix(PhotonMessageInfo info)
+        public static bool Prefix()
         {
-            MultiplayerVoteContext.OnCancelled(info.Sender?.ActorNumber ?? 0);
-
             return false;
         }
     }

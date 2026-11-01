@@ -1,6 +1,8 @@
 using System.Collections.Generic;
 using System.Linq;
+using ExitGames.Client.Photon;
 using Photon.Pun;
+using Photon.Realtime;
 using UnityEngine;
 using UnityEngine.AddressableAssets;
 using UnityEngine.UI;
@@ -9,8 +11,8 @@ namespace SolastaUnfinishedBusiness.Models;
 
 // The game's multiplayer vote as every computer sees it. The game has one vote, the fast travel vote
 // (MultiplayerFastTravelVoteModal, NetworkingManager's RequestVote / AnswerVote / CancelVote / NotifyVote* messages);
-// the mod also runs the approval of time-passing actions on it (MultiplayerApprovalContext), with only its texts
-// changed. User request, 2026-11-01: use the game's vote as it is, and show the vote screen to every player.
+// the mod also runs the approval of time-passing actions on it (MultiplayerApprovalContext), with its own texts.
+// User request, 2026-11-01: use the game's vote screens, and show the vote screen to every player.
 //
 // What the game does by itself: the asking player gets the vote screen (the other players with their votes, and
 // Cancel); everyone else gets the request window (MultiplayerAnswerModal: Accept, Refuse, a 20 second timer that
@@ -18,6 +20,10 @@ namespace SolastaUnfinishedBusiness.Models;
 // (for travel, MapWaypointItem.FastTravelVotePassed sends the travel command); the others just close their window.
 //
 // What this class changes, for travel and approval votes alike:
+// - Every vote has an ID, and its answers, outcome and cancel carry it (Photon event 174, sent in place of the game's
+//   AnswerVote / NotifyVote* / CancelVote messages, which carry no ID and are ignored when received). An answer to an
+//   earlier vote that arrives late, or a refusal of another vote, can't count for the running one. The request itself
+//   stays the game's RequestVote, with the ID added to its parameter (TakeVoteId removes it on arrival).
 // - Answers are counted by whoever asked. The game counts them only on the host's screen (LocalCommandManager.
 //   AnswerVote checks IsMasterClient), so a vote started by another player never received its answers.
 // - A player who accepted gets the vote screen too, showing who proposed what and everyone's votes so far, instead of
@@ -27,14 +33,37 @@ namespace SolastaUnfinishedBusiness.Models;
 // - The vote screen gets more player rows when the room has more than 4 players (the prefab has 3; the mod allows 6).
 // - A player who leaves no longer blocks the vote: the game reset every row to "waiting" on a redraw, so the asking
 //   computer waited for answers that could not come. The vote passes once every player still in the room accepted.
-// - Only one vote at a time: a request that arrives while another vote is running here is refused. Two votes started
-//   at the same moment therefore end each other, because an answer doesn't say which vote it is for.
+// - A vote nobody finishes is cancelled after VoteDeadlineSeconds, naming who didn't answer. The request window
+//   refuses by itself after 20 seconds, but a computer can drop a request without showing it: the game's travel
+//   request is dropped where its "nothing running that blocks saving" check fails (NetworkingManager.RequestVoteAsync),
+//   with no answer.
+// - Only one vote at a time: a request that arrives while another vote is running here is refused (that refusal names
+//   the arriving vote, so the running one isn't affected).
+// - A vote needs every player on this build (MultiplayerSessionContext's build versions): others would count answers
+//   the game's way and not understand these messages.
 //
-// Every computer keeps one record of the running vote (_vote): who asked, what, and who accepted so far. The answers
-// reach every computer (AnswerVote is sent to all the others), which is what lets each one show everyone's votes.
+// Every computer keeps one record of the running vote (_vote): its ID, who asked, what, and who accepted so far. The
+// answers reach every computer, which is what lets each one show everyone's votes.
 internal static class MultiplayerVoteContext
 {
+    private const byte EventCode = 174;
+    // [AnswerKind, int voteId, int askerId, bool accepted, byte reason, string names]; reason is the approval's busy
+    // reason (MultiplayerApprovalContext), 0 for an ordinary answer
+    private const byte AnswerKind = 1;
+    // from the asking computer: [OutcomeKind, int voteId, bool passed, int refusedBy]
+    private const byte OutcomeKind = 2;
+    // from the asking computer: [CancelKind, int voteId]
+    private const byte CancelKind = 3;
+    // added to the request's parameter, followed by the vote ID
+    private const string VoteIdMarker = "\u0003FinishingBusinessVote";
+    // longer than the request window's own 20 second timer, so only a request that was never shown runs into it
+    private const float VoteDeadlineSeconds = 30f;
+
     private static Vote _vote;
+    private static bool _eventHandlerRegistered;
+    private static int _lastVoteId = new System.Random().Next(1, 1 << 20);
+    // the ID of the vote this computer asked for last, for the outcome and cancel sent after it ended here
+    private static int _endedVoteId;
 
     // the vote screen's title and proposal labels with the prefab's own texts, captured on first use
     private static GuiLabel _titleLabel;
@@ -47,9 +76,6 @@ internal static class MultiplayerVoteContext
     // the running vote's parameter on a computer that was asked (null when there is none or this computer asked)
     internal static string RequestParameter => _vote is { LocalIsAsker: false } ? _vote.Parameter : null;
 
-    // the player who asked for the running vote
-    internal static int RequestAskerId => _vote?.AskerId ?? 0;
-
     // true while this computer was asked and hasn't answered yet
     internal static bool IsAwaitingLocalAnswer => _vote is { LocalIsAsker: false, Answered: false };
 
@@ -58,6 +84,9 @@ internal static class MultiplayerVoteContext
 
     private static MultiplayerFastTravelVoteModal VoteScreen =>
         Gui.GuiService.GetScreen<MultiplayerFastTravelVoteModal>();
+
+    private static LocalCommandManager LocalCommands =>
+        (ServiceRepository.GetService<INetworkingService>() as NetworkingManager)?.localCommandManager;
 
     // leaving or joining a room: forgets the vote and closes its screens without sending anything
     internal static void Reset()
@@ -73,52 +102,79 @@ internal static class MultiplayerVoteContext
         HideLocalScreens(shownHere);
     }
 
-    // this computer drops out of the vote it was asked to join (it answered for a reason of its own, e.g. busy)
-    internal static void Forget()
+    // clients register as soon as they join, so the first answer isn't missed
+    internal static void OnJoinedRoom()
     {
-        if (_vote is { LocalIsAsker: false })
-        {
-            _vote = null;
-        }
+        Reset();
+        RegisterEventHandler();
     }
 
     #region Asking player
 
-    // MultiplayerVoteModal.ShowVote: records the vote this computer starts; false refuses it while another vote runs
-    internal static bool OnShowVote(string parameter, MultiplayerVoteModal.VoteCanceledHandler voteCanceled)
+    // MultiplayerVoteModal.ShowVote: records the vote this computer starts and adds its ID to the request's parameter;
+    // false refuses it (another vote runs, or a player has another build)
+    internal static bool OnShowVote(ref string parameter, MultiplayerVoteModal.VoteCanceledHandler voteCanceled)
     {
+        string refusal = null;
+
         if (_vote != null)
         {
-            Gui.GuiService.ShowAlert(Gui.Localize("Message/&MultiplayerVoteAlreadyRunning"), Gui.ColorFailure, 5f);
+            refusal = Gui.Localize("Message/&MultiplayerVoteAlreadyRunning");
+        }
+        else
+        {
+            var otherBuilds = PhotonNetwork.PlayerListOthers
+                .Where(x => MultiplayerSessionContext.GetPlayerVersion(x) != MultiplayerSessionContext.BuildVersion)
+                .Select(x => x.NickName)
+                .ToList();
+
+            if (otherBuilds.Count > 0)
+            {
+                refusal = Gui.Format("Message/&MultiplayerVoteDifferentBuild", string.Join(", ", otherBuilds));
+            }
+        }
+
+        if (refusal != null)
+        {
+            Gui.GuiService.ShowAlert(refusal, Gui.ColorFailure, 5f);
             // the caller undoes what it prepared (fast travel clears its "preparing" state), as for a cancel
             voteCanceled?.Invoke();
 
             return false;
         }
 
+        RegisterEventHandler();
+
         _vote = new Vote
         {
+            Id = ++_lastVoteId,
             AskerId = LocalPlayerNumber,
             AskerName = PhotonNetwork.LocalPlayer?.NickName ?? string.Empty,
             Parameter = parameter,
-            LocalIsAsker = true
+            LocalIsAsker = true,
+            StartTime = Time.unscaledTime
         };
+        parameter += VoteIdMarker + _vote.Id;
 
         return true;
     }
 
     // ProcessVoteAccepted, ProcessVoteRefused and the asking player's Cancel end the vote here before the game closes
-    // the screen, so closing it isn't taken for the game dropping the vote (OnScreenHiding)
+    // the screen (so closing it isn't taken for the game dropping the vote, OnScreenHiding) and before the game sends
+    // the outcome or cancel, which then carries this ID
     internal static void OnAskerEndedVote()
     {
-        if (_vote is { LocalIsAsker: true })
+        if (_vote is not { LocalIsAsker: true })
         {
-            _vote = null;
+            return;
         }
+
+        _endedVoteId = _vote.Id;
+        _vote = null;
     }
 
-    // called every network frame on the asking computer: the vote passes once every player still in the room accepted,
-    // so a player who leaves doesn't hold it up
+    // called every network frame on the asking computer: the vote passes once every player still in the room accepted
+    // (so a player who leaves doesn't hold it up), and is cancelled once nobody can still answer it in time
     private static void UpdateAsker()
     {
         var screen = VoteScreen;
@@ -128,31 +184,78 @@ internal static class MultiplayerVoteContext
             return;
         }
 
-        if (PhotonNetwork.PlayerListOthers.All(x => _vote.Accepted.Contains(x.ActorNumber)))
+        var waiting = PhotonNetwork.PlayerListOthers.Where(x => !_vote.Accepted.Contains(x.ActorNumber)).ToList();
+
+        if (waiting.Count == 0)
         {
             screen.ProcessVoteAccepted();
+
+            return;
         }
+
+        if (Time.unscaledTime - _vote.StartTime < VoteDeadlineSeconds)
+        {
+            return;
+        }
+
+        Gui.GuiService.ShowAlert(
+            Gui.Format("Message/&MultiplayerVoteNoAnswer", string.Join(", ", waiting.Select(x => x.NickName))),
+            Gui.ColorFailure, 5f);
+        // the vote screen's own Cancel: tells the others, closes it and runs the vote's cancel function
+        screen.OnCancelVoteCb();
     }
 
     #endregion
 
     #region Other players
 
-    // LocalCommandManager.RequestVote, on every computer but the asking one: records the vote; false when this
-    // computer refused it because another vote is running here
-    internal static bool OnRequest(string caller, string parameter, int askerId)
+    // NetworkingManager.RequestVoteRPC: true when the request has an ID of this mod (the request then goes on its way,
+    // with the ID taken out of the parameter); outputs the parameter without it
+    internal static bool TryTakeVoteId(string parameter, out string original, out int voteId)
     {
+        original = parameter;
+        voteId = 0;
+
+        var index = parameter?.LastIndexOf(VoteIdMarker, System.StringComparison.Ordinal) ?? -1;
+
+        if (index < 0 || !int.TryParse(parameter!.Substring(index + VoteIdMarker.Length), out voteId))
+        {
+            return false;
+        }
+
+        original = parameter.Substring(0, index);
+
+        return true;
+    }
+
+    // LocalCommandManager.RequestVote, on every computer but the asking one: records the vote; false when the request
+    // isn't shown (no ID, so another build sent it; or another vote is running here, and this one is refused)
+    internal static bool OnRequest(string caller, string parameter, int voteId, bool hasVoteId, int askerId)
+    {
+        if (!hasVoteId)
+        {
+            return false;
+        }
+
         if (_vote != null)
         {
-            if (_vote.AskerId != askerId)
+            if (_vote.AskerId != askerId || _vote.Id != voteId)
             {
-                ServiceRepository.GetService<IFeedbackCommandService>()?.AnswerVote(false, 0);
+                SendAnswer(voteId, askerId, false, 0, string.Empty);
             }
 
             return false;
         }
 
-        _vote = new Vote { AskerId = askerId, AskerName = caller ?? string.Empty, Parameter = parameter };
+        RegisterEventHandler();
+        _vote = new Vote
+        {
+            Id = voteId,
+            AskerId = askerId,
+            AskerName = caller ?? string.Empty,
+            Parameter = parameter,
+            StartTime = Time.unscaledTime
+        };
 
         return true;
     }
@@ -171,6 +274,28 @@ internal static class MultiplayerVoteContext
         {
             ShowVoteScreenToOther();
         }
+    }
+
+    // NetworkingManager.AnswerVote (the request window's Accept and Refuse): sent with the vote's ID instead
+    internal static void SendLocalAnswer(bool accepted)
+    {
+        if (_vote is { LocalIsAsker: false, Preview: false })
+        {
+            SendAnswer(_vote.Id, _vote.AskerId, accepted, 0, string.Empty);
+        }
+    }
+
+    // an approval this computer can't take part in (a fight or a cutscene): refused with the reason, and this
+    // computer leaves the vote
+    internal static void RefuseAsBusy(byte reason, string names)
+    {
+        if (_vote is not { LocalIsAsker: false, Preview: false })
+        {
+            return;
+        }
+
+        SendAnswer(_vote.Id, _vote.AskerId, false, reason, names ?? string.Empty);
+        _vote = null;
     }
 
     // the request window is replaced by the vote screen, which shows who proposed what and everyone's votes so far
@@ -214,10 +339,83 @@ internal static class MultiplayerVoteContext
 
     #region Messages
 
-    // LocalCommandManager.AnswerVote, on every computer but the one that answered (replaces the game's handling)
-    internal static void OnAnswer(bool accepted, int actorNumber)
+    private static void RegisterEventHandler()
     {
-        if (_vote == null || actorNumber == _vote.AskerId)
+        if (_eventHandlerRegistered || PhotonNetwork.NetworkingClient == null)
+        {
+            return;
+        }
+
+        PhotonNetwork.NetworkingClient.EventReceived += OnEvent;
+        _eventHandlerRegistered = true;
+    }
+
+    private static void SendAnswer(int voteId, int askerId, bool accepted, byte reason, string names)
+    {
+        Raise(new object[] { AnswerKind, voteId, askerId, accepted, reason, names });
+    }
+
+    // NetworkingManager.NotifyVoteAccepted / NotifyVoteRejected, from ProcessVoteAccepted / ProcessVoteRefused on the
+    // asking computer: the outcome with the vote's ID instead
+    internal static void SendOutcome(bool passed, int refusedBy)
+    {
+        if (_endedVoteId != 0)
+        {
+            Raise(new object[] { OutcomeKind, _endedVoteId, passed, refusedBy });
+        }
+    }
+
+    // NetworkingManager.CancelVote, from the asking player's Cancel or the game closing the screen: with the ID instead
+    internal static void SendCancel()
+    {
+        if (_endedVoteId != 0)
+        {
+            Raise(new object[] { CancelKind, _endedVoteId });
+        }
+    }
+
+    private static void Raise(object[] data)
+    {
+        if (!PhotonNetwork.InRoom || PhotonNetwork.OfflineMode)
+        {
+            return;
+        }
+
+        PhotonNetwork.RaiseEvent(EventCode, data, new RaiseEventOptions { Receivers = ReceiverGroup.Others },
+            SendOptions.SendReliable);
+    }
+
+    // anything that doesn't have the expected layout is ignored
+    private static void OnEvent(EventData photonEvent)
+    {
+        if (photonEvent.Code != EventCode || photonEvent.CustomData is not object[] { Length: >= 2 } data ||
+            data[0] is not byte kind || data[1] is not int voteId)
+        {
+            return;
+        }
+
+        var sender = photonEvent.Sender;
+
+        switch (kind)
+        {
+            case AnswerKind when data.Length >= 6 && data[2] is int askerId && data[3] is bool accepted &&
+                                 data[4] is byte reason && data[5] is string names:
+                OnAnswer(voteId, askerId, sender, accepted, reason, names);
+                break;
+            case OutcomeKind when data.Length >= 4 && data[2] is bool passed && data[3] is int refusedBy:
+                OnOutcome(voteId, sender, passed, refusedBy);
+                break;
+            case CancelKind:
+                OnCancelled(voteId, sender);
+                break;
+        }
+    }
+
+    // an answer to the running vote, on every computer but the one that answered
+    private static void OnAnswer(int voteId, int askerId, int actorNumber, bool accepted, byte reason, string names)
+    {
+        if (_vote == null || _vote.Preview || _vote.Id != voteId || _vote.AskerId != askerId ||
+            actorNumber == _vote.AskerId)
         {
             return;
         }
@@ -227,6 +425,10 @@ internal static class MultiplayerVoteContext
             if (accepted)
             {
                 _vote.Accepted.Add(actorNumber);
+            }
+            else if (reason != 0)
+            {
+                MultiplayerApprovalContext.OnBusyRefusal(reason, names);
             }
 
             var screen = VoteScreen;
@@ -254,29 +456,40 @@ internal static class MultiplayerVoteContext
             return;
         }
 
-        // refused: the windows close here now; the asking computer's notice (NotifyVoteRejected) then names who
-        // refused and ends the vote. The game also showed that name from here, so it appeared twice.
+        // refused: the windows close here now; the asking computer's outcome then names who refused and ends the vote
         var shownHere = _vote.ShownToLocal;
 
         _vote.ShownToLocal = false;
         HideLocalScreens(shownHere);
     }
 
-    // LocalCommandManager.NotifyVoteAccepted / NotifyVoteRejected: the asking computer reports the outcome
-    internal static void OnOutcome()
+    // the asking computer reports the outcome: the game's own local handling (its alert naming who refused, and the
+    // request window closing), then the vote screen closes
+    private static void OnOutcome(int voteId, int senderId, bool passed, int refusedBy)
     {
-        if (_vote is not { LocalIsAsker: false })
+        if (_vote is not { LocalIsAsker: false, Preview: false } || _vote.Id != voteId || _vote.AskerId != senderId)
         {
             return;
+        }
+
+        var localCommands = LocalCommands;
+
+        if (passed)
+        {
+            localCommands?.NotifyVoteAccepted();
+        }
+        else
+        {
+            localCommands?.NotifyVoteRejected(refusedBy);
         }
 
         Reset();
     }
 
-    // NetworkingManager.CancelVoteRPC (replaces the game's handling, which named the host as the one who cancelled)
-    internal static void OnCancelled(int senderId)
+    // the asking player cancelled: the others are told who (the game named the host), and their screens close
+    private static void OnCancelled(int voteId, int senderId)
     {
-        if (_vote is not { LocalIsAsker: false } || _vote.AskerId != senderId)
+        if (_vote is not { LocalIsAsker: false, Preview: false } || _vote.Id != voteId || _vote.AskerId != senderId)
         {
             return;
         }
@@ -327,7 +540,7 @@ internal static class MultiplayerVoteContext
 
         if (_vote.LocalIsAsker)
         {
-            // the game's cancel: tells the others, closes the screen and runs the vote's cancel function
+            // the game's cancel: tells the others (SendCancel), closes the screen and runs the vote's cancel function
             OnAskerEndedVote();
 
             return true;
@@ -335,7 +548,7 @@ internal static class MultiplayerVoteContext
 
         _vote.ShownToLocal = false;
         screen.Hide();
-        ServiceRepository.GetService<IFeedbackCommandService>()?.AnswerVote(false, 0);
+        SendLocalAnswer(false);
 
         return false;
     }
@@ -364,11 +577,10 @@ internal static class MultiplayerVoteContext
             return;
         }
 
-        var voteScreen = (MultiplayerVoteModal)screen;
-        var voteCanceled = voteScreen.VoteCanceled;
+        var voteCanceled = ((MultiplayerVoteModal)screen).VoteCanceled;
 
-        _vote = null;
-        ServiceRepository.GetService<IFeedbackCommandService>()?.CancelVote();
+        OnAskerEndedVote();
+        SendCancel();
         voteCanceled?.Invoke();
     }
 
@@ -737,6 +949,10 @@ internal static class MultiplayerVoteContext
     {
         // players who accepted so far (not the asking player, who proposed it)
         internal readonly HashSet<int> Accepted = [];
+        // set by the asking computer; every message about this vote carries it
+        internal int Id;
+        // when this computer learned of the vote (the asking computer's deadline counts from it)
+        internal float StartTime;
         internal int AskerId;
         internal string AskerName;
         // the travel destination, or an approval's encoded action (MultiplayerApprovalContext.DescribeVoteParameter)

@@ -1,9 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using ExitGames.Client.Photon;
 using Photon.Pun;
-using Photon.Realtime;
 using static RuleDefinitions;
 
 namespace SolastaUnfinishedBusiness.Models;
@@ -18,8 +16,13 @@ namespace SolastaUnfinishedBusiness.Models;
 // MultiplayerVoteContext makes that vote work whoever asks, and shows it to every player; this class supplies the
 // approval's texts (DescribeVoteParameter, ShowRequest) and the parts the game's vote doesn't have:
 // - nobody is asked while a character is in combat or in a cutscene: the asking player is told which character is
-//   busy instead (before asking, and when another computer is busy as the request arrives, through Photon event 172);
+//   busy instead (before asking, and when another computer is busy as the request arrives: that computer refuses
+//   with the reason, MultiplayerVoteContext.RefuseAsBusy);
 // - a fight or cutscene starting while the vote runs cancels it.
+//
+// The request reaches the other computers without the game's travel request step (MultiplayerVoteModalPatcher's
+// RequestVoteRPC patch): that step stops every character's current action and drops the request, without an answer,
+// where a game script or a save-blocking action is running, neither of which applies to an approval.
 internal static class MultiplayerApprovalContext
 {
     internal enum ApprovalAction : byte
@@ -35,7 +38,7 @@ internal static class MultiplayerApprovalContext
         WaitAndLongRest = 9
     }
 
-    // the busy reply's reasons; the values are those the earlier request/reply messages used
+    // the busy refusal's reasons (sent as a byte in the vote's answer, 0 for none)
     private enum Answer : byte
     {
         None = 0,
@@ -43,9 +46,6 @@ internal static class MultiplayerApprovalContext
         InCutscene = 3
     }
 
-    private const byte EventCode = 172;
-    // a computer that was asked can't take part (a fight or a cutscene): [BusyKind, (byte)Answer, character names]
-    private const byte BusyKind = 2;
     // marks a vote parameter as an approval (a travel vote's parameter is the destination's name); the parts are
     // separated by PartSeparator: marker, action, character name, subject definition name, seconds
     private const string ApprovalMarker = "\u0001FinishingBusinessApproval";
@@ -55,7 +55,6 @@ internal static class MultiplayerApprovalContext
     // actions up to this long can skip approval (rituals, 1 and 10 minute castings, Mark Deity)
     private const int ShortActionSeconds = 600;
 
-    private static bool _eventHandlerRegistered;
     // the approval this computer asked for, while its vote runs
     private static PendingRequest _pending;
 
@@ -87,8 +86,6 @@ internal static class MultiplayerApprovalContext
         {
             return false;
         }
-
-        RegisterEventHandler();
 
         if (_pending != null || MultiplayerVoteContext.IsVoteRunning)
         {
@@ -170,21 +167,18 @@ internal static class MultiplayerApprovalContext
         }
     }
 
-    // another computer can't take part right now: that counts as its refusal, with the reason shown afterwards
-    private static void OnBusyReply(Player sender, Answer answer, string names)
+    // another computer refused because one of its characters is busy (MultiplayerVoteContext, before the game counts
+    // the refusal): the reason is shown once the vote is cancelled
+    internal static void OnBusyRefusal(byte reason, string names)
     {
-        var screen = Gui.GuiService.GetScreen<MultiplayerFastTravelVoteModal>();
-
-        if (_pending == null || sender == null || !screen || !screen.Visible || screen.Hiding)
+        if (_pending == null || (Answer)reason is not (Answer.InCombat or Answer.InCutscene))
         {
             return;
         }
 
-        _pending.BusyReason = Gui.Format(answer == Answer.InCombat
+        _pending.BusyReason = Gui.Format((Answer)reason == Answer.InCombat
             ? "Message/&MultiplayerApprovalInCombat"
             : "Message/&MultiplayerApprovalInCutscene", names);
-        // the game's refusal: tells everyone who refused, closes the screens and cancels the vote
-        screen.PlayerVoteReceived(sender.ActorNumber, false);
     }
 
     // called every network frame: a fight or cutscene starting while the vote runs ends it
@@ -217,9 +211,8 @@ internal static class MultiplayerApprovalContext
             DescribeVoteParameter(MultiplayerVoteContext.RequestParameter) != null &&
             DescribeLocalBusy(out var answer) != null)
         {
-            ReplyBusy(MultiplayerVoteContext.RequestAskerId, answer);
+            MultiplayerVoteContext.RefuseAsBusy((byte)answer, DescribeLocalBusyNames(answer));
             HideAnswerModal();
-            MultiplayerVoteContext.Forget();
         }
     }
 
@@ -236,7 +229,7 @@ internal static class MultiplayerApprovalContext
 
     // LocalCommandManager.RequestVote for an approval (true; false for a travel vote, which the game shows as usual):
     // the game's request window with the approval's texts and the game's own Accept and Refuse, or the busy reply
-    internal static bool ShowRequest(LocalCommandManager commandManager, string caller, string parameter, int askerId)
+    internal static bool ShowRequest(LocalCommandManager commandManager, string caller, string parameter)
     {
         if (!TryDecodeVoteParameter(parameter, out var action, out var characterName, out var subjectName,
                 out var seconds))
@@ -244,12 +237,9 @@ internal static class MultiplayerApprovalContext
             return false;
         }
 
-        RegisterEventHandler();
-
         if (DescribeLocalBusy(out var answer) != null)
         {
-            ReplyBusy(askerId, answer);
-            MultiplayerVoteContext.Forget();
+            MultiplayerVoteContext.RefuseAsBusy((byte)answer, DescribeLocalBusyNames(answer));
 
             return true;
         }
@@ -282,13 +272,6 @@ internal static class MultiplayerApprovalContext
             out requestText);
 
         return EncodeVoteParameter(ApprovalAction.ShortRest, characterName, string.Empty, seconds);
-    }
-
-    private static void ReplyBusy(int askerId, Answer answer)
-    {
-        PhotonNetwork.RaiseEvent(EventCode,
-            new object[] { BusyKind, (byte)answer, DescribeLocalBusyNames(answer) },
-            new RaiseEventOptions { TargetActors = [askerId] }, SendOptions.SendReliable);
     }
 
     private static void HideAnswerModal()
@@ -337,6 +320,11 @@ internal static class MultiplayerApprovalContext
         subjectName = parts[3];
 
         return true;
+    }
+
+    internal static bool IsApprovalParameter(string parameter)
+    {
+        return TryDecodeVoteParameter(parameter, out _, out _, out _, out _);
     }
 
     // the approval's action with its in-game time, as the vote screen shows it, or null for a travel vote
@@ -497,40 +485,12 @@ internal static class MultiplayerApprovalContext
 
     #endregion
 
-    #region Network
-
-    private static void RegisterEventHandler()
-    {
-        if (_eventHandlerRegistered || PhotonNetwork.NetworkingClient == null)
-        {
-            return;
-        }
-
-        PhotonNetwork.NetworkingClient.EventReceived += OnEvent;
-        _eventHandlerRegistered = true;
-    }
-
-    // clients register as soon as they join, so a busy reply isn't missed before they ask for anything themselves
+    // a room was joined: forgets any approval and vote from before
     internal static void OnJoinedRoom()
     {
-        Reset();
-        RegisterEventHandler();
+        _pending = null;
+        MultiplayerVoteContext.OnJoinedRoom();
     }
-
-    private static void OnEvent(EventData photonEvent)
-    {
-        if (photonEvent.Code != EventCode ||
-            photonEvent.CustomData is not object[] { Length: >= 3 } data ||
-            (byte)data[0] != BusyKind)
-        {
-            return;
-        }
-
-        OnBusyReply(PhotonNetwork.CurrentRoom?.GetPlayer(photonEvent.Sender), (Answer)(byte)data[1],
-            (string)data[2]);
-    }
-
-    #endregion
 
     private sealed class PendingRequest
     {
