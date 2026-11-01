@@ -254,15 +254,34 @@ internal static class MultiplayerApprovalContext
             return true;
         }
 
-        var title = Gui.Localize("Message/&MultiplayerApprovalRequestTitle");
-        var text = Gui.Format("Message/&MultiplayerApprovalRequestDescription", caller,
-            DescribeAction(action, characterName, subjectName), FormatDuration(seconds));
-
+        DescribeRequest(caller, action, characterName, subjectName, seconds, out var title, out var text);
         // as the game's LocalCommandManager.RequestVote does for travel, with these texts
         Gui.GuiService.ShowMultiplayerAnswer(title, text, commandManager.VoteAccepted, commandManager.VoteRejected,
             true);
 
         return true;
+    }
+
+    private static void DescribeRequest(string caller, ApprovalAction action, string characterName,
+        string subjectName, int seconds, out string title, out string text)
+    {
+        title = Gui.Localize("Message/&MultiplayerApprovalRequestTitle");
+        text = Gui.Format("Message/&MultiplayerApprovalRequestDescription", caller,
+            DescribeAction(action, characterName, subjectName), FormatDuration(seconds));
+    }
+
+    // the vote screen preview (MultiplayerVoteContext.StartPreview): a short rest by the first party character, as
+    // the vote parameter and as the request window's texts for a player named caller
+    internal static string PreviewVoteParameter(string caller, out string requestTitle, out string requestText)
+    {
+        var characterName = ServiceRepository.GetService<IGameLocationCharacterService>()?.PartyCharacters
+            .FirstOrDefault()?.Name ?? caller;
+        var seconds = RestSeconds(RestType.ShortRest);
+
+        DescribeRequest(caller, ApprovalAction.ShortRest, characterName, string.Empty, seconds, out requestTitle,
+            out requestText);
+
+        return EncodeVoteParameter(ApprovalAction.ShortRest, characterName, string.Empty, seconds);
     }
 
     private static void ReplyBusy(int askerId, Answer answer)

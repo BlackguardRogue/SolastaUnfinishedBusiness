@@ -15,6 +15,52 @@ internal static class MultiplayerDisplay
         Gui.Localize("ModUi/&MultiplayerFpsHostSeesAllOthersOwn")
     ];
 
+    // the vote screen preview's choices, kept while the game runs (not settings)
+    private static int _votePreviewOtherPlayers = 3;
+    private static bool _votePreviewLastRefuses;
+
+    // a single-player preview of the travel and approval vote screens with made-up players
+    // (MultiplayerVoteContext.StartPreview); nothing is sent
+    private static void DisplayVotePreview()
+    {
+        UI.Label();
+        UI.Label(Gui.Localize("ModUi/&MultiplayerVotePreviewTitle"));
+        UI.Label(Gui.Localize("ModUi/&MultiplayerVotePreviewHelp"));
+        UI.Label();
+
+        UI.Slider(Gui.Localize("ModUi/&MultiplayerVotePreviewPlayers"), ref _votePreviewOtherPlayers, 1,
+            MultiplayerVoteContext.PreviewMaxOtherPlayers, 3, string.Empty, UI.AutoWidth());
+        UI.Toggle(Gui.Localize("ModUi/&MultiplayerVotePreviewLastRefuses"), ref _votePreviewLastRefuses,
+            UI.AutoWidth());
+
+        if (!MultiplayerVoteContext.CanPreview())
+        {
+            UI.Label(Gui.Localize("ModUi/&MultiplayerVotePreviewUnavailable"));
+
+            return;
+        }
+
+        using (UI.HorizontalScope())
+        {
+            UI.ActionButton(Gui.Localize("ModUi/&MultiplayerVotePreviewAskApproval"),
+                () => MultiplayerVoteContext.StartPreview(true, true, _votePreviewOtherPlayers,
+                    _votePreviewLastRefuses), 250.Width());
+            UI.ActionButton(Gui.Localize("ModUi/&MultiplayerVotePreviewAskTravel"),
+                () => MultiplayerVoteContext.StartPreview(true, false, _votePreviewOtherPlayers,
+                    _votePreviewLastRefuses), 250.Width());
+        }
+
+        using (UI.HorizontalScope())
+        {
+            UI.ActionButton(Gui.Localize("ModUi/&MultiplayerVotePreviewAskedApproval"),
+                () => MultiplayerVoteContext.StartPreview(false, true, _votePreviewOtherPlayers,
+                    _votePreviewLastRefuses), 250.Width());
+            UI.ActionButton(Gui.Localize("ModUi/&MultiplayerVotePreviewAskedTravel"),
+                () => MultiplayerVoteContext.StartPreview(false, false, _votePreviewOtherPlayers,
+                    _votePreviewLastRefuses), 250.Width());
+        }
+    }
+
     // this build, and in a room the build of every player (missing ones say so); differences are red
     private static void DisplayVersions()
     {
@@ -224,6 +270,8 @@ internal static class MultiplayerDisplay
         {
             Main.Settings.AllowShortRestWithPartySpreadOut = toggle;
         }
+
+        DisplayVotePreview();
 
         UI.Label();
         UI.Label(Gui.Localize("ModUi/&MultiplayerMovementTitle"));

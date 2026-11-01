@@ -520,6 +520,15 @@ ModUi/&InfusionsOnlyOnNonMagicalItems=아티피서의 주입은 비마법 아이
 ModUi/&MultiplayerAllowAlliesToPassThroughInCombat=전투 중 둘 다 이동 중이면 아군끼리 서로 통과할 수 있게 함
 ModUi/&MultiplayerAllowCharactersToOverlapOutOfCombat=전투 밖에서 캐릭터가 같은 칸을 공유할 수 있게 하여 파티가 좁은 통로와 문을 함께 지나가게 함
 ModUi/&MultiplayerAllowPlayersToStartRests=호스트뿐 아니라 모든 플레이어가 휴식 화면에서 짧은 휴식이나 긴 휴식을 시작할 수 있게 함 <i><color=#F0DAA0>[휴식은 여전히 호스트가 모두에게 적용. 모닥불과 스토리로 시작되는 휴식은 게임 규칙을 따름]</color></i>
+ModUi/&MultiplayerVotePreviewTitle=<color=#F0DAA0>투표 화면 미리보기:</color>
+ModUi/&MultiplayerVotePreviewHelp=<i><color=#F0DAA0>이동 및 승인 투표 화면을 차례로 응답하는 가상의 플레이어와 함께 표시하여 모양을 확인합니다. 싱글 플레이의 장소 안에서만 가능하며, 아무것도 전송되지 않습니다. 보려면 이 창을 닫으세요.</color></i>
+ModUi/&MultiplayerVotePreviewPlayers=가상의 플레이어
+ModUi/&MultiplayerVotePreviewLastRefuses=마지막 플레이어가 거절
+ModUi/&MultiplayerVotePreviewUnavailable=<i><color=#F0DAA0>싱글 플레이의 장소 안에서, 미리보기가 실행 중이 아닐 때 사용할 수 있습니다</color></i>
+ModUi/&MultiplayerVotePreviewAskApproval=승인: 내가 요청
+ModUi/&MultiplayerVotePreviewAskTravel=이동: 내가 요청
+ModUi/&MultiplayerVotePreviewAskedApproval=승인: 요청을 받음
+ModUi/&MultiplayerVotePreviewAskedTravel=이동: 요청을 받음
 ModUi/&MultiplayerAlwaysOnFixes=<color=#F0DAA0>항상 적용:</color> 와일드 매직의 무작위 대상은 동기화된 주사위를 사용, 워락 슬롯과 일반 슬롯 사이의 SHIFT 선택은 주문, 반응, 변환과 함께 각 컴퓨터로 전송, 멀티플레이에서는 반응 시각을 저장하지 않음, 각 영웅은 대화마다 역할 하나를 받음, 영웅이 다른 역할의 대사를 연달아 두 번 말하지 않음, 영웅 5와 6은 컷신에서 고유한 위치를 받음.
 ModUi/&MultiplayerApprovalSkipActionsOfTenMinutesOrLess=10분 이하의 의식과 행동은 묻지 않음 <i><color=#F0DAA0>[의식, 1분과 10분 시전, 신 문양 새기기]</color></i>
 ModUi/&MultiplayerBuildInfo=<color=white>이 빌드:</color> {0}

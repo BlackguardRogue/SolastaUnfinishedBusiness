@@ -520,6 +520,15 @@ ModUi/&InfusionsOnlyOnNonMagicalItems=Le infusioni dell'artefice possono essere 
 ModUi/&MultiplayerAllowAlliesToPassThroughInCombat=Consenti agli alleati di attraversarsi in combattimento mentre entrambi si muovono
 ModUi/&MultiplayerAllowCharactersToOverlapOutOfCombat=Consenti ai personaggi di condividere le caselle fuori dal combattimento, così il gruppo passa insieme da cunicoli e porte
 ModUi/&MultiplayerAllowPlayersToStartRests=Consenti a ogni giocatore di iniziare un riposo breve o lungo dalla schermata di riposo, non solo all'host <i><color=#F0DAA0>[l'host applica comunque il riposo per tutti; i falò e i riposi avviati dalla storia seguono le regole del gioco]</color></i>
+ModUi/&MultiplayerVotePreviewTitle=<color=#F0DAA0>Anteprima della votazione:</color>
+ModUi/&MultiplayerVotePreviewHelp=<i><color=#F0DAA0>Mostra le finestre di votazione per viaggio e approvazione con giocatori inventati che rispondono uno dopo l'altro, per controllarne l'aspetto. Solo in giocatore singolo, in un luogo; non viene inviato nulla. Chiudi questa finestra per vederla.</color></i>
+ModUi/&MultiplayerVotePreviewPlayers=Giocatori inventati
+ModUi/&MultiplayerVotePreviewLastRefuses=L'ultimo giocatore rifiuta
+ModUi/&MultiplayerVotePreviewUnavailable=<i><color=#F0DAA0>Disponibile in giocatore singolo, in un luogo, quando nessuna anteprima è in corso</color></i>
+ModUi/&MultiplayerVotePreviewAskApproval=Approvazione: chiedi tu
+ModUi/&MultiplayerVotePreviewAskTravel=Viaggio: chiedi tu
+ModUi/&MultiplayerVotePreviewAskedApproval=Approvazione: ti viene chiesto
+ModUi/&MultiplayerVotePreviewAskedTravel=Viaggio: ti viene chiesto
 ModUi/&MultiplayerAlwaysOnFixes=<color=#F0DAA0>Sempre applicato:</color> il bersaglio casuale della Magia selvaggia usa i dadi sincronizzati, la scelta con MAIUSC tra slot da warlock o normali viene inviata a ogni computer con l'incantesimo, la reazione o la conversione, gli orari delle reazioni non vengono salvati in multigiocatore, ogni eroe riceve un ruolo per conversazione, un eroe non dice mai due battute di fila per ruoli diversi, e gli eroi 5 e 6 hanno la propria posizione nelle scene.
 ModUi/&MultiplayerApprovalSkipActionsOfTenMinutesOrLess=Non chiedere per rituali e azioni di 10 minuti o meno <i><color=#F0DAA0>[rituali, lanci da 1 e 10 minuti, marchio della divinità]</color></i>
 ModUi/&MultiplayerBuildInfo=<color=white>Questa build:</color> {0}

@@ -520,6 +520,15 @@ ModUi/&InfusionsOnlyOnNonMagicalItems=奇械师的灌注只能用于非魔法物
 ModUi/&MultiplayerAllowAlliesToPassThroughInCombat=允许战斗中正在移动的盟友互相穿过
 ModUi/&MultiplayerAllowCharactersToOverlapOutOfCombat=允许角色在战斗外共享格子，让队伍一起穿过狭窄通道和门
 ModUi/&MultiplayerAllowPlayersToStartRests=允许每位玩家在休息界面开始短休或长休，而不只是主机 <i><color=#F0DAA0>[主机仍为所有人执行休息；营火和由剧情触发的休息遵循游戏规则]</color></i>
+ModUi/&MultiplayerVotePreviewTitle=<color=#F0DAA0>投票界面预览：</color>
+ModUi/&MultiplayerVotePreviewHelp=<i><color=#F0DAA0>用依次回答的虚构玩家显示旅行和批准的投票界面，以检查其外观。仅限单人游戏且在地点中；不会发送任何内容。关闭此窗口即可查看。</color></i>
+ModUi/&MultiplayerVotePreviewPlayers=虚构玩家
+ModUi/&MultiplayerVotePreviewLastRefuses=最后一名玩家拒绝
+ModUi/&MultiplayerVotePreviewUnavailable=<i><color=#F0DAA0>在单人游戏的地点中、且没有正在运行的预览时可用</color></i>
+ModUi/&MultiplayerVotePreviewAskApproval=批准：你发起
+ModUi/&MultiplayerVotePreviewAskTravel=旅行：你发起
+ModUi/&MultiplayerVotePreviewAskedApproval=批准：你被询问
+ModUi/&MultiplayerVotePreviewAskedTravel=旅行：你被询问
 ModUi/&MultiplayerAlwaysOnFixes=<color=#F0DAA0>始终生效：</color>狂野魔法的随机目标使用同步骰子，SHIFT选择的邪术师法术位或普通法术位会随施法、反应或转换发送到每台电脑，多人游戏中不保存反应时间戳，每位英雄在每次对话中获得一个角色，英雄绝不会连续为不同角色说两句台词，第5和第6位英雄在过场动画中有自己的站位。
 ModUi/&MultiplayerApprovalSkipActionsOfTenMinutesOrLess=10分钟或更短的仪式和行动不询问 <i><color=#F0DAA0>[仪式、1分钟和10分钟的施法、神祇标记]</color></i>
 ModUi/&MultiplayerBuildInfo=<color=white>当前版本：</color>{0}

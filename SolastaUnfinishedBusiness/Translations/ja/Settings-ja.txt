@@ -520,6 +520,15 @@ ModUi/&InfusionsOnlyOnNonMagicalItems=アーティフィサーのインフュー
 ModUi/&MultiplayerAllowAlliesToPassThroughInCombat=戦闘中、双方が移動中なら味方同士がすり抜けられるようにする
 ModUi/&MultiplayerAllowCharactersToOverlapOutOfCombat=戦闘外ではキャラクターが同じマスに入れるようにし、パーティーが狭い通路や扉を一緒に通れるようにする
 ModUi/&MultiplayerAllowPlayersToStartRests=ホストだけでなく全プレイヤーが休憩画面から小休憩・大休憩を始められるようにする <i><color=#F0DAA0>[休憩は引き続きホストが全員に適用。キャンプファイアやストーリーで始まる休憩はゲームのルールに従う]</color></i>
+ModUi/&MultiplayerVotePreviewTitle=<color=#F0DAA0>投票画面のプレビュー:</color>
+ModUi/&MultiplayerVotePreviewHelp=<i><color=#F0DAA0>移動と承認の投票画面を、順番に回答する架空のプレイヤーで表示し、見た目を確認します。シングルプレイのロケーション内のみ。何も送信されません。表示するにはこのウィンドウを閉じてください。</color></i>
+ModUi/&MultiplayerVotePreviewPlayers=架空のプレイヤー
+ModUi/&MultiplayerVotePreviewLastRefuses=最後のプレイヤーが拒否する
+ModUi/&MultiplayerVotePreviewUnavailable=<i><color=#F0DAA0>シングルプレイのロケーション内で、プレビュー実行中でないときに使用できます</color></i>
+ModUi/&MultiplayerVotePreviewAskApproval=承認: 自分が提案
+ModUi/&MultiplayerVotePreviewAskTravel=移動: 自分が提案
+ModUi/&MultiplayerVotePreviewAskedApproval=承認: 提案を受ける
+ModUi/&MultiplayerVotePreviewAskedTravel=移動: 提案を受ける
 ModUi/&MultiplayerAlwaysOnFixes=<color=#F0DAA0>常に適用：</color>ワイルド・マジックのランダムな対象は同期ダイスを使う、ウォーロックのスロットか通常のスロットかのSHIFT選択は呪文・リアクション・変換とともに各コンピューターへ送られる、マルチプレイではリアクションのタイムスタンプを保存しない、各英雄は会話ごとに1つの役を得る、英雄が異なる役のセリフを2回続けて話すことはない、英雄5と6はカットシーンで専用の位置を得る。
 ModUi/&MultiplayerApprovalSkipActionsOfTenMinutesOrLess=10分以下の儀式と行動では承認を求めない <i><color=#F0DAA0>[儀式、1分と10分の発動、神の聖印]</color></i>
 ModUi/&MultiplayerBuildInfo=<color=white>このビルド：</color>{0}

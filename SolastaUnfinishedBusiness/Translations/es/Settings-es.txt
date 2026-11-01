@@ -520,6 +520,15 @@ ModUi/&InfusionsOnlyOnNonMagicalItems=Las infusiones del artífice solo pueden p
 ModUi/&MultiplayerAllowAlliesToPassThroughInCombat=Permitir que los aliados se atraviesen en combate mientras ambos se mueven
 ModUi/&MultiplayerAllowCharactersToOverlapOutOfCombat=Permitir que los personajes compartan casillas fuera de combate, para que el grupo pase junto por pasadizos estrechos y puertas
 ModUi/&MultiplayerAllowPlayersToStartRests=Permitir que cualquier jugador empiece un descanso corto o largo desde la pantalla de descanso, no solo el anfitrión <i><color=#F0DAA0>[el anfitrión sigue aplicando el descanso para todos; las hogueras y los descansos iniciados por la historia siguen las reglas del juego]</color></i>
+ModUi/&MultiplayerVotePreviewTitle=<color=#F0DAA0>Vista previa de la votación:</color>
+ModUi/&MultiplayerVotePreviewHelp=<i><color=#F0DAA0>Muestra las ventanas de votación de viaje y de aprobación con jugadores inventados que responden uno tras otro, para comprobar su aspecto. Solo en un jugador, en una ubicación; no se envía nada. Cierra esta ventana para verla.</color></i>
+ModUi/&MultiplayerVotePreviewPlayers=Jugadores inventados
+ModUi/&MultiplayerVotePreviewLastRefuses=El último jugador rechaza
+ModUi/&MultiplayerVotePreviewUnavailable=<i><color=#F0DAA0>Disponible en un jugador, en una ubicación, cuando no hay otra vista previa en curso</color></i>
+ModUi/&MultiplayerVotePreviewAskApproval=Aprobación: tú preguntas
+ModUi/&MultiplayerVotePreviewAskTravel=Viaje: tú preguntas
+ModUi/&MultiplayerVotePreviewAskedApproval=Aprobación: te preguntan
+ModUi/&MultiplayerVotePreviewAskedTravel=Viaje: te preguntan
 ModUi/&MultiplayerAlwaysOnFixes=<color=#F0DAA0>Siempre aplicado:</color> el objetivo aleatorio de la Magia salvaje usa los dados sincronizados, la elección con MAYÚS entre espacios de brujo o normales se envía a cada ordenador con el conjuro, la reacción o la conversión, las marcas de tiempo de reacción no se guardan en multijugador, cada héroe recibe un papel por conversación, un héroe nunca dice dos frases seguidas para papeles distintos, y los héroes 5 y 6 tienen su propia posición en las escenas.
 ModUi/&MultiplayerApprovalSkipActionsOfTenMinutesOrLess=No preguntar por rituales y acciones de 10 minutos o menos <i><color=#F0DAA0>[rituales, lanzamientos de 1 y 10 minutos, marcar deidad]</color></i>
 ModUi/&MultiplayerBuildInfo=<color=white>Esta versión:</color> {0}

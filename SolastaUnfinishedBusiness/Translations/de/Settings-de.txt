@@ -520,6 +520,15 @@ ModUi/&InfusionsOnlyOnNonMagicalItems=Infusionen des Artificers können nur auf 
 ModUi/&MultiplayerAllowAlliesToPassThroughInCombat=Verbündeten im Kampf erlauben, sich durcheinander hindurch zu bewegen, solange sich beide bewegen
 ModUi/&MultiplayerAllowCharactersToOverlapOutOfCombat=Charakteren außerhalb des Kampfes erlauben, Felder zu teilen, damit die Gruppe gemeinsam durch Kriechgänge und Türen geht
 ModUi/&MultiplayerAllowPlayersToStartRests=Jeden Spieler eine kurze oder lange Rast im Rastbildschirm beginnen lassen, nicht nur den Host <i><color=#F0DAA0>[der Host wendet die Rast weiterhin für alle an; Lagerfeuer und von der Geschichte begonnene Rasten folgen den Spielregeln]</color></i>
+ModUi/&MultiplayerVotePreviewTitle=<color=#F0DAA0>Vorschau der Abstimmung:</color>
+ModUi/&MultiplayerVotePreviewHelp=<i><color=#F0DAA0>Zeigt die Abstimmungsfenster für Reisen und Zustimmungen mit erfundenen Spielern, die nacheinander antworten, um ihr Aussehen zu prüfen. Nur im Einzelspieler, an einem Ort; es wird nichts gesendet. Schließe dieses Fenster, um sie zu sehen.</color></i>
+ModUi/&MultiplayerVotePreviewPlayers=Erfundene Spieler
+ModUi/&MultiplayerVotePreviewLastRefuses=Der letzte Spieler lehnt ab
+ModUi/&MultiplayerVotePreviewUnavailable=<i><color=#F0DAA0>Verfügbar im Einzelspieler, an einem Ort, wenn keine Vorschau läuft</color></i>
+ModUi/&MultiplayerVotePreviewAskApproval=Zustimmung: du fragst
+ModUi/&MultiplayerVotePreviewAskTravel=Reise: du fragst
+ModUi/&MultiplayerVotePreviewAskedApproval=Zustimmung: du wirst gefragt
+ModUi/&MultiplayerVotePreviewAskedTravel=Reise: du wirst gefragt
 ModUi/&MultiplayerAlwaysOnFixes=<color=#F0DAA0>Immer aktiv:</color> Das Zufallsziel der Wilden Magie nutzt die synchronisierten Würfel, die UMSCHALT-Wahl zwischen Hexenmeister- und normalen Plätzen wird mit dem Zauber, der Reaktion oder der Umwandlung an jeden Computer gesendet, Reaktionszeitstempel werden im Mehrspieler nicht gespeichert, jeder Held erhält eine Rolle pro Gespräch, ein Held spricht nie zwei Zeilen hintereinander für verschiedene Rollen, und Helden 5 und 6 erhalten eigene Plätze in Zwischensequenzen.
 ModUi/&MultiplayerApprovalSkipActionsOfTenMinutesOrLess=Nicht nach Ritualen und Aktionen von 10 Minuten oder weniger fragen <i><color=#F0DAA0>[Rituale, Wirkzeiten von 1 und 10 Minuten, Gottheit markieren]</color></i>
 ModUi/&MultiplayerBuildInfo=<color=white>Dieser Build:</color> {0}

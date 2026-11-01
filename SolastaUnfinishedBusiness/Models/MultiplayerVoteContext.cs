@@ -2,6 +2,8 @@ using System.Collections.Generic;
 using System.Linq;
 using Photon.Pun;
 using UnityEngine;
+using UnityEngine.AddressableAssets;
+using UnityEngine.UI;
 
 namespace SolastaUnfinishedBusiness.Models;
 
@@ -287,7 +289,8 @@ internal static class MultiplayerVoteContext
 
     internal static void Update()
     {
-        if (_vote == null)
+        // the preview runs on its own driver and must never pass or cancel through the network
+        if (_vote == null || _vote.Preview)
         {
             return;
         }
@@ -312,6 +315,14 @@ internal static class MultiplayerVoteContext
         if (_vote == null)
         {
             return true;
+        }
+
+        if (_vote.Preview)
+        {
+            _vote = null;
+            screen.Hide();
+
+            return false;
         }
 
         if (_vote.LocalIsAsker)
@@ -339,6 +350,13 @@ internal static class MultiplayerVoteContext
             return;
         }
 
+        if (_vote.Preview)
+        {
+            _vote = null;
+
+            return;
+        }
+
         if (!_vote.LocalIsAsker)
         {
             _vote.ShownToLocal = false;
@@ -359,7 +377,9 @@ internal static class MultiplayerVoteContext
     internal static void EnsurePlayerRows(MultiplayerVoteModal screen)
     {
         var groups = screen.playerInfoGroups;
-        var needed = (ServiceRepository.GetService<INetworkingService>()?.GetPlayersInRoom()?.Count ?? 1) - 1;
+        var needed = _vote is { Preview: true }
+            ? _vote.PreviewPlayers.Count
+            : (ServiceRepository.GetService<INetworkingService>()?.GetPlayersInRoom()?.Count ?? 1) - 1;
 
         while (groups.Count > 0 && groups.Count < needed)
         {
@@ -469,6 +489,250 @@ internal static class MultiplayerVoteContext
 
     #endregion
 
+    #region Preview
+
+    // A single-player preview of the vote screens with made-up players (user request, 2026-11-01), started from the
+    // mod menu (Multiplayer). It goes through the same screen code as a real vote (texts, rows, extra rows, marking
+    // votes, the request window giving way to the vote screen, Cancel), but nothing is sent: the made-up players
+    // answer one after another on a timer, and the outcome is shown with the game's own alerts. The game fills the
+    // rows from the room's players and the session's player slots, which single player doesn't have for made-up
+    // players, so while the preview runs OnCollectPlayerInfo, OnBindRow and OnRefreshAvatar stand in for those
+    // lookups. It can't show anything about the network side: who counts the answers, cancels reaching the others,
+    // players leaving.
+
+    private const int PreviewFirstPlayerId = -101;
+    private const float PreviewSecondsBetweenAnswers = 1.5f;
+    // a sample destination for the travel preview (a town of the main campaign)
+    private const string PreviewDestination = "Caer Cyflen";
+    private static readonly string[] PreviewNames = ["Aria", "Bram", "Corin", "Dessa", "Eldon"];
+
+    internal const int PreviewMaxOtherPlayers = 5;
+
+    // the preview needs a location (the vote screens belong to the game's location screens) and no online game
+    internal static bool CanPreview()
+    {
+        return !Global.IsMultiplayer && Gui.GameLocation != null && VoteScreen &&
+               Gui.GuiService.GetScreen<MultiplayerAnswerModal>() && _vote == null;
+    }
+
+    // asking: this player proposes and sees the others answer; otherwise the first made-up player proposes and this
+    // player gets the request window first. otherPlayers is the number of rows on the vote screen (1 to 5).
+    internal static void StartPreview(bool asking, bool approval, int otherPlayers, bool lastRefuses)
+    {
+        if (!CanPreview())
+        {
+            return;
+        }
+
+        otherPlayers = Mathf.Clamp(otherPlayers, 1, PreviewMaxOtherPlayers);
+
+        var vote = new Vote
+        {
+            Preview = true, LocalIsAsker = asking, PreviewLastRefuses = lastRefuses
+        };
+
+        for (var i = 0; i < otherPlayers; i++)
+        {
+            vote.PreviewPlayers.Add(new SessionPlayerSlot(PreviewFirstPlayerId - i, PreviewNames[i], PreviewNames[i]));
+        }
+
+        var askerName = asking ? PhotonNetwork.LocalPlayer?.NickName ?? string.Empty : PreviewNames[0];
+        string requestTitle;
+        string requestText;
+
+        if (approval)
+        {
+            vote.Parameter = MultiplayerApprovalContext.PreviewVoteParameter(askerName, out requestTitle,
+                out requestText);
+        }
+        else
+        {
+            vote.Parameter = PreviewDestination;
+            // the game's own request texts for travel (LocalCommandManager.RequestVote)
+            requestTitle = Gui.Localize("Modal/&MapWaypointNavigateVoteTitle");
+            requestText = Gui.Format("Modal/&MapWaypointNavigateVoteClientDescription", askerName,
+                PreviewDestination);
+        }
+
+        vote.AskerId = asking ? PreviewFirstPlayerId + 1 : PreviewFirstPlayerId;
+        vote.AskerName = askerName;
+
+        // everyone but the proposer answers
+        foreach (var slot in vote.PreviewPlayers.Where(x => x.PlayerId != vote.AskerId))
+        {
+            vote.PreviewToAnswer.Enqueue(slot.PlayerId);
+        }
+
+        vote.PreviewNextAnswerTime = Time.unscaledTime + PreviewSecondsBetweenAnswers;
+        _vote = vote;
+
+        var driver = new GameObject("FinishingBusinessVotePreview");
+
+        Object.DontDestroyOnLoad(driver);
+        driver.AddComponent<PreviewDriver>();
+
+        if (asking)
+        {
+            var screen = VoteScreen;
+
+            screen.VotePassed = null;
+            screen.VoteCanceled = null;
+            ApplyTexts(screen);
+            screen.CollectPlayerInfo();
+            screen.Show(false);
+
+            return;
+        }
+
+        Gui.GuiService.ShowMultiplayerAnswer(requestTitle, requestText,
+            () => OnPreviewLocalAnswer(true), () => OnPreviewLocalAnswer(false), true);
+    }
+
+    // the request window's Accept (the vote screen follows) or Refuse and its timer (the preview ends)
+    private static void OnPreviewLocalAnswer(bool accepted)
+    {
+        if (_vote is not { Preview: true, LocalIsAsker: false })
+        {
+            return;
+        }
+
+        _vote.Answered = true;
+
+        if (accepted)
+        {
+            ShowVoteScreenToOther();
+        }
+        else
+        {
+            _vote = null;
+        }
+    }
+
+    // the next made-up answer, and the outcome once everyone answered or someone refused
+    private static void UpdatePreview()
+    {
+        if (Time.unscaledTime < _vote.PreviewNextAnswerTime)
+        {
+            return;
+        }
+
+        _vote.PreviewNextAnswerTime = Time.unscaledTime + PreviewSecondsBetweenAnswers;
+
+        if (_vote.PreviewToAnswer.Count == 0)
+        {
+            // a player who was asked and hasn't answered yet: the outcome waits for them
+            if (!_vote.LocalIsAsker && !_vote.Answered)
+            {
+                return;
+            }
+
+            FinishPreview(null);
+
+            return;
+        }
+
+        var playerId = _vote.PreviewToAnswer.Dequeue();
+
+        if (_vote.PreviewLastRefuses && _vote.PreviewToAnswer.Count == 0)
+        {
+            FinishPreview(_vote.PreviewPlayers.First(x => x.PlayerId == playerId).PlayerNickname);
+
+            return;
+        }
+
+        _vote.Accepted.Add(playerId);
+
+        var screen = VoteScreen;
+
+        if (screen && screen.Visible && (_vote.LocalIsAsker || _vote.ShownToLocal))
+        {
+            ApplyVotes(screen);
+        }
+    }
+
+    // as the game ends a vote: the alerts it shows on the asking computer (everyone accepted, or who refused), and
+    // the screens closing
+    private static void FinishPreview(string refusedBy)
+    {
+        var shownHere = _vote.LocalIsAsker || _vote.ShownToLocal;
+
+        if (refusedBy != null)
+        {
+            Gui.GuiService.ShowAlert(Gui.Format("Message/&MultiplayerVoteClientRejectedDescription", refusedBy),
+                Gui.ColorFailure, 2.5f);
+        }
+        else if (_vote.LocalIsAsker)
+        {
+            Gui.GuiService.ShowAlert(Gui.Localize("Message/&MultiplayerVoteClientAllClientsAcceptedDescription"),
+                Gui.ColorSuccess, 2.5f);
+        }
+
+        _vote = null;
+        HideLocalScreens(shownHere);
+    }
+
+    // MultiplayerVoteModal.CollectPlayerInfo: the made-up players instead of the room's (false skips the game's)
+    internal static bool OnCollectPlayerInfo(MultiplayerVoteModal screen)
+    {
+        if (_vote is not { Preview: true })
+        {
+            return true;
+        }
+
+        screen.ClientInfos.Clear();
+
+        foreach (var slot in _vote.PreviewPlayers)
+        {
+            screen.ClientInfos.Add(new NetworkingDefinitions.PlayerInfo
+            {
+                actorNumber = slot.PlayerId, nickname = slot.PlayerNickname, uniqueId = string.Empty
+            });
+        }
+
+        return false;
+    }
+
+    // MultiplayerVoteModal.BindUnreadyPlayerInfoGroup: a made-up player's row, bound as the game binds a real one
+    // (false skips the game's, which looks the player up in the session)
+    internal static bool OnBindRow(PlayerInfoGroup group, int playerId)
+    {
+        var slot = _vote is { Preview: true } ? _vote.PreviewPlayers.FirstOrDefault(x => x.PlayerId == playerId) : null;
+
+        if (slot == null)
+        {
+            return true;
+        }
+
+        group.gameObject.SetActive(true);
+        group.Bind(slot, true, true, false, false, true, false, false,
+            PlayerInfoGroup.PlayerAbstractStatus.Pending);
+
+        return false;
+    }
+
+    // PlayerInfoGroup.RefreshPlayerAvatar: a made-up player gets one of the game's default avatars (the game asks the
+    // Photon room for the player, which single player doesn't have). As the game's own fallback: false = no user avatar.
+    internal static bool OnRefreshAvatar(int playerId, RawImage playerImage,
+        List<AssetReferenceSprite> defaultPlayerSpriteReferences, ref Sprite defaultSprite, ref bool result)
+    {
+        if (_vote is not { Preview: true } || _vote.PreviewPlayers.All(x => x.PlayerId != playerId) ||
+            defaultPlayerSpriteReferences is not { Count: > 0 })
+        {
+            return true;
+        }
+
+        var index = (PreviewFirstPlayerId - playerId) % defaultPlayerSpriteReferences.Count;
+
+        defaultSprite = Gui.LoadAssetSync<Sprite>(defaultPlayerSpriteReferences[index]);
+        playerImage.texture = defaultSprite.texture;
+        playerImage.gameObject.SetActive(true);
+        result = false;
+
+        return false;
+    }
+
+    #endregion
+
     private sealed class Vote
     {
         // players who accepted so far (not the asking player, who proposed it)
@@ -482,5 +746,29 @@ internal static class MultiplayerVoteContext
         internal bool Answered;
         // a computer that was asked: the vote screen shows this vote (after Accept)
         internal bool ShownToLocal;
+
+        // the single-player preview (StartPreview): made-up players, nothing sent
+        internal bool Preview;
+        internal readonly List<SessionPlayerSlot> PreviewPlayers = [];
+        // the made-up players still to answer, in order, and when the next one does
+        internal readonly Queue<int> PreviewToAnswer = new();
+        internal float PreviewNextAnswerTime;
+        internal bool PreviewLastRefuses;
+    }
+
+    // runs the preview's made-up answers each frame; it removes itself once the preview is over
+    private sealed class PreviewDriver : MonoBehaviour
+    {
+        private void Update()
+        {
+            if (_vote is not { Preview: true })
+            {
+                Destroy(gameObject);
+
+                return;
+            }
+
+            UpdatePreview();
+        }
     }
 }

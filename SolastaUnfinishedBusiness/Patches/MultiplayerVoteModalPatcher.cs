@@ -1,8 +1,12 @@
+using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using HarmonyLib;
 using JetBrains.Annotations;
 using Photon.Pun;
 using SolastaUnfinishedBusiness.Models;
+using UnityEngine;
+using UnityEngine.AddressableAssets;
+using UnityEngine.UI;
 
 namespace SolastaUnfinishedBusiness.Patches;
 
@@ -53,6 +57,47 @@ public static class MultiplayerVoteModalPatcher
         public static void Postfix(MultiplayerVoteModal __instance)
         {
             MultiplayerVoteContext.ApplyVotes(__instance);
+        }
+    }
+
+    //PATCH: the vote screen preview's made-up players instead of the room's (MULTIPLAYER)
+    [HarmonyPatch(typeof(MultiplayerVoteModal), nameof(MultiplayerVoteModal.CollectPlayerInfo))]
+    [SuppressMessage("Minor Code Smell", "S101:Types should be named in PascalCase", Justification = "Patch")]
+    [UsedImplicitly]
+    public static class CollectPlayerInfo_Patch
+    {
+        [UsedImplicitly]
+        public static bool Prefix(MultiplayerVoteModal __instance)
+        {
+            return MultiplayerVoteContext.OnCollectPlayerInfo(__instance);
+        }
+    }
+
+    //PATCH: the vote screen preview binds its made-up players' rows (MULTIPLAYER)
+    [HarmonyPatch(typeof(MultiplayerVoteModal), nameof(MultiplayerVoteModal.BindUnreadyPlayerInfoGroup))]
+    [SuppressMessage("Minor Code Smell", "S101:Types should be named in PascalCase", Justification = "Patch")]
+    [UsedImplicitly]
+    public static class BindUnreadyPlayerInfoGroup_Patch
+    {
+        [UsedImplicitly]
+        public static bool Prefix(PlayerInfoGroup playerInfoGroup, int playerId)
+        {
+            return MultiplayerVoteContext.OnBindRow(playerInfoGroup, playerId);
+        }
+    }
+
+    //PATCH: the vote screen preview's made-up players get the game's default avatars (MULTIPLAYER)
+    [HarmonyPatch(typeof(PlayerInfoGroup), nameof(PlayerInfoGroup.RefreshPlayerAvatar))]
+    [SuppressMessage("Minor Code Smell", "S101:Types should be named in PascalCase", Justification = "Patch")]
+    [UsedImplicitly]
+    public static class RefreshPlayerAvatar_Patch
+    {
+        [UsedImplicitly]
+        public static bool Prefix(int playerId, RawImage playerImage,
+            List<AssetReferenceSprite> defaultPlayerSpriteReferences, ref Sprite defaultSprite, ref bool __result)
+        {
+            return MultiplayerVoteContext.OnRefreshAvatar(playerId, playerImage, defaultPlayerSpriteReferences,
+                ref defaultSprite, ref __result);
         }
     }
 
