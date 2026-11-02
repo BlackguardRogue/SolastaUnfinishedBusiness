@@ -100,6 +100,12 @@ public static class RestModalPatcher
                 return false;
             }
 
+            // a dead, dying or unconscious leader can't lead the travel: said before anyone is asked to approve it
+            if (!CampfireRestContext.LeaderCanTravel())
+            {
+                return false;
+            }
+
             if (!MultiplayerApprovalContext.MustWaitForApproval(
                     MultiplayerApprovalContext.ApprovalAction.CampfireLongRest, string.Empty, null,
                     MultiplayerApprovalContext.RestSeconds(RestType.LongRest),

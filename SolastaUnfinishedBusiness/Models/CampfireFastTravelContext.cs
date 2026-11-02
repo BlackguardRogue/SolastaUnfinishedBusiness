@@ -32,8 +32,8 @@ namespace SolastaUnfinishedBusiness.Models;
 // game's checks for traps and watching enemies, then the whole party is placed in formation at the point. The game
 // leaves nobody out: dead, dying and unconscious characters and guests are placed too (SetupPartyOnDestination copies
 // the party and guests without any condition check). A leader already on the point travels a route of no steps (the
-// game's own samePosition case). Whether a downed leader can be routed isn't known yet; if the game can't find a path
-// it says so, and the gather fails.
+// game's own samePosition case). A dead, dying or unconscious leader stops the gather before it travels, with a
+// message naming them and their state (DescribeDownedLeader).
 internal static class CampfireFastTravelContext
 {
     // an existing fast travel waypoint this close to the campfire's user is used instead of making one
@@ -188,6 +188,27 @@ internal static class CampfireFastTravelContext
         }
 
         return false;
+    }
+
+    // the game routes a fast travel from the first party member (MapWaypointItem.PrepareFastTravel, ExecutePath); when
+    // that leader is dead, dying or unconscious the gather doesn't try (user direction, 2026-11-02: name the leader and
+    // their state, e.g. "Kushiel is dead. Unable to long rest."). The message, or null when the leader can lead.
+    internal static string DescribeDownedLeader()
+    {
+        var leader = ServiceRepository.GetService<IGameLocationCharacterService>()?.PartyCharacters.FirstOrDefault();
+
+        if (leader?.RulesetCharacter is not { IsDeadOrDyingOrUnconscious: true } character)
+        {
+            return null;
+        }
+
+        var key = character.IsDead
+            ? "Message/&CampfireLeaderDead"
+            : character.IsDying
+                ? "Message/&CampfireLeaderDying"
+                : "Message/&CampfireLeaderUnconscious";
+
+        return Gui.Format(key, leader.Name);
     }
 
     // drops the destination; a temporary waypoint leaves the map again

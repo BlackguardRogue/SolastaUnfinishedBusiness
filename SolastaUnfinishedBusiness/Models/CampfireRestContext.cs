@@ -304,6 +304,12 @@ internal static class CampfireRestContext
             return false;
         }
 
+        // the leader can't lead the travel: said instead of waiting for nothing
+        if (!LeaderCanTravel())
+        {
+            return true;
+        }
+
         var hours = LongRestWaitContext.MissingHours();
 
         if (!MultiplayerApprovalContext.MustWaitForApprovalWithSubjectName(
@@ -333,6 +339,14 @@ internal static class CampfireRestContext
     {
         if (!Gathers(campfire))
         {
+            return false;
+        }
+
+        // checked again here, as the leader may have gone down while the approval ran
+        if (!LeaderCanTravel())
+        {
+            CampfireFastTravelContext.OnGatherAbandoned();
+
             return false;
         }
 
@@ -418,6 +432,23 @@ internal static class CampfireRestContext
     private static void ShowGatherFailed()
     {
         Gui.GuiService.ShowAlert(Gui.Localize("Message/&CampfireGatherFailed"), Gui.ColorFailure, 5f);
+    }
+
+    // the party's leader (the first party member, from whom the game routes a fast travel) can lead it; when they are
+    // dead, dying or unconscious the player is told who and in which state, e.g. "Kushiel is dead. Unable to long
+    // rest." (user direction, 2026-11-02), and nobody travels or rests
+    internal static bool LeaderCanTravel()
+    {
+        var message = CampfireFastTravelContext.DescribeDownedLeader();
+
+        if (message == null)
+        {
+            return true;
+        }
+
+        Gui.GuiService.ShowAlert(message, Gui.ColorFailure, 5f);
+
+        return false;
     }
 
     // leaving or joining a room, or loading: forgets the campfire and any gather
