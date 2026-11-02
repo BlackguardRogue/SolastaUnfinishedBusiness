@@ -59,8 +59,13 @@ internal static class Program
                             $"The failed attempt couldn't restore the previous files; they are in {transaction}");
                     }
 
-                    // an attempt that stopped before changing anything has no backup worth keeping
-                    if (attempt > 0 && !File.Exists(Path.Combine(transaction, "journal.xml")))
+                    // an attempt that stopped before changing anything has no backup worth keeping. One that stopped
+                    // even before creating its backup folder (a missing or empty staged update, the installer lock
+                    // held) has none to delete: deleting it anyway threw "Could not find a part of the path
+                    // ...\transaction", which every later attempt repeated and which then replaced the real error in
+                    // the result the game reports
+                    if (attempt > 0 && !File.Exists(Path.Combine(transaction, "journal.xml")) &&
+                        Directory.Exists(transaction))
                     {
                         Directory.Delete(transaction, true);
                     }
