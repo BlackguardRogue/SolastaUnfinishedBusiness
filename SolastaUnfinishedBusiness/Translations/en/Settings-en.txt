@@ -49,6 +49,7 @@ ModUi/&Category=Category
 ModUi/&ChangeDragonbornElementalBreathUsages=Change <color=#D89555>Dragonborn</color> elemental breath usages to CON modifier per short rest
 ModUi/&ChangeSleetStormToCube=Change <color=#D89555>Sleet Storm</color> to use a cube instead of a cylinder
 ModUi/&Changelog=<b><color=#D89555>Change Log</color></b>
+ModUi/&UpdateProgressPreview=Preview the update progress
 ModUi/&Character=Character
 ModUi/&CharactersPool=Characters Pool
 ModUi/&Classes=Classes

@@ -55,6 +55,7 @@ ModUi/&Category=Categoría
 ModUi/&ChangeDragonbornElementalBreathUsages=Cambiar los usos del aliento elemental de <color=#D89555>Dragonborn</color> a modificador CON por cada descanso corto
 ModUi/&ChangeSleetStormToCube=Cambie <color=#D89555>Tormenta de aguanieve</color> para utilizar un cubo en lugar de un cilindro
 ModUi/&Changelog=<b><color=#D89555>Registro de cambios</color></b>
+ModUi/&UpdateProgressPreview=Ver el progreso de actualización
 ModUi/&Character=Personaje
 ModUi/&CharactersPool=Grupo de personajes
 ModUi/&Classes=Clases

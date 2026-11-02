@@ -55,6 +55,7 @@ ModUi/&Category=分类
 ModUi/&ChangeDragonbornElementalBreathUsages=将<color=#D89555>龙裔</color>元素吐息用法更改为每次短后可用体质调整值次
 ModUi/&ChangeSleetStormToCube=将 <color=#D89555>雪雨暴</color> 改为使用立方体，而不是圆柱体
 ModUi/&Changelog=<b><color=#D89555>变更日志</color></b>
+ModUi/&UpdateProgressPreview=预览更新进度
 ModUi/&Character=角色
 ModUi/&CharactersPool=角色池
 ModUi/&Classes=职业

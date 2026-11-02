@@ -55,6 +55,7 @@ ModUi/&Category=Catégorie
 ModUi/&ChangeDragonbornElementalBreathUsages=Changez les utilisations du souffle élémentaire de <color=#D89555>Dragonborn</color> en modificateur de CON par repos court
 ModUi/&ChangeSleetStormToCube=Changez <color=#D89555>Sleet Storm</color> pour utiliser un cube au lieu d'un cylindre
 ModUi/&Changelog=<b><color=#D89555>Journal des modifications</color></b>
+ModUi/&UpdateProgressPreview=Aperçu de la progression
 ModUi/&Character=Personnage
 ModUi/&CharactersPool=Groupe de personnages
 ModUi/&Classes=Cours

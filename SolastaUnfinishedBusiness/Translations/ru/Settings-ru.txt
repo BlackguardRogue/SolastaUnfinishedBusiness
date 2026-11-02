@@ -55,6 +55,7 @@ ModUi/&Category=Категория
 ModUi/&ChangeDragonbornElementalBreathUsages=Изменить количество использований <color=#D89555>Драконорождёнными</color> стихийного дыхания на модификатор ТЕЛ до короткого отдыха
 ModUi/&ChangeSleetStormToCube=Использовать для <color=#D89555>Метели</color> куб вместо цилиндра
 ModUi/&Changelog=<b><color=#D89555>Список изменений</color></b>
+ModUi/&UpdateProgressPreview=Просмотр хода обновления
 ModUi/&Character=Персонаж
 ModUi/&CharactersPool=Пул персонажей
 ModUi/&Classes=Классы

@@ -65,19 +65,22 @@ jobs:
           dotnet build SolastaUnfinishedBusiness.sln --no-restore -c "Release Workflow"
           -p:FbDevelopmentBuild=${{ github.ref_type != 'tag' }}
       - name: Check development-only tools
-        # the vote screen preview's entry point must be in a test build (so this check means something) and must not
-        # be in a release build
+        # each development-only tool's entry point must be in a test build (so this check means something) and must not
+        # be in a release build: the vote screen preview (MultiplayerVoteContext.StartPreview) and the update progress
+        # preview (UpdateContext.StartProgressPreview)
         run: |
           dll=SolastaFiles/Mods/SolastaUnfinishedBusiness/SolastaUnfinishedBusiness.dll
-          if grep -q -a "StartPreview" "$dll"; then found=true; else found=false; fi
-          if [ "$GITHUB_REF_TYPE" = "tag" ] && [ "$found" = true ]; then
-            echo "::error::The release build contains the development-only vote screen preview"
-            exit 1
-          fi
-          if [ "$GITHUB_REF_TYPE" != "tag" ] && [ "$found" = false ]; then
-            echo "::error::The test build is missing the development-only vote screen preview; FB_DEVELOPMENT wasn't set"
-            exit 1
-          fi
+          for entry in StartPreview StartProgressPreview; do
+            if grep -q -a "$entry" "$dll"; then found=true; else found=false; fi
+            if [ "$GITHUB_REF_TYPE" = "tag" ] && [ "$found" = true ]; then
+              echo "::error::The release build contains the development-only tool $entry"
+              exit 1
+            fi
+            if [ "$GITHUB_REF_TYPE" != "tag" ] && [ "$found" = false ]; then
+              echo "::error::The test build is missing the development-only tool $entry; FB_DEVELOPMENT wasn't set"
+              exit 1
+            fi
+          done
       - name: Zip Files
         run: |
           cd SolastaFiles/Mods
@@ -112,17 +115,19 @@ jobs:
       - name: Check a release build has no development-only tools
         if: github.ref_type != 'tag'
         # builds the code once more as a version tag would (after the test build was kept, so its files can be
-        # replaced) and checks the vote screen preview isn't in it and its version is the plain source version, with
+        # replaced) and checks no development-only tool is in it and its version is the plain source version, with
         # neither "-dev" nor the commit (in Info.json or the DLL's product version), so the release side of the checks
         # above is proven on every run, not first at a release; nothing is published
         run: |
           dotnet build SolastaUnfinishedBusiness.sln --no-restore --no-incremental -c "Release Workflow" \
             -p:FbDevelopmentBuild=false
           dll=SolastaFiles/Mods/SolastaUnfinishedBusiness/SolastaUnfinishedBusiness.dll
-          if grep -q -a "StartPreview" "$dll"; then
-            echo "::error::A release build would contain the development-only vote screen preview"
-            exit 1
-          fi
+          for entry in StartPreview StartProgressPreview; do
+            if grep -q -a "$entry" "$dll"; then
+              echo "::error::A release build would contain the development-only tool $entry"
+              exit 1
+            fi
+          done
           built=$(jq -r .Version SolastaFiles/Mods/SolastaUnfinishedBusiness/Info.json)
           source=$(jq -r .Version SolastaUnfinishedBusiness/Info.json)
           if [ "$built" != "$source" ]; then
