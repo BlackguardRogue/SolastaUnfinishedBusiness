@@ -54,13 +54,11 @@ internal static class CampfireFastTravelContext
     private static int _arrivals;
     private static bool _lastArrivalInterrupted;
 
-    // where the running fast travel goes (OnFastTravelStarting), and where the last one that placed the party went, on
-    // every computer. In multiplayer another player's fast travel, agreed before the campfire's and queued at an earlier
+    // where the last fast travel that placed the party went, on every computer. In multiplayer another player's fast travel, agreed before the campfire's and queued at an earlier
     // command tick, can still run first here: the game doesn't refuse a second travel request
     // (FastTravelManager.NetworkedFastTravel), and the travels run in tick order. Its arrival isn't the gather's, so the
     // gather compares where an arrival went with its own waypoint (Codex's 1.11.0 release review, 2026-11-02; found by
     // reading the game's code, not seen in a game).
-    private static int3? _travelTarget;
     private static int3? _lastArrivalTarget;
 
     // SetupPartyOnDestination is running: the game clears IsFastTraveling and asks for the exploration state at the
@@ -322,32 +320,25 @@ internal static class CampfireFastTravelContext
         return accessor.sector == sector;
     }
 
-    // GameLocationMapManager's IGameLocationMapService.FastTravel, on every computer: a fast travel's route starts.
-    // Its only caller is MapWaypointItem.ExecuteTravel, which passes the waypoint's Position, and the game runs one
-    // fast travel at a time (fastTravelCoroutine), so the next arrival is this travel's.
-    internal static void OnFastTravelStarting(int3 gridPosition)
-    {
-        _travelTarget = gridPosition;
-    }
-
     // GameLocationMapManager.SetupPartyOnDestination runs a step: the travel's arrival is under way
     internal static void OnArrivalStep()
     {
         _arriving = true;
     }
 
-    // GameLocationMapManager.SetupPartyOnDestination's end, on every computer: a fast travel placed the party. A
+    // GameLocationMapManager.SetupPartyOnDestination's end, on every computer: a fast travel placed the party at
+    // gridPosition (its waypoint's Position: MapWaypointItem.ExecuteTravel, the only caller of the map manager's
+    // FastTravel, passes it, and FastTravel hands it on to this arrival step unchanged). A
     // temporary campfire waypoint has done its job once the travel to it arrived; another travel's arrival leaves it,
     // as the campfire's own travel may still be queued after it (it then goes at the other lockstep points: a long
     // rest, the next campfire, the location unloading).
-    internal static void OnFastTravelEnded()
+    internal static void OnFastTravelEnded(int3 gridPosition)
     {
         _arriving = false;
         _arrivals++;
         _lastArrivalInterrupted =
             ServiceRepository.GetService<IGameLocationMapService>() is GameLocationMapManager { interrupted: true };
-        _lastArrivalTarget = _travelTarget;
-        _travelTarget = null;
+        _lastArrivalTarget = gridPosition;
 
         if (_destination is { Temporary: true } destination && _lastArrivalTarget == destination.Waypoint.Position)
         {
@@ -371,7 +362,6 @@ internal static class CampfireFastTravelContext
     internal static void Reset()
     {
         _arriving = false;
-        _travelTarget = null;
         RemoveDestination();
     }
 
