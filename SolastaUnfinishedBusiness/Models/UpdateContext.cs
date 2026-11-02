@@ -217,11 +217,13 @@ internal static class UpdateContext
         }
     }
 
-    // part by part as numbers, so 1.6.10.0 is newer than 1.6.9.0; a missing part counts as 0
+    // part by part as numbers, so 1.6.10.0 is newer than 1.6.9.0; a missing part counts as 0. A development build's
+    // mark ("-dev.<commit>", see the project file's StampBuildVersion) is left out, so such a build counts as its
+    // release's version: no update back to that release, and an update to the next one
     private static int CompareVersions(string left, string right)
     {
-        var a = left.Split('.');
-        var b = right.Split('.');
+        var a = WithoutMark(left).Split('.');
+        var b = WithoutMark(right).Split('.');
 
         for (var i = 0; i < Math.Max(a.Length, b.Length); i++)
         {
@@ -235,6 +237,14 @@ internal static class UpdateContext
         }
 
         return 0;
+    }
+
+    // the version without a pre-release mark: everything from the first "-" on
+    private static string WithoutMark(string version)
+    {
+        var index = version.IndexOf('-');
+
+        return index < 0 ? version : version.Substring(0, index);
     }
 
     #endregion
