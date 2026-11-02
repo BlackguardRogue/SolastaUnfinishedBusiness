@@ -9,8 +9,8 @@ namespace SolastaUnfinishedBusiness.Patches;
 [UsedImplicitly]
 public static class FunctorStartLongRestPatcher
 {
-    //PATCH: a campfire's long rest: any player can start it in multiplayer, a spread-out party walks to the campfire
-    //first, and a campfire set to rest at once rests without an approval (CampfireRestContext)
+    //PATCH: a campfire's long rest: any player can start it in multiplayer, the whole party fast travels to the
+    //campfire first, and a campfire set to rest at once rests without an approval or a gather (CampfireRestContext)
     [HarmonyPatch(typeof(FunctorStartLongRest), nameof(FunctorStartLongRest.Execute))]
     [SuppressMessage("Minor Code Smell", "S101:Types should be named in PascalCase", Justification = "Patch")]
     [UsedImplicitly]
@@ -23,8 +23,8 @@ public static class FunctorStartLongRestPatcher
         }
     }
 
-    //PATCH: the campfire's "Waiting to Perform a Long Rest" (the party already rested today): characters too far away
-    //walk to the campfire before the wait, so the long rest after it isn't refused for a spread-out party
+    //PATCH: the campfire's "Waiting to Perform a Long Rest" (the party already rested today): the whole party fast
+    //travels to the campfire before the wait, so the long rest after it isn't refused for a spread-out party
     //(CampfireRestContext)
     [HarmonyPatch(typeof(FunctorStartLongRest), nameof(FunctorStartLongRest.DoWaitLongRest))]
     [SuppressMessage("Minor Code Smell", "S101:Types should be named in PascalCase", Justification = "Patch")]

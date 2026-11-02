@@ -39,12 +39,11 @@ internal static class MultiplayerApprovalContext
         CastRitual = 7,
         UsePower = 8,
         WaitAndLongRest = 9,
-        // characters too far from a campfire walk to it, then the party takes a long rest (CampfireRestContext); the
-        // character name part holds the walkers' names
+        // the party gathers at a campfire (the whole party fast travels there), then takes a long rest
+        // (CampfireRestContext); no character name
         CampfireLongRest = 10,
-        // the party already rested today at a campfire with characters too far away: they walk to it, the party waits
-        // until it can rest again, then takes a long rest (CampfireRestContext); the character name part holds the
-        // walkers' names, the subject part the hours of the wait
+        // the party already rested today at a campfire: it gathers there, waits until it can rest again, then takes a
+        // long rest (CampfireRestContext); no character name, the subject part holds the hours of the wait
         CampfireWaitAndLongRest = 11
     }
 
@@ -181,7 +180,7 @@ internal static class MultiplayerApprovalContext
     }
 
     // runs an action that an earlier approval already covered, past the patches that would ask again (the wait and
-    // long rest after a campfire walk, approved with the walk)
+    // long rest after a campfire's gather, approved with the gather)
     internal static void RunApproved(Action action)
     {
         var wasRunning = IsRunningApprovedAction;
@@ -448,7 +447,7 @@ internal static class MultiplayerApprovalContext
             characterName = FormatDuration(hours * 3600);
         }
 
-        // the walk before a wait: the walkers' names, then the wait, sent in hours too
+        // the gather before a wait: the wait, sent in hours too
         if (action == ApprovalAction.CampfireWaitAndLongRest && int.TryParse(subjectName, out var waitHours))
         {
             return Gui.Format($"Message/&MultiplayerApprovalAction{action}", characterName,

@@ -10,8 +10,8 @@ internal static class LongRestWaitContext
 {
     internal const string RestTooOften = "Failure/&FailureFlagCannotRestTooOften";
 
-    // set while checking whether the rest would pass apart from the once-a-day rule (also by CampfireRestContext, to
-    // find who must walk to a campfire before a wait)
+    // set while checking whether the rest would pass apart from the once-a-day rule (also by CampfireRestContext, for
+    // the rest checks around a campfire's gather before a wait)
     internal static bool IgnoreRestFrequency { get; set; }
 
     // the rest screen's last long rest check passed only because it will wait first
@@ -74,9 +74,8 @@ internal static class LongRestWaitContext
             "Message/&MessageYesTitle", "Message/&MessageNoTitle",
             () =>
             {
-                // at a campfire with characters too far away, they walk to it before the wait (user direction,
-                // 2026-11-02); checked while the campfire's rest screen is still open, as that is how the campfire
-                // is known
+                // at a campfire the whole party fast travels to it before the wait (user directions, 2026-11-02);
+                // checked while the campfire's rest screen is still open, as that is how the campfire is known
                 var gathering = CampfireRestContext.TryGatherBeforeWait();
 
                 // the deferred rest opens the rest screen again once the wait is over, as at a campfire

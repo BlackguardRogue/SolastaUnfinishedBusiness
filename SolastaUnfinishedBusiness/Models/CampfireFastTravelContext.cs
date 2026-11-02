@@ -9,35 +9,38 @@ using Object = UnityEngine.Object;
 namespace SolastaUnfinishedBusiness.Models;
 
 // Fast travel for the campfire gather (user directions, 2026-11-02: "ensure that there is no fast travel point within
-// 5 cells of the campfire before creating one. Then, if necessary, create one and fast travel people who are further
-// than the distance required for long rest"; then "have all players be moved to the fast travel point if ANY player is
-// outside the long rest range"). CampfireRestContext uses it before its walk: when any character is further than the
-// long rest distance from the campfire's user, the whole party fast travels to the campfire's point, and the walk
-// covers whatever is left.
+// 5 cells of the campfire before creating one. Then, if necessary, create one"; "have all players be moved to the fast
+// travel point"; then "for the campfire gather, we always require to fast travel, even if the character is nearby" and
+// "do not exclude the dead/dying/downed/unconscious characters"; then "ensure that the fast travel only occurs if
+// there is someone outside of the long rest radius"). CampfireRestContext runs it before an ordinary campfire long
+// rest when the party is out of range (NeedsTravel): the whole party fast travels to the campfire's point, with no
+// walk.
 //
 // The destination is a map waypoint, as the game's fast travel only goes to one:
 // - a fast travel waypoint already within ExistingWaypointRadius cells of the campfire is used as it is;
-// - otherwise, when somebody is beyond the long rest distance, a temporary waypoint is added next to the campfire's
-//   user with the game's own GameLocation.AddWaypoint (the game builds its waypoints from the map's WorldNodes when a
-//   location loads; none of them is saved, so a temporary one can't reach a save). It is removed once a fast travel
-//   ends, a long rest starts, another campfire is used, or the location unloads.
+// - otherwise, when the party is out of range, a temporary waypoint is added next to the campfire's user with the
+//   game's own GameLocation.AddWaypoint
+//   (the game builds its waypoints from the map's WorldNodes when a location loads; none of them is saved, so a
+//   temporary one can't reach a save). It is removed once a fast travel ends, a long rest starts, another campfire is
+//   used, or the location unloads.
 // The destination is set where the campfire's functor runs, which is on every computer in the lockstep: in
 // multiplayer every computer must have the waypoint, as the game's fast travel looks it up by position on each one.
 //
 // The travel is the game's own networked fast travel, unchanged (ICommandService.RequestFastTravel, a lockstep
 // command; then the map's MapWaypointItem.PrepareFastTravel and GameLocationMapManager.FastTravel, all on every
-// computer): the leader goes along the path, with the game's checks for traps and watching enemies, then the whole
-// party, guests included, is placed in formation at the point. f32eeadb moved only the far characters by changing the
-// party list those steps read; Codex's review of it (2026-11-02) found that this list could differ between computers
-// (a local timeout cleared it on one only) and that ordinary map travel to the same point was taken for a gather.
-// Moving the whole party needs no such list, so neither can happen.
+// computer): every computer shows the map with the leader (the first party member) going along the route, with the
+// game's checks for traps and watching enemies, then the whole party is placed in formation at the point. The game
+// leaves nobody out: dead, dying and unconscious characters and guests are placed too (SetupPartyOnDestination copies
+// the party and guests without any condition check). A leader already on the point travels a route of no steps (the
+// game's own samePosition case). Whether a downed leader can be routed isn't known yet; if the game can't find a path
+// it says so, and the gather fails.
 internal static class CampfireFastTravelContext
 {
     // an existing fast travel waypoint this close to the campfire's user is used instead of making one
     private const float ExistingWaypointRadius = 5f;
 
-    // the game's long rest rule: every two living party members within this many cells
-    // (GameRestingManager.CanExecuteLocationRest)
+    // the game's long rest distance (GameRestingManager.CanExecuteLocationRest: every two living party members within
+    // this many cells)
     private const float RestDistance = 10f;
 
     private const string WaypointName = "FinishingBusinessCampfireWaypoint";
@@ -45,11 +48,17 @@ internal static class CampfireFastTravelContext
     // the destination of the last campfire used, on every computer
     private static Destination _destination;
 
+    // fast travels that placed the party (SetupPartyOnDestination ran to its end), and whether the last one was cut
+    // short by watching enemies (GameLocationMapManager.interrupted, which ExecutePath resets at each start), on every
+    // computer; the asking computer uses them to know its travel really arrived
+    private static int _arrivals;
+    private static bool _lastArrivalInterrupted;
+
     #region Destination
 
     // FunctorStartLongRest on every computer: the campfire's fast travel destination, an existing waypoint within
-    // ExistingWaypointRadius cells or, when somebody is beyond the long rest distance, a temporary one. Positions and
-    // waypoints are the same on every computer, so all of them pick the same one.
+    // ExistingWaypointRadius cells or, when the party is out of range, a temporary one. Positions and waypoints are the
+    // same on every computer, so all of them pick the same one.
     internal static void PrepareDestination(GameLocationCharacter user)
     {
         RemoveDestination();
@@ -76,15 +85,16 @@ internal static class CampfireFastTravelContext
             return;
         }
 
-        var far = FindFarCharacters(user);
-
-        // nobody beyond the long rest distance: a walk at most, no waypoint needed
-        if (far.Count == 0)
+        // in range: no fast travel will be needed, so no temporary point
+        if (!NeedsTravel(user))
         {
             return;
         }
 
-        var waypoint = AddTemporaryWaypoint(gameLocation, user, far[0]);
+        // the free cell is found as for another party member, so the user's own cell isn't picked
+        var other = ServiceRepository.GetService<IGameLocationCharacterService>()?.PartyCharacters
+            .FirstOrDefault(x => x != user) ?? user;
+        var waypoint = AddTemporaryWaypoint(gameLocation, user, other);
 
         if (waypoint != null)
         {
@@ -147,6 +157,39 @@ internal static class CampfireFastTravelContext
         return gameLocation.MapWaypoints.LastOrDefault();
     }
 
+    // the party is out of the long rest range, so the gather needs its fast travel: the game's rule fails (two living
+    // party members more than RestDistance cells apart), or a party member, dead, dying or unconscious included (whom
+    // the game's rule skips, so they'd be left behind), is more than RestDistance cells from the campfire's user
+    internal static bool NeedsTravel(GameLocationCharacter user)
+    {
+        var party = ServiceRepository.GetService<IGameLocationCharacterService>()?.PartyCharacters;
+
+        if (user == null || party == null)
+        {
+            return false;
+        }
+
+        if (party.Any(x => Distance(x.LocationPosition, user.LocationPosition) > RestDistance))
+        {
+            return true;
+        }
+
+        var living = party.Where(x => x.RulesetCharacter is { IsDeadOrDyingOrUnconscious: false }).ToList();
+
+        for (var i = 0; i < living.Count; i++)
+        {
+            for (var j = i + 1; j < living.Count; j++)
+            {
+                if (Distance(living[i].LocationPosition, living[j].LocationPosition) > RestDistance)
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
     // drops the destination; a temporary waypoint leaves the map again
     internal static void RemoveDestination()
     {
@@ -177,17 +220,6 @@ internal static class CampfireFastTravelContext
         Object.Destroy(destination.Waypoint.Definition);
     }
 
-    // characters beyond the long rest distance from the campfire's user (the game's rule only counts characters who
-    // are up)
-    private static List<GameLocationCharacter> FindFarCharacters(GameLocationCharacter user)
-    {
-        return (ServiceRepository.GetService<IGameLocationCharacterService>()?.PartyCharacters ?? [])
-            .Where(x => x != user &&
-                        x.RulesetCharacter is { IsDeadOrDyingOrUnconscious: false } &&
-                        Distance(x.LocationPosition, user.LocationPosition) > RestDistance)
-            .ToList();
-    }
-
     private static float Distance(int3 a, int3 b)
     {
         return (a - b).magnitude;
@@ -197,9 +229,10 @@ internal static class CampfireFastTravelContext
 
     #region Travel
 
-    // the gather on the computer that started it: when anybody is beyond the long rest distance, the whole party fast
-    // travels to the campfire's point, then travelled runs (with false when the travel hadn't begun in time, and the
-    // gather is given up). False when nobody needs it or the game can't fast travel now (the walk does it all).
+    // the gather on the computer that started it: the whole party fast travels to the campfire's point, then travelled
+    // runs: true only when the game placed the party there and enemies didn't cut the travel short; false when it
+    // hadn't begun in time, the game couldn't travel (no path, its waypoint lookup failed) or it was interrupted. False
+    // when the game can't fast travel now; the gather then fails, as there is no walk.
     internal static bool TryStart(GameLocationCharacter user, Func<bool> isWanted, Action<bool> travelled)
     {
         if (_destination is not { } destination || destination.User != user || !destination.GameLocation)
@@ -214,7 +247,7 @@ internal static class CampfireFastTravelContext
         // the game's own conditions for this fast travel: the map offers the waypoint (shown and revealed), its
         // same-area rule for the party's leader, nothing blocking fast travel now (running functors or actions
         // blocking saves, a battle)
-        if (FindFarCharacters(user).Count == 0 || leader == null || !waypoint.Shown || !waypoint.Revealed ||
+        if (leader == null || !waypoint.Shown || !waypoint.Revealed ||
             !IsInWaypointArea(waypoint, leader) ||
             mapService == null || mapService.IsPreparingFastTravel || mapService.IsFastTraveling ||
             Gui.Battle != null ||
@@ -230,6 +263,7 @@ internal static class CampfireFastTravelContext
 
         driver.IsWanted = isWanted;
         driver.Travelled = travelled;
+        driver.ArrivalsAtStart = _arrivals;
 
         return true;
     }
@@ -251,10 +285,14 @@ internal static class CampfireFastTravelContext
         return accessor.sector == sector;
     }
 
-    // GameLocationMapManager.SetupPartyOnDestination's end, on every computer: a fast travel is over, so a temporary
-    // campfire waypoint has done its job
+    // GameLocationMapManager.SetupPartyOnDestination's end, on every computer: a fast travel placed the party, so a
+    // temporary campfire waypoint has done its job
     internal static void OnFastTravelEnded()
     {
+        _arrivals++;
+        _lastArrivalInterrupted =
+            ServiceRepository.GetService<IGameLocationMapService>() is GameLocationMapManager { interrupted: true };
+
         if (_destination is { Temporary: true })
         {
             RemoveDestination();
@@ -294,7 +332,8 @@ internal static class CampfireFastTravelContext
 
     // waits for the campfire fast travel on the computer that asked for it. The travel command runs at a later tick;
     // once the game's travel has begun there is no time limit, and the gather only goes on once the game is back to
-    // exploring, so nothing starts while the party is still travelling. A travel that hasn't begun here after
+    // exploring, so nothing starts while the party is still travelling. It reports travelled only when a travel placed
+    // the party since it started and wasn't interrupted. A travel that hasn't begun here after
     // StartTimeoutSeconds is reported as not travelled, and the gather is given up without sending anything more:
     // the command may only be late (a stalled tick), not dropped, so it may still run (Codex review of c44f860d,
     // 2026-11-02). It goes away without going on when the gather was dropped meanwhile (another rest screen opened, a
@@ -303,6 +342,7 @@ internal static class CampfireFastTravelContext
     {
         private const float StartTimeoutSeconds = 20f;
 
+        internal int ArrivalsAtStart;
         internal Func<bool> IsWanted;
         internal Action<bool> Travelled;
         private bool _began;
@@ -339,7 +379,7 @@ internal static class CampfireFastTravelContext
 
             if (!travelling && IsExploring())
             {
-                Finish(true);
+                Finish(_arrivals > ArrivalsAtStart && !_lastArrivalInterrupted);
             }
         }
 

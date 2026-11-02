@@ -67,32 +67,31 @@ public static class RestModalPatcher
                 return true;
             }
 
-            // the campfire's walk is over and the rest checks passed (CampfireRestContext): the game's own Start
+            // the campfire's gather is over and the rest checks passed (CampfireRestContext): the game's own Start
             if (CampfireRestContext.IsReplayingStart)
             {
                 return true;
             }
 
             //PATCH: when the party already rested today, waits until it can rest again, then rests (at a campfire, the
-            //characters too far away walk to it before the wait)
+            //whole party fast travels to it before the wait)
             if (LongRestWaitContext.TryWaitThenRest(__instance))
             {
                 return false;
             }
 
-            //PATCH: at a campfire, a party too spread out gathers there first (fast travel, then a walk), then rests;
-            //in multiplayer the gather and the rest are approved together
-            var walkers = CampfireRestContext.FindWalkers();
-
-            if (walkers.Count == 0)
+            //PATCH: at a campfire, a party out of the long rest range fast travels there first, then rests; in
+            //multiplayer the gather and the rest are approved together (CampfireRestContext)
+            if (!CampfireRestContext.GathersAtCampfire())
             {
                 return !MustWaitForApproval(RestType.LongRest, __instance.OnStartLongRestCb);
             }
 
             var failure = string.Empty;
 
-            // every other rest rule must pass before anyone walks (the walk only fixes the distance); the button is
-            // only enabled when they do, so this is a rule that stopped passing since, shown as the game shows it
+            // every other rest rule must pass before the party travels (the gather only fixes the distance); the
+            // button is only enabled when they do, so this is a rule that stopped passing since, shown as the game
+            // shows it
             if (ServiceRepository.GetService<IGameRestingService>()
                     ?.CanExecuteLocationRest(RestType.LongRest, ref failure, true) != true)
             {
@@ -102,12 +101,11 @@ public static class RestModalPatcher
             }
 
             if (!MultiplayerApprovalContext.MustWaitForApproval(
-                    MultiplayerApprovalContext.ApprovalAction.CampfireLongRest,
-                    string.Join(", ", walkers.ConvertAll(x => x.Name)), null,
+                    MultiplayerApprovalContext.ApprovalAction.CampfireLongRest, string.Empty, null,
                     MultiplayerApprovalContext.RestSeconds(RestType.LongRest),
-                    () => CampfireRestContext.StartGather(__instance, walkers)))
+                    () => CampfireRestContext.StartGather(__instance)))
             {
-                CampfireRestContext.StartGather(__instance, walkers);
+                CampfireRestContext.StartGather(__instance);
             }
 
             return false;
@@ -121,7 +119,7 @@ public static class RestModalPatcher
     }
 
     //PATCH: a rest screen that isn't a campfire's own forgets the campfire, and any rest screen but the one reopened
-    //after a campfire walk ends that walk (CampfireRestContext)
+    //after a campfire's gather ends that gather (CampfireRestContext)
     [HarmonyPatch(typeof(RestModal), nameof(RestModal.OnBeginShow))]
     [SuppressMessage("Minor Code Smell", "S101:Types should be named in PascalCase", Justification = "Patch")]
     [UsedImplicitly]

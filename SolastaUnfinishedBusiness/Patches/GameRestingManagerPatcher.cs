@@ -56,7 +56,7 @@ public static class GameRestingManagerPatcher
             ref bool __result)
         {
             // a campfire whose check failed on the once-a-day rule offers the game's wait next: kept so the party can
-            // walk to it before that wait (CampfireRestContext)
+            // gather there before that wait (CampfireRestContext)
             CampfireRestContext.OnRestChecked(restType, failureFlag, __result);
 
             //PATCH: on the rest screen, a long rest the party already took today waits until it can rest again
@@ -73,8 +73,8 @@ public static class GameRestingManagerPatcher
                 }
             }
 
-            // a campfire's long rest with characters too far away: they walk to the campfire before the rest, which
-            // checks again then (CampfireRestContext)
+            // a campfire's long rest with the party spread out: the party gathers at the campfire before the rest,
+            // which checks again then (CampfireRestContext)
             if (!__result && CampfireRestContext.AllowsSpreadOut(restType, failureFlag))
             {
                 failureFlag = string.Empty;

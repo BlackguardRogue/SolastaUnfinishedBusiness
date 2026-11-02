@@ -511,7 +511,7 @@ ModUi/&AddOriginFeatsToAutoLearn= + 출신 재주를 자동 습득에 추가
 ModUi/&AllMagicThrownReturn=모든 마법 투척 무기가 던진 사람에게 돌아옵니다 <b><i><color=#C04040E0>[해제하려면 재시작 필요]</color></i></b>
 ModUi/&AllowShortRestWithPartySpreadOut=파티가 흩어져 있어도 짧은 휴식 허용 <i><color=#F0DAA0>[파티가 10칸 안에 있어야 한다는 게임 규칙을 바꿈. 전투, 대화, 컷신 중에는 불가하며 다른 휴식 규칙(근처의 적, 위험 지역, 식량)은 그대로 적용. 게임플레이 > 멀티플레이와 게임플레이 > 캠페인에도 있음]</color></i>
 ModUi/&CombineWaitWithLongRest=파티가 오늘 이미 긴 휴식을 했다면 긴 휴식 버튼이 다시 휴식할 수 있을 때까지 기다린 뒤 휴식 <i><color=#F0DAA0>[총 시간이 표시된 확인 한 번, 멀티플레이에서는 승인 한 번, 모닥불에서도 동일. 다른 휴식 규칙은 그대로 적용]</color></i>
-ModUi/&GatherPartyForCampfireRest=모닥불에서 긴 휴식을 하기에 너무 흩어진 파티는 먼저 그곳에 모임: 누군가 10칸보다 멀리 있으면 파티 전원이 빠른 이동으로 가고, 아니면 멀리 있는 캐릭터가 걸어감 <i><color=#F0DAA0>[게임은 파티 전원이 10칸 안에 있어야 함. 멀티플레이에서는 모이기와 휴식을 함께 승인하며, 모두 도착하고 다른 휴식 규칙을 만족해야 휴식이 시작됨. 게임플레이 > 멀티플레이와 게임플레이 > 캠페인에도 있음]</color></i>
+ModUi/&GatherPartyForCampfireRest=모닥불에서 긴 휴식을 하기에 너무 흩어진 파티는 먼저 그곳으로 빠른 이동함: 쓰러진 캐릭터를 포함해 누군가 긴 휴식 범위 밖에 있으면 파티 전원이 모닥불로 빠른 이동함 <i><color=#F0DAA0>[게임은 파티 전원이 10칸 안에 있어야 함. 모닥불에서 5칸 안의 빠른 이동 지점이나 임시 지점을 사용함. 이동할 수 없으면 휴식하지 않음. 멀티플레이에서는 모이기와 휴식을 함께 승인함. 게임플레이 > 멀티플레이와 게임플레이 > 캠페인에도 있음]</color></i>
 ModUi/&CraftWithBaseInsteadOfPrimed=준비된 무기나 방어구를 요구하는 제조법이 일반 아이템도 받음 <i><color=#F0DAA0>[게임, 이 모드, 캠페인의 모든 제조법. 준비된 아이템을 먼저 사용하고, 일반 아이템은 장착하지 않은 경우에만 계산하므로 당신의 장비는 절대 소모되지 않음]</color></i>
 ModUi/&EnableBackgroundAbilityScoreIncreases=능력치 상승을 종족 대신 배경에서 얻음 <i><color=#F0DAA0>[유연한 종족과 호환되지 않아 꺼짐]</color></i>
 ModUi/&EnableBackgroundBonusFeats=배경 보너스 재주 활성화 <i><color=#F0DAA0>[유연한 배경과 호환되지 않아 꺼짐]</color></i>

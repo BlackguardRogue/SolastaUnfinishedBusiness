@@ -511,7 +511,7 @@ ModUi/&AddOriginFeatsToAutoLearn= + 将起源专长加入自动学习
 ModUi/&AllMagicThrownReturn=所有魔法投掷武器都会回到投掷者手中 <b><i><color=#C04040E0>[关闭需要重启]</color></i></b>
 ModUi/&AllowShortRestWithPartySpreadOut=允许在队伍分散时进行短休 <i><color=#F0DAA0>[改变队伍必须在10格内的游戏规则；不能在战斗、对话或过场动画中，其他休息规则（附近有敌人、不安全区域、食物）仍然适用。也位于 游戏玩法 > 多人游戏 和 游戏玩法 > 战役]</color></i>
 ModUi/&CombineWaitWithLongRest=队伍今天已长休过时，长休按钮会等待到可以再次休息，然后休息 <i><color=#F0DAA0>[一次显示总时长的确认，多人游戏中一次批准，营火处也是；其他休息规则仍然适用]</color></i>
-ModUi/&GatherPartyForCampfireRest=在营火处，过于分散而无法长休的队伍会先在营火旁集合：若有人距离超过10格，全队快速旅行过去，否则远处的角色走过去 <i><color=#F0DAA0>[游戏要求所有队员都在10格内；多人游戏中集合和休息一起批准，所有人到达且其他休息规则都满足后才开始休息。也位于 游戏玩法 > 多人游戏 和 游戏玩法 > 战役]</color></i>
+ModUi/&GatherPartyForCampfireRest=在营火处，过于分散而无法长休的队伍会先快速旅行过去：若有人（包括倒地的角色）在长休范围之外，全队快速旅行到营火旁 <i><color=#F0DAA0>[游戏要求所有队员都在10格内；队伍使用营火5格内的快速旅行点，或一个临时点；无法旅行则不休息；多人游戏中集合和休息一起批准。也位于 游戏玩法 > 多人游戏 和 游戏玩法 > 战役]</color></i>
 ModUi/&CraftWithBaseInsteadOfPrimed=需要制备好的武器或护甲的配方也接受普通版本 <i><color=#F0DAA0>[所有配方，包括游戏、本模组和战役的；优先使用制备好的物品；普通物品只在未装备时计入，因此你自己的装备绝不会被消耗]</color></i>
 ModUi/&EnableBackgroundAbilityScoreIncreases=属性提升来自背景而非种族 <i><color=#F0DAA0>[与“灵活种族”不兼容，它将被关闭]</color></i>
 ModUi/&EnableBackgroundBonusFeats=启用背景奖励专长 <i><color=#F0DAA0>[与“灵活背景”不兼容，它将被关闭]</color></i>

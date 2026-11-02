@@ -1,22 +1,26 @@
 using System.Collections;
-using System.Collections.Generic;
 using System.Linq;
-using TA;
-using UnityEngine;
 using static RuleDefinitions;
 
 namespace SolastaUnfinishedBusiness.Models;
 
-// Long rests at campfires (FunctorStartLongRest, the campfire gadget's functor). User direction, 2026-11-01:
+// Long rests at campfires (FunctorStartLongRest, the campfire gadget's functor). User directions, 2026-11-01 and
+// 2026-11-02:
 // 1. In multiplayer any player can start the long rest at a campfire, not only the host. The game refuses clients
 //    (GameRestingManager.CanExecuteLocationRest with player privileges, "only the host can rest"); this follows the
 //    setting that already lets every player start rests from the rest screen (MultiplayerAllowPlayersToStartRests).
-// 2. When the party is too spread out to rest (the game's rule: every two living party members within 10 cells), the
-//    party gathers at the campfire first, and the approval says so (setting GatherPartyForCampfireRest): when anybody
-//    is more than 10 cells away the whole party fast travels there (CampfireFastTravelContext, user directions,
-//    2026-11-02), then whoever is still too far walks.
-// 3. A campfire set to rest at once starts its rest without the multiplayer approval, as in the game (user direction,
-//    2026-11-02; it asked for one in 9b341d45).
+// 2. When the party is out of the long rest range, an ordinary campfire's long rest gathers it at the campfire first
+//    (setting GatherPartyForCampfireRest): the whole party, dead, dying and unconscious characters and guests
+//    included, fast travels to the campfire's point (CampfireFastTravelContext; "do not exclude the
+//    dead/dying/downed/unconscious characters", "ensure that the fast travel only occurs if there is someone outside
+//    of the long rest radius"). Out of range means the game's rule fails (two living members more than 10 cells
+//    apart) or anybody, downed included, is more than 10 cells from the campfire's user
+//    (CampfireFastTravelContext.NeedsTravel); otherwise the rest runs as without the mod. There is no walk: if the
+//    game can't fast travel, the travel fails or enemies interrupt it, nobody rests and the player is told. A party
+//    too spread out for the game's rule can still use the campfire, since the gather brings it together; the approval
+//    says the party gathers.
+// 3. A campfire set to rest at once starts its rest without the multiplayer approval or a gather, as in the game (it
+//    asked for an approval in 9b341d45).
 //
 // How the game runs a campfire: the functor runs on every computer (gadget functors are part of the lockstep), but
 // only the computer whose player controls the character that used the campfire opens the rest screen
@@ -25,16 +29,11 @@ namespace SolastaUnfinishedBusiness.Models;
 // rest. A campfire set to rest at once (the functor's bool parameter) skips the checks, opens the screen without food
 // and presses Start itself. Rests on the world map are the travel's own (GameTravelScheduler), not this functor.
 //
-// The gather: on the computer that pressed Start (after the approval, in multiplayer), first the fast travel when
-// anybody is beyond the long rest distance (CampfireFastTravelContext), then the walk. In the walk, each character
-// further than
-// GatherRadius cells from the character who used the campfire gets the game's own move command
-// (ICommandService.MoveCharacter, which every computer runs in the lockstep) to a place in the party formation around
-// that character. The rest screen closes for the gather: it pauses game time while it is open (RestModal.OnBeginShow
-// calls GameTime.Pause, OnEndHide resumes it), so nobody could move with it open (in-game test, 2026-11-02: every
-// walk ran out of time). Once every walker arrived, the rest checks run again, and the rest screen opens again with
-// the game's Start pressed, as the game does for a campfire that rests at once. A walk that can't finish (a character
-// can't get there, a fight or cutscene starts, another rest screen opens) starts no rest.
+// The gather, on the computer that pressed Start (after the approval, in multiplayer): the rest screen closes, as it
+// pauses game time while open (RestModal.OnBeginShow calls GameTime.Pause, OnEndHide resumes it; in-game test,
+// 2026-11-02); the party fast travels; once the game confirms the party arrived and the rest checks pass again, the
+// rest screen opens again with the game's Start pressed, as the game does for a campfire that rests at once. A fight,
+// a cutscene or another rest screen opening ends the gather without a rest.
 //
 // A long rest that has to wait first (the party already rested that day) gathers before the wait (user direction,
 // 2026-11-02: "the party is auto gathered before the time skip"). The game checks the once-a-day rule before the
@@ -47,12 +46,6 @@ internal static class CampfireRestContext
 {
     private const string PartyTooSpreadOut = "Failure/&FailureFlagPartyTooSpreadOut";
 
-    // walkers end up within this many cells of the campfire's user, so every two characters are within the game's 10
-    private const float GatherRadius = 4f;
-
-    // a walk that hasn't finished by then is given up (a move the game can't path may never report back)
-    private const float GatherTimeoutSeconds = 90f;
-
     // the campfire whose functor runs or whose rest screen is open on this computer
     private static Campfire _campfire;
 
@@ -63,19 +56,19 @@ internal static class CampfireRestContext
     // set while the functor runs on this computer (each step of it)
     internal static bool InFunctor { get; private set; }
 
-    // set while the rest checks run without the campfire's spread-out allowance (to find out whether a walk is needed)
+    // set while the rest checks run without the campfire's spread-out allowance (after the gather, the real distance)
     private static bool SuppressSpreadOutAllowance { get; set; }
 
-    // set while the game's Start Long Rest runs again after the walk
+    // set while the game's Start Long Rest runs again after the gather
     internal static bool IsReplayingStart { get; private set; }
 
-    // the gather (fast travel or walk) under way on this computer
+    // the gather (the fast travel) under way on this computer
     internal static bool IsGathering => _gather != null;
 
     private static Gather _gather;
 
     // a campfire set to rest at once pressing Start itself: no rest checks, no "wait until the party can rest" (the
-    // campfire skipped them) and no approval
+    // campfire skipped them), no gather and no approval
     internal static bool IsForcedStart => _campfire is { Forced: true } && InFunctor;
 
     // FunctorStartLongRest.Execute: runs each step of the functor with the campfire known
@@ -91,15 +84,15 @@ internal static class CampfireRestContext
         _waitCampfire = null;
 
         // the campfire's fast travel destination, on every computer (the functor runs on each in the lockstep): an
-        // existing fast travel waypoint next to the campfire, or a temporary one when somebody is beyond the long rest
-        // distance (CampfireFastTravelContext); a campfire that rests at once has no gather
-        if (campfire.Forced)
+        // existing fast travel waypoint next to the campfire, or a temporary one (CampfireFastTravelContext); a
+        // campfire that rests at once has no gather
+        if (Gathers(campfire))
         {
-            CampfireFastTravelContext.RemoveDestination();
+            CampfireFastTravelContext.PrepareDestination(campfire.User);
         }
         else
         {
-            CampfireFastTravelContext.PrepareDestination(campfire.User);
+            CampfireFastTravelContext.RemoveDestination();
         }
 
         while (true)
@@ -131,15 +124,14 @@ internal static class CampfireRestContext
     // screen does (MultiplayerAllowPlayersToStartRests)
     internal static bool SkipsPlayerPrivileges => InFunctor && Main.Settings.MultiplayerAllowPlayersToStartRests;
 
-    // CanExecuteLocationRest failed only because the party is spread out: true when the campfire's walk will fix that
-    // (the functor's check, the rest screen's button and Start, before the walk)
+    // CanExecuteLocationRest failed only because the party is spread out: true at a campfire whose gather fixes that
+    // (the functor's check, the rest screen's button and Start, before the gather)
     internal static bool AllowsSpreadOut(RestType restType, string failureFlag)
     {
         return restType == RestType.LongRest &&
                failureFlag == PartyTooSpreadOut &&
                !SuppressSpreadOutAllowance &&
-               Main.Settings.GatherPartyForCampfireRest &&
-               CurrentCampfire() is { Forced: false, User: not null };
+               Gathers(CurrentCampfire());
     }
 
     // CanExecuteLocationRest's result: when the campfire functor's own check fails on the once-a-day rule, the game
@@ -153,7 +145,8 @@ internal static class CampfireRestContext
         }
     }
 
-    // the campfire this computer's rest belongs to: during its functor, while its rest screen is open, or while it walks
+    // the campfire this computer's rest belongs to: during its functor, while its rest screen is open, or while it
+    // gathers
     private static Campfire CurrentCampfire()
     {
         if (_campfire == null || InFunctor || IsGathering || IsReplayingStart)
@@ -171,36 +164,18 @@ internal static class CampfireRestContext
         return _campfire;
     }
 
-    // the characters who must walk to the campfire before the long rest of its rest screen, or none (not a campfire
-    // rest, the setting is off, or the party is close enough)
-    internal static List<GameLocationCharacter> FindWalkers()
+    // an ordinary campfire (not one that rests at once) with the setting on: its long rest always gathers first
+    private static bool Gathers(Campfire campfire)
     {
-        return FindWalkers(CurrentCampfire(), false);
+        return campfire is { Forced: false, User: not null } && Main.Settings.GatherPartyForCampfireRest;
     }
 
-    // the characters who must walk to the campfire, or none. Checked with the game's own rule, without the spread-out
-    // allowance; before a wait, without the once-a-day rule too (the wait is there for it, and the game checks it
-    // before the distance, so it would hide a spread-out party). Only a party that fails on the distance alone walks.
-    private static List<GameLocationCharacter> FindWalkers(Campfire campfire, bool ignoreRestFrequency)
+    // the rest screen's long rest belongs to a campfire whose party is out of range, so it gathers first
+    internal static bool GathersAtCampfire()
     {
-        if (campfire is not { Forced: false, User: not null } || !Main.Settings.GatherPartyForCampfireRest)
-        {
-            return [];
-        }
+        var campfire = CurrentCampfire();
 
-        if (CheckLongRest(out var failure, ignoreRestFrequency) || failure != PartyTooSpreadOut)
-        {
-            return [];
-        }
-
-        var anchor = campfire.User.LocationPosition;
-
-        // the game's rule only counts characters who are up (not dead, dying or unconscious)
-        return (ServiceRepository.GetService<IGameLocationCharacterService>()?.PartyCharacters ?? [])
-            .Where(x => x != campfire.User &&
-                        x.RulesetCharacter is { IsDeadOrDyingOrUnconscious: false } &&
-                        (x.LocationPosition - anchor).magnitude > GatherRadius)
-            .ToList();
+        return Gathers(campfire) && CampfireFastTravelContext.NeedsTravel(campfire.User);
     }
 
     // the game's long rest check as the rest screen runs it (every player may rest, with the setting), without the
@@ -230,8 +205,8 @@ internal static class CampfireRestContext
     }
 
     // RestModal.OnBeginShow: a rest screen that isn't the campfire's own (opened from the party bar, after a wait, or
-    // after a world map rest) forgets the campfire; any rest screen but the one reopened after the walk also ends a
-    // walk under way without a rest (the player started over; the walkers still finish their moves)
+    // after a world map rest) forgets the campfire; any rest screen but the one reopened after the gather also ends a
+    // gather under way without a rest (the player started over; a fast travel already queued still runs)
     internal static void OnRestScreenShown()
     {
         if (IsReplayingStart)
@@ -247,12 +222,12 @@ internal static class CampfireRestContext
         }
     }
 
-    // after the walk: opens the rest screen again and presses the game's Start Long Rest, past the approval and the
+    // after the gather: opens the rest screen again and presses the game's Start Long Rest, past the approval and the
     // campfire's own handling; the same steps as the game's campfire that rests at once (FunctorStartLongRest.Execute:
     // ForceRestType, Show(true), OnStartLongRestCb), keeping the food choice the campfire's screen had
     private static void ReplayStart(RestModal restModal, bool consumeFood)
     {
-        // the location changed during the walk (a fight or cutscene would have ended it first)
+        // the location changed during the gather (a fight or cutscene would have ended it first)
         if (!restModal)
         {
             return;
@@ -276,32 +251,33 @@ internal static class CampfireRestContext
         }
     }
 
-    // the rest screen's Start with characters too far away (after the approval in multiplayer): the rest screen
-    // closes, the party walks to the campfire, then the screen opens again and the rest starts
-    internal static void StartGather(RestModal restModal, List<GameLocationCharacter> walkers)
+    // the campfire rest screen's Start (after the approval in multiplayer): the rest screen closes, the whole party
+    // fast travels to the campfire, then the screen opens again and the rest starts
+    internal static void StartGather(RestModal restModal)
     {
         // the screen keeps its food choice (the campfire opened it with food consumed) in a field that Start reads
         var consumeFood = restModal.consumeFood;
 
-        if (!StartGather(_campfire, walkers, false, () => ReplayStart(restModal, consumeFood)))
+        if (!StartGather(_campfire, false, () => ReplayStart(restModal, consumeFood)))
         {
             return;
         }
 
-        // closing the screen resumes game time (RestModal.OnEndHide), which the walk needs; StartGather set the walk
-        // first, so the campfire is kept while the screen is closed
+        // closing the screen resumes game time (RestModal.OnEndHide), which the travel needs; StartGather set the
+        // gather first, so the campfire is kept while the screen is closed
         if (restModal.Visible)
         {
             restModal.Hide();
         }
     }
 
-    // a long rest that waits first, at a campfire with characters too far away: the party walks to the campfire, then
-    // the game's wait and long rest run (ICommandService.StartDeferredLongRest, which rests once the wait is over).
-    // Called from the game's campfire wait prompt (FunctorStartLongRest.DoWaitLongRest) and from the rest screen's
-    // combined wait and long rest (LongRestWaitContext); true when the walk took over, false when nobody walks and
-    // the caller waits as usual. In multiplayer the walk, the wait and the rest are approved together, and the wait
-    // after the walk isn't asked about again.
+    // a long rest that waits first at a campfire: the whole party fast travels to the campfire, then the game's wait
+    // and long rest run (ICommandService.StartDeferredLongRest, which rests once the wait is over). Called from the
+    // game's campfire wait prompt (FunctorStartLongRest.DoWaitLongRest) and from the rest screen's combined wait and
+    // long rest (LongRestWaitContext); true when the gather took over (or a rest rule other than the distance already
+    // fails, which is shown instead of waiting for nothing), false when it isn't a gathering campfire or the party is
+    // in range, and the caller waits as usual. In multiplayer the gather, the wait and the rest are approved together, and the wait after the
+    // gather isn't asked about again.
     internal static bool TryGatherBeforeWait()
     {
         // the game's prompt kept its campfire; the rest screen's wait finds its campfire on the open screen
@@ -309,9 +285,21 @@ internal static class CampfireRestContext
 
         _waitCampfire = null;
 
-        var walkers = FindWalkers(campfire, true);
+        if (!Gathers(campfire))
+        {
+            return false;
+        }
 
-        if (walkers.Count == 0)
+        // every rule but the once-a-day one (the wait is for it) and the distance (the gather is for it)
+        if (!CheckLongRest(out var failure, true) && failure != PartyTooSpreadOut)
+        {
+            Gui.GuiService.ShowAlert(failure, Gui.ColorFailure, 2.5f);
+
+            return true;
+        }
+
+        // in range: the game's wait and rest as usual
+        if (!CampfireFastTravelContext.NeedsTravel(campfire.User))
         {
             return false;
         }
@@ -319,59 +307,56 @@ internal static class CampfireRestContext
         var hours = LongRestWaitContext.MissingHours();
 
         if (!MultiplayerApprovalContext.MustWaitForApprovalWithSubjectName(
-                MultiplayerApprovalContext.ApprovalAction.CampfireWaitAndLongRest,
-                string.Join(", ", walkers.ConvertAll(x => x.Name)), hours.ToString(),
+                MultiplayerApprovalContext.ApprovalAction.CampfireWaitAndLongRest, string.Empty, hours.ToString(),
                 (hours * 3600) + MultiplayerApprovalContext.RestSeconds(RestType.LongRest),
-                () => StartGather(campfire, walkers, true, WaitThenRest)))
+                () => StartGather(campfire, true, WaitThenRest)))
         {
-            StartGather(campfire, walkers, true, WaitThenRest);
+            StartGather(campfire, true, WaitThenRest);
         }
 
         return true;
     }
 
-    // after the walk before a wait: the game's wait and long rest, already approved with the walk; the hours are
-    // counted again, as the game counts them, since the walk took a little game time
+    // after the gather before a wait: the game's wait and long rest, already approved with the gather; the hours are
+    // counted again, as the game counts them, since the travel took a little game time
     private static void WaitThenRest()
     {
         MultiplayerApprovalContext.RunApproved(() =>
             ServiceRepository.GetService<ICommandService>()?.StartDeferredLongRest(LongRestWaitContext.MissingHours()));
     }
 
-    // the gather at the campfire; arrived runs once everyone is there and the rest rules pass (before a wait, all but
-    // the once-a-day rule). False when it couldn't start.
-    private static bool StartGather(
-        Campfire campfire, List<GameLocationCharacter> walkers, bool beforeWait, System.Action arrived)
+    // the gather: the whole party fast travels to the campfire's point (CampfireFastTravelContext), then arrived runs
+    // once the rest rules pass (before a wait, all but the once-a-day rule). There is no walk (user direction,
+    // 2026-11-02): when the game can't fast travel now, the gather fails with its message and nobody rests. False when
+    // it couldn't start.
+    private static bool StartGather(Campfire campfire, bool beforeWait, System.Action arrived)
     {
-        if (campfire?.User == null || walkers.Count == 0)
+        if (!Gathers(campfire))
         {
             return false;
         }
 
-        var gather = new Gather
-        {
-            Arrived = arrived, BeforeWait = beforeWait, Walkers = walkers, StartTime = Time.unscaledTime
-        };
+        var gather = new Gather { Arrived = arrived, BeforeWait = beforeWait };
 
-        // first, when anybody is beyond the long rest distance, the whole party fast travels to the campfire (user
-        // directions, 2026-11-02; CampfireFastTravelContext), then the walk covers whatever is left; when the game
-        // can't fast travel now, or nobody is that far, everyone walks
-        if (CampfireFastTravelContext.TryStart(campfire.User, () => _gather == gather,
-                travelled => AfterFastTravel(gather, campfire, travelled)))
+        if (!CampfireFastTravelContext.TryStart(campfire.User, () => _gather == gather,
+                travelled => AfterFastTravel(gather, travelled)))
         {
-            _gather = gather;
+            ShowGatherFailed();
+            CampfireFastTravelContext.OnGatherAbandoned();
 
-            return true;
+            return false;
         }
 
-        return StartWalk(campfire, gather);
+        _gather = gather;
+
+        return true;
     }
 
-    // the campfire fast travel is over: whoever is still too far walks, then the rest. When it hadn't begun in time
-    // the gather is given up and nothing more is sent (Codex review of c44f860d, 2026-11-02): the travel command may
-    // still be queued for a later tick (the game has no way to withdraw it), and a walk sent now could run alongside
-    // it; if it does run later, the party simply ends up at the campfire and can use it again.
-    private static void AfterFastTravel(Gather gather, Campfire campfire, bool travelled)
+    // the campfire fast travel is over. travelled is false when it never began in time (the command may only be late,
+    // so nothing more is sent: Codex review of c44f860d, 2026-11-02), when the game couldn't travel (no path, its
+    // waypoint lookup failed) or when enemies interrupted it short of the campfire; the gather then fails and nobody
+    // rests.
+    private static void AfterFastTravel(Gather gather, bool travelled)
     {
         // another rest screen opened during the travel, or a reset
         if (_gather != gather)
@@ -381,156 +366,41 @@ internal static class CampfireRestContext
 
         EndGather();
 
-        if (!travelled)
-        {
-            ShowGatherFailed(gather.Walkers);
-            CampfireFastTravelContext.OnGatherAbandoned();
-
-            return;
-        }
-
         // a fight or cutscene (an enemy saw the party on the way): the game's own screens explain it
         if (IsBusy())
         {
             return;
         }
 
-        var walkers = FindWalkers(campfire, gather.BeforeWait);
-
-        if (walkers.Count > 0)
+        if (!travelled)
         {
-            StartWalk(campfire,
-                new Gather
-                {
-                    Arrived = gather.Arrived,
-                    BeforeWait = gather.BeforeWait,
-                    Walkers = walkers,
-                    StartTime = Time.unscaledTime
-                });
+            ShowGatherFailed();
+            CampfireFastTravelContext.OnGatherAbandoned();
 
             return;
         }
 
-        FinishGather(gather, []);
-    }
-
-    // the walk to the campfire. False when it couldn't start.
-    private static bool StartWalk(Campfire campfire, Gather gather)
-    {
-        var positioning = ServiceRepository.GetService<IGameLocationPositioningService>();
-        var characterService = ServiceRepository.GetService<IGameLocationCharacterService>();
-        var commands = ServiceRepository.GetService<ICommandService>();
-        var walkers = gather.Walkers;
-
-        if (positioning == null || characterService == null || commands == null)
-        {
-            return false;
-        }
-
-        // places in the party formation around the campfire's user, found as the game finds them for a group move
-        var positions = new List<int3>();
-        var sizes = new List<RulesetActor.SizeParameters>();
-
-        positioning.ComputeFormationPlacementPositions(walkers, campfire.User.LocationPosition,
-            campfire.User.Orientation, characterService.PartyFormation.FormationPositions,
-            CellHelpers.PlacementMode.PlanningStation, positions, sizes, 10, false, false);
-
-        if (positions.Count < walkers.Count)
-        {
-            ShowGatherFailed(walkers.Skip(positions.Count));
-
-            return false;
-        }
-
-        _gather = gather;
-
-        for (var i = 0; i < walkers.Count; i++)
-        {
-            var walker = walkers[i];
-
-            // each walker reports once its move ends; aborted is true when it was stopped or couldn't get there
-            commands.MoveCharacter(walker, positions[i], campfire.User.Orientation, 0.1f * i, walker.GetMoveStance(),
-                aborted => OnWalkerDone(gather, walker, aborted), false, false);
-        }
-
-        new GameObject("FinishingBusinessCampfireGather").AddComponent<GatherDriver>().Gather = gather;
-
-        return true;
-    }
-
-    private static void OnWalkerDone(Gather gather, GameLocationCharacter walker, bool aborted)
-    {
-        if (_gather != gather)
-        {
-            return;
-        }
-
-        gather.Done.Add(walker);
-
-        if (aborted)
-        {
-            gather.Failed.Add(walker);
-        }
-    }
-
-    // every frame while walking: ends the walk when everyone reported, when it can no longer lead to a rest, or when it
-    // took too long; true while it goes on
-    private static bool UpdateGather(Gather gather)
-    {
-        if (_gather != gather)
-        {
-            return false;
-        }
-
-        // a fight or a cutscene (which stops every character's move itself) ends the walk without a rest; the game's
-        // own screens explain them. (The rest screen is closed during the walk, so it no longer counts.)
-        if (IsBusy())
-        {
-            EndGather();
-
-            return false;
-        }
-
-        if (gather.Done.Count < gather.Walkers.Count &&
-            Time.unscaledTime - gather.StartTime < GatherTimeoutSeconds)
-        {
-            return true;
-        }
-
-        EndGather();
-        FinishGather(gather,
-            gather.Walkers.Where(x => gather.Failed.Contains(x) || !gather.Done.Contains(x)).ToList());
-
-        return false;
-    }
-
-    // the gather is over: the rest checks, then the rest screen's Start or the wait and rest; notThere are the
-    // characters who didn't get there
-    private static void FinishGather(Gather gather, List<GameLocationCharacter> notThere)
-    {
         // every rest rule again, now with the 10 cells too: the game's Start doesn't check them itself (only with a
         // gamepad), the rest screen's button did, before the gather. Before a wait, all but the once-a-day rule,
         // which the wait is for; the game checks every rule again once the wait is over.
-        var canRest = CheckLongRest(out var failure, gather.BeforeWait);
-
-        if (notThere.Count > 0 || (!canRest && failure == PartyTooSpreadOut))
+        if (!CheckLongRest(out var failure, gather.BeforeWait))
         {
-            ShowGatherFailed(notThere.Count > 0 ? notThere : gather.Walkers);
+            if (failure == PartyTooSpreadOut)
+            {
+                ShowGatherFailed();
+            }
+            else
+            {
+                // something else changed during the gather (an enemy came near, ...), shown as the game shows it
+                Gui.GuiService.ShowAlert(failure, Gui.ColorFailure, 2.5f);
+            }
+
             CampfireFastTravelContext.OnGatherAbandoned();
 
             return;
         }
 
-        if (!canRest)
-        {
-            // something else changed during the gather (an enemy came near, ...), shown as the game shows it
-            Gui.GuiService.ShowAlert(failure, Gui.ColorFailure, 2.5f);
-            CampfireFastTravelContext.OnGatherAbandoned();
-
-            return;
-        }
-
-        // everyone is here and every rule passes: the rest screen's Start, or the wait and rest
+        // the party is at the campfire and every rule passes: the rest screen's Start, or the wait and rest
         gather.Arrived();
     }
 
@@ -545,14 +415,12 @@ internal static class CampfireRestContext
         _gather = null;
     }
 
-    private static void ShowGatherFailed(IEnumerable<GameLocationCharacter> walkers)
+    private static void ShowGatherFailed()
     {
-        var names = string.Join(", ", walkers.Select(x => x.Name));
-
-        Gui.GuiService.ShowAlert(Gui.Format("Message/&CampfireGatherFailed", names), Gui.ColorFailure, 5f);
+        Gui.GuiService.ShowAlert(Gui.Localize("Message/&CampfireGatherFailed"), Gui.ColorFailure, 5f);
     }
 
-    // leaving or joining a room, or loading: forgets the campfire and any walk
+    // leaving or joining a room, or loading: forgets the campfire and any gather
     internal static void Reset()
     {
         _campfire = null;
@@ -566,35 +434,16 @@ internal static class CampfireRestContext
         // the campfire rests at once, without the rest screen's checks or food
         internal bool Forced;
 
-        // the character who used the campfire; the walkers gather around them
+        // the character who used the campfire; the party gathers at the campfire's point next to them
         internal GameLocationCharacter User;
     }
 
     private sealed class Gather
     {
-        internal readonly HashSet<GameLocationCharacter> Done = [];
-        internal readonly HashSet<GameLocationCharacter> Failed = [];
-
-        // what runs once everyone arrived and the rules pass: the rest screen's Start, or the wait and rest
+        // what runs once the party arrived and the rules pass: the rest screen's Start, or the wait and rest
         internal System.Action Arrived;
 
-        // the walk comes before a wait, so its last check leaves out the once-a-day rule
+        // the gather comes before a wait, so its last check leaves out the once-a-day rule
         internal bool BeforeWait;
-        internal float StartTime;
-        internal List<GameLocationCharacter> Walkers;
-    }
-
-    // drives the walk frame by frame, also in single player (where no network frame runs)
-    private sealed class GatherDriver : MonoBehaviour
-    {
-        internal Gather Gather;
-
-        private void Update()
-        {
-            if (Gather == null || !UpdateGather(Gather))
-            {
-                Destroy(gameObject);
-            }
-        }
     }
 }
