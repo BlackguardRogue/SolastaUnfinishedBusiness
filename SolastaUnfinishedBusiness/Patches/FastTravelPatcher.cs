@@ -8,7 +8,8 @@ using SolastaUnfinishedBusiness.Models;
 
 namespace SolastaUnfinishedBusiness.Patches;
 
-// The campfire gather's temporary fast travel waypoint (CampfireFastTravelContext) leaves the map again at points that
+// The campfire gather (CampfireFastTravelContext) follows the game's fast travel arrival from its start to its end, so
+// it knows when the party was really placed; its temporary fast travel waypoint leaves the map again at points that
 // run on every computer: when a fast travel ends and when a long rest starts. The travel itself is the game's own.
 [UsedImplicitly]
 public static class FastTravelPatcher
@@ -21,7 +22,8 @@ public static class FastTravelPatcher
             "MoveNext");
     }
 
-    //PATCH: a fast travel that placed the party removes the campfire's temporary waypoint
+    //PATCH: a fast travel's arrival is followed from start to end (the campfire gather waits for it), and one that
+    //placed the party removes the campfire's temporary waypoint
     [HarmonyPatch]
     [SuppressMessage("Minor Code Smell", "S101:Types should be named in PascalCase", Justification = "Patch")]
     [UsedImplicitly]
@@ -32,6 +34,13 @@ public static class FastTravelPatcher
         {
             return CoroutineMoveNext(typeof(GameLocationMapManager),
                 nameof(GameLocationMapManager.SetupPartyOnDestination));
+        }
+
+        // a step of the arrival runs: until its end, the travel isn't over
+        [UsedImplicitly]
+        public static void Prefix()
+        {
+            CampfireFastTravelContext.OnArrivalStep();
         }
 
         // the coroutine's last step ran: the party is placed

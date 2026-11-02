@@ -54,6 +54,12 @@ internal static class CampfireFastTravelContext
     private static int _arrivals;
     private static bool _lastArrivalInterrupted;
 
+    // SetupPartyOnDestination is running: the game clears IsFastTraveling and asks for the exploration state at the
+    // start of that arrival step (IL_009b), and only then places the party and fades back in over later frames, so
+    // "not travelling, exploring" doesn't mean the travel is over while this is set (in-game test, 2026-11-02: the
+    // gather reported a failed travel although the party arrived)
+    private static bool _arriving;
+
     #region Destination
 
     // FunctorStartLongRest on every computer: the campfire's fast travel destination, an existing waypoint within
@@ -306,10 +312,17 @@ internal static class CampfireFastTravelContext
         return accessor.sector == sector;
     }
 
+    // GameLocationMapManager.SetupPartyOnDestination runs a step: the travel's arrival is under way
+    internal static void OnArrivalStep()
+    {
+        _arriving = true;
+    }
+
     // GameLocationMapManager.SetupPartyOnDestination's end, on every computer: a fast travel placed the party, so a
     // temporary campfire waypoint has done its job
     internal static void OnFastTravelEnded()
     {
+        _arriving = false;
         _arrivals++;
         _lastArrivalInterrupted =
             ServiceRepository.GetService<IGameLocationMapService>() is GameLocationMapManager { interrupted: true };
@@ -334,6 +347,7 @@ internal static class CampfireFastTravelContext
     // leaving or joining a room, or loading
     internal static void Reset()
     {
+        _arriving = false;
         RemoveDestination();
     }
 
@@ -353,8 +367,10 @@ internal static class CampfireFastTravelContext
 
     // waits for the campfire fast travel on the computer that asked for it. The travel command runs at a later tick;
     // once the game's travel has begun there is no time limit, and the gather only goes on once the game is back to
-    // exploring, so nothing starts while the party is still travelling. It reports travelled only when a travel placed
-    // the party since it started and wasn't interrupted. A travel that hasn't begun here after
+    // exploring, so nothing starts while the party is still travelling. It finishes as soon as the arrival step has
+    // run to its end (travelled unless enemies interrupted it), or, for a travel that never reaches that step (no
+    // route, its waypoint lookup failed), once the game is exploring again with no arrival step running (not
+    // travelled). A travel that hasn't begun here after
     // StartTimeoutSeconds is reported as not travelled, and the gather is given up without sending anything more:
     // the command may only be late (a stalled tick), not dropped, so it may still run (Codex review of c44f860d,
     // 2026-11-02). It goes away without going on when the gather was dropped meanwhile (another rest screen opened, a
@@ -383,8 +399,16 @@ internal static class CampfireFastTravelContext
                 return;
             }
 
+            // the arrival step ran to its end since this travel was asked for
+            if (_arrivals > ArrivalsAtStart)
+            {
+                Finish(!_lastArrivalInterrupted);
+
+                return;
+            }
+
             var mapService = ServiceRepository.GetService<IGameLocationMapService>();
-            var travelling = mapService is { IsPreparingFastTravel: true } or { IsFastTraveling: true };
+            var travelling = _arriving || mapService is { IsPreparingFastTravel: true } or { IsFastTraveling: true };
 
             if (!_began)
             {
@@ -398,9 +422,10 @@ internal static class CampfireFastTravelContext
                 return;
             }
 
+            // the travel ended without reaching its arrival step
             if (!travelling && IsExploring())
             {
-                Finish(_arrivals > ArrivalsAtStart && !_lastArrivalInterrupted);
+                Finish(false);
             }
         }
 
