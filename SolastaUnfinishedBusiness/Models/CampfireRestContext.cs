@@ -401,7 +401,9 @@ internal static class CampfireRestContext
         {
             if (failure == PartyTooSpreadOut)
             {
-                ShowGatherFailed();
+                // the game's own range rule failed: named like the gather's check below (Codex's review of
+                // 429d2db3, 2026-11-02), with the general message only if that check finds nobody
+                ShowOutOfRange(gather.User);
             }
             else
             {
@@ -420,9 +422,9 @@ internal static class CampfireRestContext
         // a downed character could still be left behind: the gather's own range check, with them, decides (Codex's
         // review of fc363341, 2026-11-02; read in the game's code, not seen in a game). The message names who is out of
         // range (user direction, 2026-11-02).
-        if (CampfireFastTravelContext.DescribeOutOfRange(gather.User) is { } outOfRange)
+        if (CampfireFastTravelContext.NeedsTravel(gather.User))
         {
-            Gui.GuiService.ShowAlert(outOfRange, Gui.ColorFailure, 5f);
+            ShowOutOfRange(gather.User);
             CampfireFastTravelContext.OnGatherAbandoned();
 
             return;
@@ -446,6 +448,20 @@ internal static class CampfireRestContext
     private static void ShowGatherFailed()
     {
         Gui.GuiService.ShowAlert(Gui.Localize("Message/&CampfireGatherFailed"), Gui.ColorFailure, 5f);
+    }
+
+    // after the travel the party is still out of the long rest range: "<name> is out of range for a long rest." (user
+    // direction, 2026-11-02), or the general failure when no single character can be named
+    private static void ShowOutOfRange(GameLocationCharacter user)
+    {
+        if (CampfireFastTravelContext.DescribeOutOfRange(user) is { } outOfRange)
+        {
+            Gui.GuiService.ShowAlert(outOfRange, Gui.ColorFailure, 5f);
+        }
+        else
+        {
+            ShowGatherFailed();
+        }
     }
 
     // the party's leader (the first party member, from whom the game routes a fast travel) can lead it; when they are
