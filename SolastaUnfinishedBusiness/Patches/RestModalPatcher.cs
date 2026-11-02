@@ -80,8 +80,8 @@ public static class RestModalPatcher
                 return false;
             }
 
-            //PATCH: at a campfire, characters too far away walk to it first, then the party rests; in multiplayer the
-            //walk and the rest are approved together
+            //PATCH: at a campfire, a party too spread out gathers there first (fast travel, then a walk), then rests;
+            //in multiplayer the gather and the rest are approved together
             var walkers = CampfireRestContext.FindWalkers();
 
             if (walkers.Count == 0)

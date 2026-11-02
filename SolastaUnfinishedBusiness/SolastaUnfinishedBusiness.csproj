@@ -65,6 +65,13 @@
     <DebugType>portable</DebugType>
   </PropertyGroup>
 
+  <!-- Development-only tools (FB_DEVELOPMENT, e.g. the multiplayer vote screen preview): compiled only into debug
+       builds and builds made with -p:FbDevelopmentBuild=true. Off by default, so a release build has none of them; the
+       workflow turns it on for every build but a version tag's (user direction, 2026-11-02). -->
+  <PropertyGroup Condition="'$(FbDevelopmentBuild)'=='true' or '$(Configuration)'=='Debug Install'">
+    <DefineConstants>$(DefineConstants);FB_DEVELOPMENT</DefineConstants>
+  </PropertyGroup>
+
   <ItemGroup>
     <Reference Include="System.Collections" />
     <Reference Include="System.IO.Compression" />

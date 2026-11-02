@@ -15,6 +15,10 @@ internal static class MultiplayerDisplay
         Gui.Localize("ModUi/&MultiplayerFpsHostSeesAllOthersOwn")
     ];
 
+#if FB_DEVELOPMENT
+    // the vote screen preview is a development tool: compiled only into development builds (FB_DEVELOPMENT, see the
+    // project file), never into a release (user direction, 2026-11-02)
+
     // the vote screen preview's choices, kept while the game runs (not settings)
     private static int _votePreviewOtherPlayers = 3;
     private static bool _votePreviewLastRefuses;
@@ -60,6 +64,7 @@ internal static class MultiplayerDisplay
                     _votePreviewLastRefuses), 250.Width());
         }
     }
+#endif
 
     // this build, and in a room the build of every player (missing ones say so); differences are red
     private static void DisplayVersions()
@@ -278,7 +283,9 @@ internal static class MultiplayerDisplay
             Main.Settings.GatherPartyForCampfireRest = toggle;
         }
 
+#if FB_DEVELOPMENT
         DisplayVotePreview();
+#endif
 
         UI.Label();
         UI.Label(Gui.Localize("ModUi/&MultiplayerMovementTitle"));

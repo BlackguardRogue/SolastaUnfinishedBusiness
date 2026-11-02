@@ -663,9 +663,14 @@ internal static class MultiplayerVoteContext
     internal static void EnsurePlayerRows(MultiplayerVoteModal screen)
     {
         var groups = screen.playerInfoGroups;
-        var needed = _vote is { Preview: true }
-            ? _vote.PreviewPlayers.Count
-            : (ServiceRepository.GetService<INetworkingService>()?.GetPlayersInRoom()?.Count ?? 1) - 1;
+        var needed = (ServiceRepository.GetService<INetworkingService>()?.GetPlayersInRoom()?.Count ?? 1) - 1;
+
+#if FB_DEVELOPMENT
+        if (_vote is { Preview: true })
+        {
+            needed = _vote.PreviewPlayers.Count;
+        }
+#endif
 
         while (groups.Count > 0 && groups.Count < needed)
         {
@@ -775,10 +780,12 @@ internal static class MultiplayerVoteContext
 
     #endregion
 
+#if FB_DEVELOPMENT
     #region Preview
 
     // A single-player preview of the vote screens with made-up players (user request, 2026-11-01), started from the
-    // mod menu (Multiplayer). It goes through the same screen code as a real vote (texts, rows, extra rows, marking
+    // mod menu (Multiplayer). A development tool: compiled only into development builds (FB_DEVELOPMENT, see the
+    // project file), never into a release (user direction, 2026-11-02). It goes through the same screen code as a real vote (texts, rows, extra rows, marking
     // votes, the request window giving way to the vote screen, Cancel), but nothing is sent: the made-up players
     // answer one after another on a timer, and the outcome is shown with the game's own alerts. The game fills the
     // rows from the room's players and the session's player slots, which single player doesn't have for made-up
@@ -1018,6 +1025,7 @@ internal static class MultiplayerVoteContext
     }
 
     #endregion
+#endif
 
     private sealed class Vote
     {
@@ -1039,6 +1047,7 @@ internal static class MultiplayerVoteContext
         // a computer that was asked: when it refused the vote, -1 until then
         internal float RefusedTime = -1f;
 
+#if FB_DEVELOPMENT
         // the single-player preview (StartPreview): made-up players, nothing sent
         internal bool Preview;
         internal readonly List<SessionPlayerSlot> PreviewPlayers = [];
@@ -1046,8 +1055,13 @@ internal static class MultiplayerVoteContext
         internal readonly Queue<int> PreviewToAnswer = new();
         internal float PreviewNextAnswerTime;
         internal bool PreviewLastRefuses;
+#else
+        // the preview exists in development builds only, so no vote is one here
+        internal bool Preview => false;
+#endif
     }
 
+#if FB_DEVELOPMENT
     // runs the preview's made-up answers each frame; it removes itself once the preview is over
     private sealed class PreviewDriver : MonoBehaviour
     {
@@ -1063,4 +1077,5 @@ internal static class MultiplayerVoteContext
             UpdatePreview();
         }
     }
+#endif
 }

@@ -61,6 +61,9 @@ public static class MultiplayerVoteModalPatcher
         }
     }
 
+#if FB_DEVELOPMENT
+    // the vote screen preview's patches exist in development builds only (FB_DEVELOPMENT, see the project file)
+
     //PATCH: the vote screen preview's made-up players instead of the room's (MULTIPLAYER)
     [HarmonyPatch(typeof(MultiplayerVoteModal), nameof(MultiplayerVoteModal.CollectPlayerInfo))]
     [SuppressMessage("Minor Code Smell", "S101:Types should be named in PascalCase", Justification = "Patch")]
@@ -101,6 +104,7 @@ public static class MultiplayerVoteModalPatcher
                 ref defaultSprite, ref __result);
         }
     }
+#endif
 
     //PATCH: Cancel on another player's vote screen refuses that vote (MULTIPLAYER)
     [HarmonyPatch(typeof(MultiplayerVoteModal), nameof(MultiplayerVoteModal.OnCancelVoteCb))]

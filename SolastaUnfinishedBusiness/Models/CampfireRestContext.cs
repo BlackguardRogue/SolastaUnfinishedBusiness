@@ -12,7 +12,9 @@ namespace SolastaUnfinishedBusiness.Models;
 //    (GameRestingManager.CanExecuteLocationRest with player privileges, "only the host can rest"); this follows the
 //    setting that already lets every player start rests from the rest screen (MultiplayerAllowPlayersToStartRests).
 // 2. When the party is too spread out to rest (the game's rule: every two living party members within 10 cells), the
-//    characters further away walk to the campfire first, and the approval says so (setting GatherPartyForCampfireRest).
+//    party gathers at the campfire first, and the approval says so (setting GatherPartyForCampfireRest): when anybody
+//    is more than 10 cells away the whole party fast travels there (CampfireFastTravelContext, user directions,
+//    2026-11-02), then whoever is still too far walks.
 // 3. A campfire set to rest at once starts its rest without the multiplayer approval, as in the game (user direction,
 //    2026-11-02; it asked for one in 9b341d45).
 //
@@ -23,22 +25,24 @@ namespace SolastaUnfinishedBusiness.Models;
 // rest. A campfire set to rest at once (the functor's bool parameter) skips the checks, opens the screen without food
 // and presses Start itself. Rests on the world map are the travel's own (GameTravelScheduler), not this functor.
 //
-// The walk: on the computer that pressed Start (after the approval, in multiplayer), each character further than
+// The gather: on the computer that pressed Start (after the approval, in multiplayer), first the fast travel when
+// anybody is beyond the long rest distance (CampfireFastTravelContext), then the walk. In the walk, each character
+// further than
 // GatherRadius cells from the character who used the campfire gets the game's own move command
 // (ICommandService.MoveCharacter, which every computer runs in the lockstep) to a place in the party formation around
-// that character. The rest screen closes for the walk: it pauses game time while it is open (RestModal.OnBeginShow
+// that character. The rest screen closes for the gather: it pauses game time while it is open (RestModal.OnBeginShow
 // calls GameTime.Pause, OnEndHide resumes it), so nobody could move with it open (in-game test, 2026-11-02: every
 // walk ran out of time). Once every walker arrived, the rest checks run again, and the rest screen opens again with
 // the game's Start pressed, as the game does for a campfire that rests at once. A walk that can't finish (a character
 // can't get there, a fight or cutscene starts, another rest screen opens) starts no rest.
 //
-// A long rest that has to wait first (the party already rested that day) walks before the wait (user direction,
+// A long rest that has to wait first (the party already rested that day) gathers before the wait (user direction,
 // 2026-11-02: "the party is auto gathered before the time skip"). The game checks the once-a-day rule before the
 // distance (GameRestingManager.CanExecuteLocationRest), so a campfire offers its wait ("Waiting to Perform a Long
 // Rest", FunctorStartLongRest.DoWaitLongRest) even for a spread-out party, and the long rest after the wait
 // (StartDeferredLongRestAsync) then refused it as spread out, 16 hours later. Both waits, that one and the rest
-// screen's combined wait and long rest (LongRestWaitContext), now walk the party to the campfire first, then wait; in
-// multiplayer the walk, the wait and the rest are approved together.
+// screen's combined wait and long rest (LongRestWaitContext), now gather the party at the campfire first, then wait;
+// in multiplayer the gather, the wait and the rest are approved together.
 internal static class CampfireRestContext
 {
     private const string PartyTooSpreadOut = "Failure/&FailureFlagPartyTooSpreadOut";
@@ -65,7 +69,7 @@ internal static class CampfireRestContext
     // set while the game's Start Long Rest runs again after the walk
     internal static bool IsReplayingStart { get; private set; }
 
-    // the walk under way on this computer
+    // the gather (fast travel or walk) under way on this computer
     internal static bool IsGathering => _gather != null;
 
     private static Gather _gather;
@@ -375,7 +379,7 @@ internal static class CampfireRestContext
 
         EndGather();
 
-        // a fight or cutscene (an enemy saw a traveller): the game's own screens explain it
+        // a fight or cutscene (an enemy saw the party on the way): the game's own screens explain it
         if (IsBusy())
         {
             return;

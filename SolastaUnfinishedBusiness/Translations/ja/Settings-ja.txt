@@ -511,7 +511,7 @@ ModUi/&AddOriginFeatsToAutoLearn= + 出自特技を自動習得に追加
 ModUi/&AllMagicThrownReturn=すべての魔法の投擲武器が投げた者の手に戻る <b><i><color=#C04040E0>[解除には再起動が必要]</color></i></b>
 ModUi/&AllowShortRestWithPartySpreadOut=パーティーが散らばっていても小休憩を許可 <i><color=#F0DAA0>[パーティーが10マス以内にいなければならないゲームのルールを変更。戦闘中、会話中、カットシーン中は不可で、その他の休憩ルール（近くの敵、危険な場所、食料）は引き続き適用。ゲームプレイ > マルチプレイ と ゲームプレイ > キャンペーン にもあり]</color></i>
 ModUi/&CombineWaitWithLongRest=パーティーが今日すでに大休憩を取っている場合、大休憩ボタンは再び休憩できるまで待ってから休憩する <i><color=#F0DAA0>[合計時間を示す確認が1回、マルチプレイでは承認が1回、キャンプファイアでも同様。その他の休憩ルールは引き続き適用]</color></i>
-ModUi/&GatherPartyForCampfireRest=キャンプファイアでは、大休憩には遠すぎるキャラクターがまずそこまで歩く <i><color=#F0DAA0>[ゲームはパーティー全員が10マス以内にいることを求める。マルチプレイでは移動と休憩をまとめて承認し、全員が到着してその他の休憩ルールを満たしてから休憩が始まる。ゲームプレイ > マルチプレイ と ゲームプレイ > キャンペーン にもあり]</color></i>
+ModUi/&GatherPartyForCampfireRest=キャンプファイアでは、大休憩には散らばりすぎたパーティーがまずそこに集まる：誰かが10マスより遠ければパーティー全員がファストトラベルし、そうでなければ遠いキャラクターが歩く <i><color=#F0DAA0>[ゲームはパーティー全員が10マス以内にいることを求める。マルチプレイでは集合と休憩をまとめて承認し、全員が到着してその他の休憩ルールを満たしてから休憩が始まる。ゲームプレイ > マルチプレイ と ゲームプレイ > キャンペーン にもあり]</color></i>
 ModUi/&CraftWithBaseInsteadOfPrimed=プライムドの武器や防具を必要とするレシピで通常品も使える <i><color=#F0DAA0>[ゲーム、このMOD、キャンペーンのすべてのレシピ。プライムド品が先に使われ、通常品は装備していない場合のみ数えるので、自分の装備が消費されることはない]</color></i>
 ModUi/&EnableBackgroundAbilityScoreIncreases=能力値の上昇を種族ではなく背景から得る <i><color=#F0DAA0>[柔軟な種族とは両立せず、オフになる]</color></i>
 ModUi/&EnableBackgroundBonusFeats=背景のボーナス特技を有効化 <i><color=#F0DAA0>[柔軟な背景とは両立せず、オフになる]</color></i>

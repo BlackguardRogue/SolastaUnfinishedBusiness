@@ -53,7 +53,25 @@ jobs:
       - name: Clean
         run: dotnet clean SolastaUnfinishedBusiness.sln
       - name: Build
-        run: dotnet build SolastaUnfinishedBusiness.sln --no-restore -c "Release Workflow"
+        # development-only tools (FB_DEVELOPMENT, such as the multiplayer vote screen preview) are compiled into test
+        # builds only, never into a version tag's release build
+        run: >-
+          dotnet build SolastaUnfinishedBusiness.sln --no-restore -c "Release Workflow"
+          -p:FbDevelopmentBuild=${{ github.ref_type != 'tag' }}
+      - name: Check development-only tools
+        # the vote screen preview's entry point must be in a test build (so this check means something) and must not
+        # be in a release build
+        run: |
+          dll=SolastaFiles/Mods/SolastaUnfinishedBusiness/SolastaUnfinishedBusiness.dll
+          if grep -q -a "StartPreview" "$dll"; then found=true; else found=false; fi
+          if [ "$GITHUB_REF_TYPE" = "tag" ] && [ "$found" = true ]; then
+            echo "::error::The release build contains the development-only vote screen preview"
+            exit 1
+          fi
+          if [ "$GITHUB_REF_TYPE" != "tag" ] && [ "$found" = false ]; then
+            echo "::error::The test build is missing the development-only vote screen preview; FB_DEVELOPMENT wasn't set"
+            exit 1
+          fi
       - name: Zip Files
         run: |
           cd SolastaFiles/Mods

@@ -17,7 +17,7 @@ public static class GameRestingManagerPatcher
 
     //PATCH: allows a short rest while the party is spread out, but not during a conversation or cutscene
     //PATCH: lets every player start a rest from the rest screen or a campfire, not only the host (MULTIPLAYER)
-    //PATCH: a campfire's long rest passes the spread-out rule when the party will walk to the campfire first
+    //PATCH: a campfire's long rest passes the spread-out rule when the party will gather at the campfire first
     [HarmonyPatch(typeof(GameRestingManager), nameof(GameRestingManager.CanExecuteLocationRest))]
     [SuppressMessage("Minor Code Smell", "S101:Types should be named in PascalCase", Justification = "Patch")]
     [UsedImplicitly]
