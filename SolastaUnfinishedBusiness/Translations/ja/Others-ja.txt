@@ -716,6 +716,7 @@ Message/&CampfireGatherFailed=パーティーはキャンプファイアまで�
 Message/&CampfireLeaderDead={0}は死亡している。ファストトラベルできない。
 Message/&CampfireLeaderDying={0}は瀕死状態だ。ファストトラベルできない。
 Message/&CampfireLeaderUnconscious={0}は気絶している。ファストトラベルできない。
+Message/&CampfireCharacterOutOfRange={0}は大休憩の範囲外にいる。
 Screen/&CampfireFastTravelWaypointTitle=キャンプファイア
 Message/&MultiplayerApprovalBusyDescription=行動は実行されませんでした：{0}\n\n終わってからもう一度試してください。
 Message/&MultiplayerApprovalBusyTitle=承認を求められません

@@ -418,10 +418,11 @@ internal static class CampfireRestContext
         // as many characters as it finds free cells for (GameLocationMapManager.SetupPartyOnDestination teleports
         // foundPositions.Count of them; ComputeFormationPlacementPositions can come back short on a cramped point), so
         // a downed character could still be left behind: the gather's own range check, with them, decides (Codex's
-        // review of fc363341, 2026-11-02; read in the game's code, not seen in a game)
-        if (CampfireFastTravelContext.NeedsTravel(gather.User))
+        // review of fc363341, 2026-11-02; read in the game's code, not seen in a game). The message names who is out of
+        // range (user direction, 2026-11-02).
+        if (CampfireFastTravelContext.DescribeOutOfRange(gather.User) is { } outOfRange)
         {
-            ShowGatherFailed();
+            Gui.GuiService.ShowAlert(outOfRange, Gui.ColorFailure, 5f);
             CampfireFastTravelContext.OnGatherAbandoned();
 
             return;

@@ -715,6 +715,7 @@ Message/&CampfireGatherFailed=队伍无法快速旅行到营火旁，因此没�
 Message/&CampfireLeaderDead={0}已死亡。无法快速旅行。
 Message/&CampfireLeaderDying={0}濒临死亡。无法快速旅行。
 Message/&CampfireLeaderUnconscious={0}已昏迷。无法快速旅行。
+Message/&CampfireCharacterOutOfRange={0}不在长休范围内。
 Screen/&CampfireFastTravelWaypointTitle=营火
 Message/&MultiplayerApprovalBusyDescription=行动未执行：{0}\n\n结束后请再试一次。
 Message/&MultiplayerApprovalBusyTitle=无法请求批准

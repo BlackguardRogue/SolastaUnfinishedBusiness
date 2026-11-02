@@ -54,10 +54,10 @@ internal static class CampfireFastTravelContext
     private static int _arrivals;
     private static bool _lastArrivalInterrupted;
 
-    // where the last fast travel that placed the party went, on every computer. In multiplayer another player's fast travel, agreed before the campfire's and queued at an earlier
-    // command tick, can still run first here: the game doesn't refuse a second travel request
-    // (FastTravelManager.NetworkedFastTravel), and the travels run in tick order. Its arrival isn't the gather's, so the
-    // gather compares where an arrival went with its own waypoint (Codex's 1.11.0 release review, 2026-11-02; found by
+    // where the last fast travel that placed the party went, on every computer. In multiplayer another player's fast
+    // travel, agreed before the campfire's and queued at an earlier command tick, can still run first here: the game
+    // doesn't refuse a second travel request (FastTravelManager.NetworkedFastTravel), and the travels run in tick order.
+    // Its arrival isn't the gather's, so the gather compares where an arrival went with its own waypoint (Codex's 1.11.0 release review, 2026-11-02; found by
     // reading the game's code, not seen in a game).
     private static int3? _lastArrivalTarget;
 
@@ -181,16 +181,26 @@ internal static class CampfireFastTravelContext
     // the game's rule skips, so they'd be left behind), is more than RestDistance cells from the campfire's user
     internal static bool NeedsTravel(GameLocationCharacter user)
     {
+        return FindOutOfRange(user) != null;
+    }
+
+    // the party member that puts the party out of the long rest range (NeedsTravel), or null when it is in range: the
+    // first one more than RestDistance cells from the campfire's user, otherwise, of the first two living members too
+    // far apart, the one further from the user
+    private static GameLocationCharacter FindOutOfRange(GameLocationCharacter user)
+    {
         var party = ServiceRepository.GetService<IGameLocationCharacterService>()?.PartyCharacters;
 
         if (user == null || party == null)
         {
-            return false;
+            return null;
         }
 
-        if (party.Any(x => Distance(x.LocationPosition, user.LocationPosition) > RestDistance))
+        var far = party.FirstOrDefault(x => Distance(x.LocationPosition, user.LocationPosition) > RestDistance);
+
+        if (far != null)
         {
-            return true;
+            return far;
         }
 
         var living = party.Where(x => x.RulesetCharacter is { IsDeadOrDyingOrUnconscious: false }).ToList();
@@ -201,12 +211,25 @@ internal static class CampfireFastTravelContext
             {
                 if (Distance(living[i].LocationPosition, living[j].LocationPosition) > RestDistance)
                 {
-                    return true;
+                    return Distance(living[i].LocationPosition, user.LocationPosition) >=
+                           Distance(living[j].LocationPosition, user.LocationPosition)
+                        ? living[i]
+                        : living[j];
                 }
             }
         }
 
-        return false;
+        return null;
+    }
+
+    // after the travel, a party member still out of the long rest range (the game couldn't place them): the message
+    // naming them, e.g. "Kushiel is out of range for a long rest." (user direction, 2026-11-02), or null when the
+    // whole party is in range
+    internal static string DescribeOutOfRange(GameLocationCharacter user)
+    {
+        var character = FindOutOfRange(user);
+
+        return character == null ? null : Gui.Format("Message/&CampfireCharacterOutOfRange", character.Name);
     }
 
     // the game routes a fast travel from the first party member (MapWaypointItem.PrepareFastTravel, ExecutePath); when
