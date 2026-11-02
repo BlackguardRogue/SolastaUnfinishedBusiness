@@ -350,7 +350,7 @@ internal static class CampfireRestContext
             return false;
         }
 
-        var gather = new Gather { Arrived = arrived, BeforeWait = beforeWait };
+        var gather = new Gather { Arrived = arrived, BeforeWait = beforeWait, User = campfire.User };
 
         if (!CampfireFastTravelContext.TryStart(campfire.User, () => _gather == gather,
                 travelled => AfterFastTravel(gather, travelled)))
@@ -414,6 +414,19 @@ internal static class CampfireRestContext
             return;
         }
 
+        // the game's rule above leaves out dead, dying and unconscious characters, and the game's arrival places only
+        // as many characters as it finds free cells for (GameLocationMapManager.SetupPartyOnDestination teleports
+        // foundPositions.Count of them; ComputeFormationPlacementPositions can come back short on a cramped point), so
+        // a downed character could still be left behind: the gather's own range check, with them, decides (Codex's
+        // review of fc363341, 2026-11-02; read in the game's code, not seen in a game)
+        if (CampfireFastTravelContext.NeedsTravel(gather.User))
+        {
+            ShowGatherFailed();
+            CampfireFastTravelContext.OnGatherAbandoned();
+
+            return;
+        }
+
         // the party is at the campfire and every rule passes: the rest screen's Start, or the wait and rest
         gather.Arrived();
     }
@@ -435,8 +448,8 @@ internal static class CampfireRestContext
     }
 
     // the party's leader (the first party member, from whom the game routes a fast travel) can lead it; when they are
-    // dead, dying or unconscious the player is told who and in which state, e.g. "Kushiel is dead. Unable to long
-    // rest." (user direction, 2026-11-02), and nobody travels or rests
+    // dead, dying or unconscious the player is told who and in which state, e.g. "Kushiel is dead. Unable to fast
+    // travel." (user direction, 2026-11-02), and nobody travels or rests
     internal static bool LeaderCanTravel()
     {
         var message = CampfireFastTravelContext.DescribeDownedLeader();
@@ -476,5 +489,8 @@ internal static class CampfireRestContext
 
         // the gather comes before a wait, so its last check leaves out the once-a-day rule
         internal bool BeforeWait;
+
+        // the character who used the campfire: the whole party must be in range of them after the travel
+        internal GameLocationCharacter User;
     }
 }

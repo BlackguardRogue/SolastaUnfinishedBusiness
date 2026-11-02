@@ -84,11 +84,17 @@ internal static class CampfireFastTravelContext
         }
 
         // the user asked that no second fast travel point be made next to one that is already there; a waypoint
-        // hidden by the map (its node inactive) doesn't count, as the game doesn't offer it either
+        // hidden by the map (its node inactive) doesn't count, as the game doesn't offer it either. Of those, one the
+        // party can fast travel to now (revealed, and in the leader's area when the waypoint asks for that: TryStart's
+        // conditions) comes first, so a nearer unusable point doesn't hide a usable one (Codex's review of fc363341,
+        // 2026-11-02). When none is usable the nearest is kept, and TryStart then fails the gather: no temporary point
+        // is made beside an existing one. MapWaypoints has the same order on every computer, so all pick the same one.
+        var leader = ServiceRepository.GetService<IGameLocationCharacterService>()?.PartyCharacters.FirstOrDefault();
         var existing = gameLocation.MapWaypoints
             .Where(x => x.Definition is { AllowFastTravel: true, LocationExit: false } && x.Shown &&
                         Distance(x.Position, user.LocationPosition) <= ExistingWaypointRadius)
-            .OrderBy(x => Distance(x.Position, user.LocationPosition))
+            .OrderBy(x => x.Revealed && leader != null && IsInWaypointArea(x, leader) ? 0 : 1)
+            .ThenBy(x => Distance(x.Position, user.LocationPosition))
             .FirstOrDefault();
 
         if (existing != null)
