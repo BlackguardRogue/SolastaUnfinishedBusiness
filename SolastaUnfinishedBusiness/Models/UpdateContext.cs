@@ -424,7 +424,9 @@ internal static class UpdateContext
         {
             State = UpdateState.Queued;
             StateDetail = version;
-            ShowMessage(Gui.Format("Message/&UpdateQueued", version), "Message/&UpdateQuitNow", Application.Quit,
+            // "Would you like to restart Solasta to install the mod?" with Restart and Later (user direction,
+            // 2026-11-02): quitting is the restart, since the helper installs the update and starts the game again
+            ShowMessage(Gui.Format("Message/&UpdateQueued", version), "Message/&UpdateRestartTitle", Application.Quit,
                 "Message/&MessageLaterTitle");
 
             return;
@@ -797,10 +799,10 @@ internal static class UpdateContext
 
     // The download's progress, in a message that stays open while the update downloads and is checked (user direction,
     // 2026-11-02: show it in the game's own UI, not only in the mod menu, as a filling bar with the percentage in its
-    // centre). The message says what is happening and that Hide is safe, and has the bar at the bottom
-    // (CustomUI.UpdateProgressBar: the game's own timer bar, full while the download is checked). Its one button,
-    // Hide, only closes it: the download goes on, and what comes next (the "Quit now" message, or the failure) opens by
-    // itself as before, replacing this message if it is still open (MessageModal.Show re-shows the modal with the new
+    // centre). The message says what is happening, with the bar under it (CustomUI.UpdateProgressBar: the game's own
+    // timer bar, full while the download is checked). Its one button, Hide, only closes it: the download goes on, and
+    // what comes next (the message offering to restart Solasta, or the failure) opens by itself as before, replacing
+    // this message if it is still open (MessageModal.Show re-shows the modal with the new
     // content). The text and the bar are updated in place (RefreshProgressMessage) while this message is the one
     // showing. Without the game's bar (its window not loaded) the text shows the percentage instead.
 
@@ -847,7 +849,7 @@ internal static class UpdateContext
                 ? Gui.Format("Message/&UpdateProgressDownloading", version)
                 : Gui.Format("ModUi/&UpdateStatusDownloading", version, percent.ToString());
 
-        return status + "\n\n" + Gui.Localize("Message/&UpdateProgressHint") + (withBar ? UpdateProgressBar.Room : "");
+        return status + (withBar ? UpdateProgressBar.Room : "");
     }
 
     private static void ShowProgressMessage()
@@ -948,8 +950,8 @@ internal static class UpdateContext
 #if FB_DEVELOPMENT
     // A development tool (compiled only into development builds, FB_DEVELOPMENT, like the vote screen preview): shows the
     // progress message with made-up progress, so the bar can be seen without a real update. It fills over
-    // PreviewDownloadSeconds, stays full for PreviewCheckSeconds, then shows the downloaded message with only OK, as
-    // the real update does with Quit now; nothing is downloaded or installed, and the game never quits.
+    // PreviewDownloadSeconds, stays full for PreviewCheckSeconds, then shows the downloaded message with the real one's
+    // Restart and Later, where Restart only closes it; nothing is downloaded or installed, and the game never quits.
     private const string PreviewVersion = "9.9.9";
     private const float PreviewDownloadSeconds = 12f;
     private const float PreviewCheckSeconds = 3f;
@@ -973,7 +975,9 @@ internal static class UpdateContext
         _previewStart = -1f;
         _progressMessageText = null;
         UpdateProgressBar.Remove();
-        ShowMessage(Gui.Format("Message/&UpdateQueued", PreviewVersion), "Message/&MessageOkTitle");
+        // the real message's buttons, but neither quits: Restart only closes the preview
+        ShowMessage(Gui.Format("Message/&UpdateQueued", PreviewVersion), "Message/&UpdateRestartTitle", null,
+            "Message/&MessageLaterTitle");
     }
 #endif
 

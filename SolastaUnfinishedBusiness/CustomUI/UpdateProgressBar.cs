@@ -145,8 +145,10 @@ internal static class UpdateProgressBar
         text.enableWordWrapping = false;
         text.overflowMode = TextOverflowModes.Overflow;
         text.raycastTarget = false;
-        // these two make TextMeshPro give this text its own copy of the font material, so the message's text is unchanged
-        text.outlineWidth = 0.25f;
+        // these two make TextMeshPro give this text its own copy of the font material, so the message's text is unchanged.
+        // Thin: at the message's font size a 0.25 outline covered almost all of the light face, so the percentage read
+        // dark and nearly vanished over the bar's dark empty part (seen in game, 141b52e7)
+        text.outlineWidth = 0.12f;
         text.outlineColor = new Color32(0, 0, 0, 255);
     }
 
