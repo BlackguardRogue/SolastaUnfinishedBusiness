@@ -198,7 +198,7 @@ internal static class CampfireFastTravelContext
 
     // the game routes a fast travel from the first party member (MapWaypointItem.PrepareFastTravel, ExecutePath); when
     // that leader is dead, dying or unconscious the gather doesn't try (user direction, 2026-11-02: name the leader and
-    // their state, e.g. "Kushiel is dead. Unable to long rest."). The message, or null when the leader can lead.
+    // their state, e.g. "Kushiel is dead. Unable to fast travel."). The message, or null when the leader can lead.
     internal static string DescribeDownedLeader()
     {
         var leader = ServiceRepository.GetService<IGameLocationCharacterService>()?.PartyCharacters.FirstOrDefault();
