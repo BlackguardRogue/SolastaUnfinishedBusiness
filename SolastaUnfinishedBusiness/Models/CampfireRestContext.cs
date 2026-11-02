@@ -357,7 +357,7 @@ internal static class CampfireRestContext
         // directions, 2026-11-02; CampfireFastTravelContext), then the walk covers whatever is left; when the game
         // can't fast travel now, or nobody is that far, everyone walks
         if (CampfireFastTravelContext.TryStart(campfire.User, () => _gather == gather,
-                _ => AfterFastTravel(gather, campfire)))
+                travelled => AfterFastTravel(gather, campfire, travelled)))
         {
             _gather = gather;
 
@@ -367,9 +367,11 @@ internal static class CampfireRestContext
         return StartWalk(campfire, gather);
     }
 
-    // the campfire fast travel is over (or it never began, and nobody moved): whoever is still too far walks, then the
-    // rest
-    private static void AfterFastTravel(Gather gather, Campfire campfire)
+    // the campfire fast travel is over: whoever is still too far walks, then the rest. When it hadn't begun in time
+    // the gather is given up and nothing more is sent (Codex review of c44f860d, 2026-11-02): the travel command may
+    // still be queued for a later tick (the game has no way to withdraw it), and a walk sent now could run alongside
+    // it; if it does run later, the party simply ends up at the campfire and can use it again.
+    private static void AfterFastTravel(Gather gather, Campfire campfire, bool travelled)
     {
         // another rest screen opened during the travel, or a reset
         if (_gather != gather)
@@ -378,6 +380,14 @@ internal static class CampfireRestContext
         }
 
         EndGather();
+
+        if (!travelled)
+        {
+            ShowGatherFailed(gather.Walkers);
+            CampfireFastTravelContext.OnGatherAbandoned();
+
+            return;
+        }
 
         // a fight or cutscene (an enemy saw the party on the way): the game's own screens explain it
         if (IsBusy())

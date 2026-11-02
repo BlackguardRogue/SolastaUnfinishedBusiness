@@ -198,8 +198,8 @@ internal static class CampfireFastTravelContext
     #region Travel
 
     // the gather on the computer that started it: when anybody is beyond the long rest distance, the whole party fast
-    // travels to the campfire's point, then travelled runs (with false when the travel never began, so the walk does
-    // it all). False when nobody needs it or the game can't fast travel now (the walk does it all).
+    // travels to the campfire's point, then travelled runs (with false when the travel hadn't begun in time, and the
+    // gather is given up). False when nobody needs it or the game can't fast travel now (the walk does it all).
     internal static bool TryStart(GameLocationCharacter user, Func<bool> isWanted, Action<bool> travelled)
     {
         if (_destination is not { } destination || destination.User != user || !destination.GameLocation)
@@ -294,10 +294,11 @@ internal static class CampfireFastTravelContext
 
     // waits for the campfire fast travel on the computer that asked for it. The travel command runs at a later tick;
     // once the game's travel has begun there is no time limit, and the gather only goes on once the game is back to
-    // exploring, so nothing starts while the party is still travelling. Only a travel that never began here (and so
-    // never began anywhere, as every computer runs the command at the same tick) is given up after
-    // StartTimeoutSeconds, and the gather walks instead. It goes away without going on when the gather was dropped
-    // meanwhile (another rest screen opened, a reset).
+    // exploring, so nothing starts while the party is still travelling. A travel that hasn't begun here after
+    // StartTimeoutSeconds is reported as not travelled, and the gather is given up without sending anything more:
+    // the command may only be late (a stalled tick), not dropped, so it may still run (Codex review of c44f860d,
+    // 2026-11-02). It goes away without going on when the gather was dropped meanwhile (another rest screen opened, a
+    // reset); a travel already queued then still runs, as an ordinary whole-party fast travel.
     private sealed class TravelDriver : MonoBehaviour
     {
         private const float StartTimeoutSeconds = 20f;

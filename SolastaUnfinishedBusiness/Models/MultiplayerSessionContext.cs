@@ -22,9 +22,6 @@ namespace SolastaUnfinishedBusiness.Models;
 internal static class MultiplayerSessionContext
 {
     private const string VersionKey = "UbV";
-    // the vote messages' protocol (MultiplayerVoteContext), published by each player beside its version: test builds
-    // between two releases share a version, so the version can't tell vote protocols apart (Codex review, 2026-11-02)
-    private const string VoteProtocolKey = "UbVp";
     private const string SettingsKey = "UbS";
     private const string SettingsHashKey = "UbSH";
     private const string PingKey = "UbPg";
@@ -50,10 +47,6 @@ internal static class MultiplayerSessionContext
     // so the version alone tells builds apart
     internal static string BuildVersion => Main.ModVersion;
 
-    // raise whenever the vote messages change in a way another build can't read: 2 is the vote with IDs on Photon
-    // event 174 (builds before it publish no number, read as 0)
-    internal const int VoteProtocol = 2;
-
     private static string HostSettingsFile => Path.Combine(Main.SettingsFolder, $"{HostSettingsName}.xml");
     private static string UseHostSettingsFlagFile => Path.Combine(Main.SettingsFolder, UseHostSettingsFlag);
 
@@ -69,10 +62,7 @@ internal static class MultiplayerSessionContext
             return;
         }
 
-        PhotonNetwork.LocalPlayer.SetCustomProperties(new Hashtable
-        {
-            { VersionKey, BuildVersion }, { VoteProtocolKey, VoteProtocol }
-        });
+        PhotonNetwork.LocalPlayer.SetCustomProperties(new Hashtable { { VersionKey, BuildVersion } });
 
         if (PhotonNetwork.IsMasterClient)
         {
@@ -184,25 +174,6 @@ internal static class MultiplayerSessionContext
         }
 
         return player.CustomProperties.TryGetValue(VersionKey, out var value) ? value as string : null;
-    }
-
-    // the vote protocol a player's build speaks; 0 when it publishes none (an older build, another mod version, or no
-    // mod)
-    internal static int GetPlayerVoteProtocol(Player player)
-    {
-        if (player == null)
-        {
-            return 0;
-        }
-
-        if (player.IsLocal)
-        {
-            return VoteProtocol;
-        }
-
-        return player.CustomProperties.TryGetValue(VoteProtocolKey, out var value) && value is int protocol
-            ? protocol
-            : 0;
     }
 
     internal static string DescribeVersion(string version)

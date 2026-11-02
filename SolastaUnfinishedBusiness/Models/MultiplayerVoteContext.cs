@@ -134,9 +134,8 @@ internal static class MultiplayerVoteContext
         }
         else
         {
-            // the vote protocol, not the mod version: test builds between two releases share a version
             var otherBuilds = PhotonNetwork.PlayerListOthers
-                .Where(x => MultiplayerSessionContext.GetPlayerVoteProtocol(x) != MultiplayerSessionContext.VoteProtocol)
+                .Where(x => MultiplayerSessionContext.GetPlayerVersion(x) != MultiplayerSessionContext.BuildVersion)
                 .Select(x => x.NickName)
                 .ToList();
 
@@ -252,13 +251,6 @@ internal static class MultiplayerVoteContext
         // the request waits for a command tick, but a cancel or outcome arrives at once: a vote that already ended on
         // the asking computer isn't shown when its request comes after (nobody would answer it any more)
         if (EndedVotes.Contains((askerId, voteId)))
-        {
-            return false;
-        }
-
-        // an asking computer that speaks another vote protocol can't read this computer's answers
-        if (MultiplayerSessionContext.GetPlayerVoteProtocol(PhotonNetwork.CurrentRoom?.GetPlayer(askerId)) !=
-            MultiplayerSessionContext.VoteProtocol)
         {
             return false;
         }

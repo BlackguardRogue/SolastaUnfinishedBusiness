@@ -86,6 +86,18 @@ jobs:
           name: ${{ env.ARTIFACT }}
           path: SolastaUnfinishedBusiness.zip
           retention-days: 30
+      - name: Check a release build has no development-only tools
+        if: github.ref_type != 'tag'
+        # builds the code once more as a version tag would (after the test build was kept, so its files can be
+        # replaced) and checks the vote screen preview isn't in it, so the release side of the check above is proven on
+        # every run, not first at a release; nothing is published
+        run: |
+          dotnet build SolastaUnfinishedBusiness.sln --no-restore --no-incremental -c "Release Workflow" \
+            -p:FbDevelopmentBuild=false
+          if grep -q -a "StartPreview" SolastaFiles/Mods/SolastaUnfinishedBusiness/SolastaUnfinishedBusiness.dll; then
+            echo "::error::A release build would contain the development-only vote screen preview"
+            exit 1
+          fi
       - name: Release Notes
         if: github.ref_type == 'tag'
         # the version's changelog entry: the lines after "<version>:" up to the next blank line
