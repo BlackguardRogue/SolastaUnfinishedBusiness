@@ -45,6 +45,9 @@ internal static class UpdateContext
     private static readonly ConcurrentQueue<Action> MainThread = new();
     private static readonly List<Action> PendingPrompts = [];
 
+    // the text last put in the download's progress message, or null when that message isn't open
+    [CanBeNull] private static string _progressMessageText;
+
     private static string ArchiveFolder => Path.Combine(Main.ModFolder, ArchiveFolderName);
 
     // beside the game's Mods folder, never inside the mod folder the update replaces
@@ -278,6 +281,11 @@ internal static class UpdateContext
                 MainThread.Enqueue(() => Fail(version, e.Message));
             }
         });
+
+        // on the next frame: UpdateMod usually runs from the update message's own Update button, while the game is
+        // still closing that message (MessageModal.OnEndHide calls the button's handler, then GuiPanel.OnEndHide, which
+        // unhooks the input-scheme handler that a message shown inside the handler would just have hooked)
+        MainThread.Enqueue(ShowProgressMessage);
     }
 
     // background thread: the release's package, checked against its published size and SHA-256, then its contents;
@@ -785,6 +793,61 @@ internal static class UpdateContext
             "Message/&MessageUpdateTitle", UpdateMod, "Message/&MessageLaterTitle");
     }
 
+    // The download's progress, in a message that stays open while the update downloads and is checked (user direction,
+    // 2026-11-02: show it in the game's own UI, not only in the mod menu). It reads like the mod menu's status line,
+    // plus a line saying Hide is safe. Its one button, Hide, only closes it: the download goes on, and
+    // what comes next (the "Quit now" message, or the failure) opens by itself as before, replacing this message if
+    // it is still open (MessageModal.Show re-shows the modal with the new content). The text is updated in place
+    // (RefreshProgressMessage) while this message is the one showing.
+    private static string ProgressMessageText =>
+        StatusText + "\n\n" + Gui.Localize("Message/&UpdateProgressHint");
+
+    private static void ShowProgressMessage()
+    {
+        if (!InProgress)
+        {
+            // the download already ended (its own message is showing)
+            return;
+        }
+
+        _progressMessageText = ProgressMessageText;
+        ShowMessage(_progressMessageText, "Message/&UpdateHideTitle",
+            () => _progressMessageText = null, onCancelled: () => _progressMessageText = null);
+    }
+
+    // every frame: puts the current percentage or step into the progress message. Only while the message showing is
+    // still the progress message: its label still holds the text last put there (GuiLabel.Text returns the string as
+    // set, before translation), so a message that replaced it is never written over
+    private static void RefreshProgressMessage()
+    {
+        if (_progressMessageText == null || Gui.GuiService == null)
+        {
+            return;
+        }
+
+        var messageModal = Gui.GuiService.GetScreen<MessageModal>();
+
+        if (!InProgress || !messageModal || !messageModal.Visible ||
+            messageModal.contentLabel.Text != _progressMessageText)
+        {
+            _progressMessageText = null;
+
+            return;
+        }
+
+        var text = ProgressMessageText;
+
+        if (text == _progressMessageText)
+        {
+            return;
+        }
+
+        // the modal sized itself to the first text; later ones keep its line count (only the number or the step's
+        // short wording changes)
+        messageModal.contentLabel.Text = text;
+        _progressMessageText = text;
+    }
+
     // asks before updating from the game's settings menu, which has no buttons, only toggles
     internal static void DisplayUpdateConfirmation()
     {
@@ -911,6 +974,7 @@ internal static class UpdateContext
                 }
             }
 
+            RefreshProgressMessage();
             ShowPendingPrompt();
         }
     }
