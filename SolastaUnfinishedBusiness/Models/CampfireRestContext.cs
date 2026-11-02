@@ -349,10 +349,11 @@ internal static class CampfireRestContext
             Arrived = arrived, BeforeWait = beforeWait, Walkers = walkers, StartTime = Time.unscaledTime
         };
 
-        // first the characters beyond the long rest distance fast travel to the campfire (user direction,
-        // 2026-11-02; CampfireFastTravelContext), then the walk covers whatever is left; when the game can't fast
-        // travel now, or nobody is that far, everyone walks
-        if (CampfireFastTravelContext.TryStart(campfire.User, () => AfterFastTravel(gather, campfire)))
+        // first, when anybody is beyond the long rest distance, the whole party fast travels to the campfire (user
+        // directions, 2026-11-02; CampfireFastTravelContext), then the walk covers whatever is left; when the game
+        // can't fast travel now, or nobody is that far, everyone walks
+        if (CampfireFastTravelContext.TryStart(campfire.User, () => _gather == gather,
+                _ => AfterFastTravel(gather, campfire)))
         {
             _gather = gather;
 
@@ -362,7 +363,8 @@ internal static class CampfireRestContext
         return StartWalk(campfire, gather);
     }
 
-    // the campfire fast travel is over (or the game dropped it): whoever is still too far walks, then the rest
+    // the campfire fast travel is over (or it never began, and nobody moved): whoever is still too far walks, then the
+    // rest
     private static void AfterFastTravel(Gather gather, Campfire campfire)
     {
         // another rest screen opened during the travel, or a reset
