@@ -60,19 +60,81 @@ public static class RestModalPatcher
         {
             GameRestingManagerPatcher.InRestScreen = true;
 
-            //PATCH: when the party already rested today, waits until it can rest again, then rests
+            // a campfire set to rest at once pressing Start itself: the game's own Start, with no rest checks, no wait
+            // and no approval (user direction, 2026-11-02), as the story puts the party to rest there
+            if (CampfireRestContext.IsForcedStart)
+            {
+                return true;
+            }
+
+            // the campfire's gather is over and the rest checks passed (CampfireRestContext): the game's own Start
+            if (CampfireRestContext.IsReplayingStart)
+            {
+                return true;
+            }
+
+            //PATCH: when the party already rested today, waits until it can rest again, then rests (at a campfire, the
+            //whole party fast travels to it before the wait)
             if (LongRestWaitContext.TryWaitThenRest(__instance))
             {
                 return false;
             }
 
-            return !MustWaitForApproval(RestType.LongRest, __instance.OnStartLongRestCb);
+            //PATCH: at a campfire, a party out of the long rest range fast travels there first, then rests; in
+            //multiplayer the gather and the rest are approved together (CampfireRestContext)
+            if (!CampfireRestContext.GathersAtCampfire())
+            {
+                return !MustWaitForApproval(RestType.LongRest, __instance.OnStartLongRestCb);
+            }
+
+            var failure = string.Empty;
+
+            // every other rest rule must pass before the party travels (the gather only fixes the distance); the
+            // button is only enabled when they do, so this is a rule that stopped passing since, shown as the game
+            // shows it
+            if (ServiceRepository.GetService<IGameRestingService>()
+                    ?.CanExecuteLocationRest(RestType.LongRest, ref failure, true) != true)
+            {
+                Gui.GuiService.ShowAlert(failure, Gui.ColorFailure, 2.5f);
+
+                return false;
+            }
+
+            // a dead, dying or unconscious leader can't lead the travel: said before anyone is asked to approve it
+            if (!CampfireRestContext.LeaderCanTravel())
+            {
+                return false;
+            }
+
+            if (!MultiplayerApprovalContext.MustWaitForApproval(
+                    MultiplayerApprovalContext.ApprovalAction.CampfireLongRest, string.Empty, null,
+                    MultiplayerApprovalContext.RestSeconds(RestType.LongRest),
+                    () => CampfireRestContext.StartGather(__instance)))
+            {
+                CampfireRestContext.StartGather(__instance);
+            }
+
+            return false;
         }
 
         [UsedImplicitly]
         public static void Finalizer()
         {
             GameRestingManagerPatcher.InRestScreen = false;
+        }
+    }
+
+    //PATCH: a rest screen that isn't a campfire's own forgets the campfire, and any rest screen but the one reopened
+    //after a campfire's gather ends that gather (CampfireRestContext)
+    [HarmonyPatch(typeof(RestModal), nameof(RestModal.OnBeginShow))]
+    [SuppressMessage("Minor Code Smell", "S101:Types should be named in PascalCase", Justification = "Patch")]
+    [UsedImplicitly]
+    public static class OnBeginShow_Patch
+    {
+        [UsedImplicitly]
+        public static void Prefix()
+        {
+            CampfireRestContext.OnRestScreenShown();
         }
     }
 

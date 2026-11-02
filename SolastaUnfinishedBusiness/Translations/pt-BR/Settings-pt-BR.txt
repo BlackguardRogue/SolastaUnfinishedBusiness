@@ -511,6 +511,7 @@ ModUi/&AddOriginFeatsToAutoLearn= + Adicionar talentos de origem ao aprendizado 
 ModUi/&AllMagicThrownReturn=Todas as armas de arremesso mágicas voltam para quem as lança <b><i><color=#C04040E0>[Reinício necessário para remover]</color></i></b>
 ModUi/&AllowShortRestWithPartySpreadOut=Permitir descanso curto com o grupo espalhado <i><color=#F0DAA0>[muda a regra do jogo de que o grupo deve estar a até 10 casas; não em combate, conversa ou cena, e as outras regras de descanso (inimigos por perto, áreas inseguras, comida) continuam valendo. Também em Jogabilidade > Multijogador e Jogabilidade > Campanhas]</color></i>
 ModUi/&CombineWaitWithLongRest=Quando o grupo já fez um descanso longo hoje, o botão Descanso longo espera até poder descansar de novo e então descansa <i><color=#F0DAA0>[uma confirmação com o tempo total e uma aprovação no multijogador, também em fogueiras; todas as outras regras de descanso continuam valendo]</color></i>
+ModUi/&GatherPartyForCampfireRest=Numa fogueira, um grupo espalhado demais para um descanso longo viaja rápido até ela primeiro: se alguém, incluindo personagens caídos, estiver fora do alcance do descanso longo, o grupo inteiro viaja rápido até a fogueira <i><color=#F0DAA0>[o jogo exige todo o grupo a até 10 casas; o grupo usa um ponto de viagem rápida a até 5 casas da fogueira, ou um temporário; se não puder viajar, não descansa; no multijogador a reunião e o descanso são aprovados juntos. Também em Jogabilidade > Multijogador e Jogabilidade > Campanhas]</color></i>
 ModUi/&CraftWithBaseInsteadOfPrimed=Receitas que pedem uma arma ou armadura preparada também aceitam a comum <i><color=#F0DAA0>[toda receita, do jogo, deste mod e de campanhas; itens preparados são usados primeiro; os comuns só contam se não estiverem equipados, para que seu próprio equipamento nunca seja gasto]</color></i>
 ModUi/&EnableBackgroundAbilityScoreIncreases=Os aumentos de atributo vêm do antecedente em vez da raça <i><color=#F0DAA0>[Raças flexíveis é incompatível e será desligado]</color></i>
 ModUi/&EnableBackgroundBonusFeats=Ativar talentos bônus de antecedente <i><color=#F0DAA0>[Antecedentes flexíveis é incompatível e será desligado]</color></i>
@@ -519,7 +520,16 @@ ModUi/&InfusionSlotsReturnOnLongRestOnly=Encerrar uma infusão só libera o espa
 ModUi/&InfusionsOnlyOnNonMagicalItems=As infusões do artífice só podem ser colocadas em itens não mágicos <i><color=#F0DAA0>[regra de mesa; senão itens mágicos também podem ser infundidos, mas não uma arma que uma magia temporária como Arma Mágica esteja melhorando]</color></i>
 ModUi/&MultiplayerAllowAlliesToPassThroughInCombat=Permitir que aliados atravessem uns aos outros em combate enquanto ambos se movem
 ModUi/&MultiplayerAllowCharactersToOverlapOutOfCombat=Permitir que personagens dividam casas fora de combate, para o grupo passar junto por passagens estreitas e portas
-ModUi/&MultiplayerAllowPlayersToStartRests=Permitir que qualquer jogador comece um descanso curto ou longo na tela de descanso, não só o anfitrião <i><color=#F0DAA0>[o anfitrião continua aplicando o descanso para todos; fogueiras e descansos iniciados pela história seguem as regras do jogo]</color></i>
+ModUi/&MultiplayerAllowPlayersToStartRests=Permitir que qualquer jogador comece um descanso curto ou longo na tela de descanso ou numa fogueira, não só o anfitrião <i><color=#F0DAA0>[o anfitrião continua aplicando o descanso para todos; descansos iniciados pela história seguem as regras do jogo]</color></i>
+ModUi/&MultiplayerVotePreviewTitle=<color=#F0DAA0>Prévia da votação:</color>
+ModUi/&MultiplayerVotePreviewHelp=<i><color=#F0DAA0>Mostra as janelas de votação de viagem e de aprovação com jogadores fictícios que respondem um após o outro, para conferir a aparência. Apenas no modo solo, em um local; nada é enviado. Feche esta janela para vê-la.</color></i>
+ModUi/&MultiplayerVotePreviewPlayers=Jogadores fictícios
+ModUi/&MultiplayerVotePreviewLastRefuses=O último jogador recusa
+ModUi/&MultiplayerVotePreviewUnavailable=<i><color=#F0DAA0>Disponível no modo solo, em um local, quando nenhuma prévia está em andamento</color></i>
+ModUi/&MultiplayerVotePreviewAskApproval=Aprovação: você pede
+ModUi/&MultiplayerVotePreviewAskTravel=Viagem: você pede
+ModUi/&MultiplayerVotePreviewAskedApproval=Aprovação: pedem a você
+ModUi/&MultiplayerVotePreviewAskedTravel=Viagem: pedem a você
 ModUi/&MultiplayerAlwaysOnFixes=<color=#F0DAA0>Sempre aplicado:</color> o alvo aleatório da Magia Selvagem usa os dados sincronizados, a escolha com SHIFT entre espaços de bruxo ou normais é enviada a cada computador com a magia, a reação ou a conversão, os horários das reações não são guardados no multijogador, cada herói recebe um papel por conversa, um herói nunca fala duas falas seguidas para papéis diferentes, e os heróis 5 e 6 têm sua própria posição nas cenas.
 ModUi/&MultiplayerApprovalSkipActionsOfTenMinutesOrLess=Não perguntar por rituais e ações de 10 minutos ou menos <i><color=#F0DAA0>[rituais, conjurações de 1 e 10 minutos, marcar divindade]</color></i>
 ModUi/&MultiplayerBuildInfo=<color=white>Esta versão:</color> {0}
