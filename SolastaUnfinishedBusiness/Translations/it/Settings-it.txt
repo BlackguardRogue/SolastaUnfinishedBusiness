@@ -55,6 +55,7 @@ ModUi/&Category=Categoria
 ModUi/&ChangeDragonbornElementalBreathUsages=Cambia l'uso del respiro elementale di <color=#D89555>Dragonborn</color> in modificatore COS per riposo breve
 ModUi/&ChangeSleetStormToCube=Cambia <color=#D89555>Tempesta di nevischio</color> per usare un cubo invece di un cilindro
 ModUi/&Changelog=<b><color=#D89555>Registro delle modifiche</color></b>
+ModUi/&UpdateProgressPreview=Anteprima del progresso
 ModUi/&Character=Carattere
 ModUi/&CharactersPool=Pool di personaggi
 ModUi/&Classes=Lezioni

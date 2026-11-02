@@ -55,6 +55,7 @@ ModUi/&Category=범주
 ModUi/&ChangeDragonbornElementalBreathUsages=<color=#D89555>드래곤본</color> 원소 숨결 사용을 짧은 휴식당 CON 수정치로 변경
 ModUi/&ChangeSleetStormToCube=<color=#D89555>눈보라 폭풍</color>을 실린더 대신 큐브를 사용하도록 변경합니다.
 ModUi/&Changelog=<b><color=#D89555>변경 로그</color></b>
+ModUi/&UpdateProgressPreview=업데이트 진행 미리 보기
 ModUi/&Character=성격
 ModUi/&CharactersPool=캐릭터 풀
 ModUi/&Classes=수업

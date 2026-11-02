@@ -55,6 +55,7 @@ ModUi/&Category=カテゴリ
 ModUi/&ChangeDragonbornElementalBreathUsages=<color=#D89555>Dragonborn</color> のエレメンタルブレスの使用量を短い休憩ごとの CON 修正値に変更します
 ModUi/&ChangeSleetStormToCube=<color=#D89555>Sleet Storm</color> を、円柱の代わりに立方体を使用するように変更します。
 ModUi/&Changelog=<b><color=#D89555>変更ログ</color></b>
+ModUi/&UpdateProgressPreview=更新の進行状況をプレビュー
 ModUi/&Character=キャラクター
 ModUi/&CharactersPool=キャラクタープール
 ModUi/&Classes=クラス

@@ -802,6 +802,7 @@ Message/&UpdateQuitNow=Jetzt beenden
 Message/&UpdateQueued=Version {0} ist heruntergeladen und geprüft. Sie wird beim Beenden des Spiels installiert, danach startet das Spiel neu. Schlägt die Installation fehl, bleibt die vorherige Version, und der nächste Start nennt den Grund.
 Message/&UpdateHideTitle=Ausblenden
 Message/&UpdateProgressHint=Ausblenden schließt diese Meldung; der Download läuft weiter. Wenn das Update bereit ist, fragt das Spiel, ob du es zum Installieren beenden möchtest.
+Message/&UpdateProgressDownloading=Version {0} wird heruntergeladen…
 Message/&UpdateInstalledRestart=Version {0} ist installiert. Starte das Spiel neu, um sie zu verwenden.
 Message/&UpdateFailed=Das Update auf Version {0} ist fehlgeschlagen: {1}
 Message/&UpdateFailedRestored={0}. Die Dateien der vorherigen Version sind vorhanden; die Sicherung liegt in {1}

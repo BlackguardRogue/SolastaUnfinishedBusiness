@@ -166,6 +166,15 @@ internal static class ToolsDisplay
 
             UI.ActionButton(Gui.Localize("ModUi/&Changelog"), UpdateContext.OpenChangeLog, width);
 
+#if FB_DEVELOPMENT
+            // development builds only: the update's progress message with made-up progress (nothing is downloaded)
+            if (UpdateContext.CanPreviewProgress)
+            {
+                UI.ActionButton(Gui.Localize("ModUi/&UpdateProgressPreview"), UpdateContext.StartProgressPreview,
+                    UI.Width(220f));
+            }
+#endif
+
 #if DEBUG
             if (!IsUnityExplorerEnabled)
             {

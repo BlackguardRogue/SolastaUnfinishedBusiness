@@ -802,6 +802,7 @@ Message/&UpdateQuitNow=今すぐ終了
 Message/&UpdateQueued=バージョン {0} のダウンロードと検証が済みました。ゲームを終了するとインストールされ、その後ゲームが再起動します。インストールに失敗した場合は以前のバージョンのままとなり、次回起動時に理由が表示されます。
 Message/&UpdateHideTitle=非表示
 Message/&UpdateProgressHint=「非表示」でこのメッセージを閉じても、ダウンロードは続きます。アップデートの準備ができると、インストールのためにゲームの終了を求めます。
+Message/&UpdateProgressDownloading=バージョン {0} をダウンロード中…
 Message/&UpdateInstalledRestart=バージョン {0} をインストールしました。使うにはゲームを再起動してください。
 Message/&UpdateFailed=バージョン {0} への更新に失敗しました：{1}
 Message/&UpdateFailedRestored={0}。以前のバージョンのファイルはそのままです。バックアップは {1} にあります

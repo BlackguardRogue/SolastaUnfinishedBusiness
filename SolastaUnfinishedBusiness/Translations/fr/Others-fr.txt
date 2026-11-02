@@ -802,6 +802,7 @@ Message/&UpdateQuitNow=Quitter maintenant
 Message/&UpdateQueued=La version {0} est téléchargée et vérifiée. Elle sera installée quand vous quitterez le jeu, puis le jeu redémarrera. Si l'installation échoue, la version précédente reste et le prochain démarrage dira pourquoi.
 Message/&UpdateHideTitle=Masquer
 Message/&UpdateProgressHint=Masquer ferme ce message ; le téléchargement continue. Quand la mise à jour est prête, le jeu vous propose de quitter pour l'installer.
+Message/&UpdateProgressDownloading=Téléchargement de la version {0}…
 Message/&UpdateInstalledRestart=La version {0} est installée. Redémarrez le jeu pour l'utiliser.
 Message/&UpdateFailed=La mise à jour vers la version {0} a échoué : {1}
 Message/&UpdateFailedRestored={0}. Les fichiers de la version précédente sont en place ; la sauvegarde est dans {1}

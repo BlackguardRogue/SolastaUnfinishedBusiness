@@ -45,8 +45,10 @@ internal static class UpdateContext
     private static readonly ConcurrentQueue<Action> MainThread = new();
     private static readonly List<Action> PendingPrompts = [];
 
-    // the text last put in the download's progress message, or null when that message isn't open
+    // the text last put in the download's progress message, or null when that message isn't open, and whether that
+    // message has the progress bar
     [CanBeNull] private static string _progressMessageText;
+    private static bool _progressMessageHasBar;
 
     private static string ArchiveFolder => Path.Combine(Main.ModFolder, ArchiveFolderName);
 
@@ -794,48 +796,143 @@ internal static class UpdateContext
     }
 
     // The download's progress, in a message that stays open while the update downloads and is checked (user direction,
-    // 2026-11-02: show it in the game's own UI, not only in the mod menu). It reads like the mod menu's status line,
-    // plus a line saying Hide is safe. Its one button, Hide, only closes it: the download goes on, and
-    // what comes next (the "Quit now" message, or the failure) opens by itself as before, replacing this message if
-    // it is still open (MessageModal.Show re-shows the modal with the new content). The text is updated in place
-    // (RefreshProgressMessage) while this message is the one showing.
-    private static string ProgressMessageText =>
-        StatusText + "\n\n" + Gui.Localize("Message/&UpdateProgressHint");
+    // 2026-11-02: show it in the game's own UI, not only in the mod menu, as a filling bar with the percentage in its
+    // centre). The message says what is happening and that Hide is safe, and has the bar at the bottom
+    // (CustomUI.UpdateProgressBar: the game's own timer bar, full while the download is checked). Its one button,
+    // Hide, only closes it: the download goes on, and what comes next (the "Quit now" message, or the failure) opens by
+    // itself as before, replacing this message if it is still open (MessageModal.Show re-shows the modal with the new
+    // content). The text and the bar are updated in place (RefreshProgressMessage) while this message is the one
+    // showing. Without the game's bar (its window not loaded) the text shows the percentage instead.
+
+    // what the progress message shows now: the version, whether the download is being checked, and the percentage
+    private static (string version, bool checking, int percent) ProgressNow
+    {
+        get
+        {
+#if FB_DEVELOPMENT
+            if (_previewStart >= 0f)
+            {
+                var elapsed = Time.unscaledTime - _previewStart;
+
+                return (PreviewVersion, elapsed >= PreviewDownloadSeconds,
+                    (int)Mathf.Min(100f, elapsed * 100f / PreviewDownloadSeconds));
+            }
+#endif
+
+            return (LatestVersion, State == UpdateState.Verifying, State == UpdateState.Verifying ? 100 : Progress);
+        }
+    }
+
+    private static bool ProgressActive
+    {
+        get
+        {
+#if FB_DEVELOPMENT
+            if (_previewStart >= 0f)
+            {
+                return true;
+            }
+#endif
+
+            return InProgress;
+        }
+    }
+
+    private static string ProgressMessageText(bool withBar)
+    {
+        var (version, checking, percent) = ProgressNow;
+        var status = checking
+            ? Gui.Format("ModUi/&UpdateStatusVerifying", version)
+            : withBar
+                ? Gui.Format("Message/&UpdateProgressDownloading", version)
+                : Gui.Format("ModUi/&UpdateStatusDownloading", version, percent.ToString());
+
+        return status + "\n\n" + Gui.Localize("Message/&UpdateProgressHint") + (withBar ? UpdateProgressBar.Room : "");
+    }
 
     private static void ShowProgressMessage()
     {
-        if (!InProgress)
+        if (!ProgressActive)
         {
             // the download already ended (its own message is showing)
             return;
         }
 
-        _progressMessageText = ProgressMessageText;
+        _progressMessageHasBar = UpdateProgressBar.CanShow;
+        _progressMessageText = ProgressMessageText(_progressMessageHasBar);
         ShowMessage(_progressMessageText, "Message/&UpdateHideTitle",
             () => _progressMessageText = null, onCancelled: () => _progressMessageText = null);
-    }
 
-    // every frame: puts the current percentage or step into the progress message. Only while the message showing is
-    // still the progress message: its label still holds the text last put there (GuiLabel.Text returns the string as
-    // set, before translation), so a message that replaced it is never written over
-    private static void RefreshProgressMessage()
-    {
-        if (_progressMessageText == null || Gui.GuiService == null)
+        if (!_progressMessageHasBar)
         {
             return;
         }
 
         var messageModal = Gui.GuiService.GetScreen<MessageModal>();
 
-        if (!InProgress || !messageModal || !messageModal.Visible ||
-            messageModal.contentLabel.Text != _progressMessageText)
+        if (UpdateProgressBar.Attach(messageModal))
         {
-            _progressMessageText = null;
+            RefreshProgressBar();
 
             return;
         }
 
-        var text = ProgressMessageText;
+        // the copy failed: the percentage goes back into the text (the message keeps the room it was sized with)
+        _progressMessageHasBar = false;
+        _progressMessageText = ProgressMessageText(false);
+        messageModal.contentLabel.Text = _progressMessageText;
+    }
+
+    private static void RefreshProgressBar()
+    {
+        var (_, checking, percent) = ProgressNow;
+
+        UpdateProgressBar.Set(checking ? 1f : percent / 100f, checking ? "100%" : $"{percent}%");
+    }
+
+    // every frame: puts the current step and percentage into the progress message. Only while the message showing is
+    // still the progress message: its label still holds the text last put there (GuiLabel.Text returns the string as
+    // set, before translation), so a message that replaced it is never written over, and the bar leaves with it (in
+    // the same frame when the next message comes from the main-thread queue, which runs just before this)
+    private static void RefreshProgressMessage()
+    {
+        if (_progressMessageText == null || Gui.GuiService == null)
+        {
+            UpdateProgressBar.Remove();
+#if FB_DEVELOPMENT
+            // Hide stops a preview
+            _previewStart = -1f;
+#endif
+
+            return;
+        }
+
+        var messageModal = Gui.GuiService.GetScreen<MessageModal>();
+
+        if (!ProgressActive || !messageModal || !messageModal.Visible ||
+            messageModal.contentLabel.Text != _progressMessageText)
+        {
+            _progressMessageText = null;
+            UpdateProgressBar.Remove();
+
+            return;
+        }
+
+#if FB_DEVELOPMENT
+        if (_previewStart >= 0f && Time.unscaledTime - _previewStart >= PreviewDownloadSeconds + PreviewCheckSeconds)
+        {
+            EndProgressPreview();
+
+            return;
+        }
+#endif
+
+        if (_progressMessageHasBar)
+        {
+            RefreshProgressBar();
+        }
+
+        var text = ProgressMessageText(_progressMessageHasBar);
 
         if (text == _progressMessageText)
         {
@@ -847,6 +944,38 @@ internal static class UpdateContext
         messageModal.contentLabel.Text = text;
         _progressMessageText = text;
     }
+
+#if FB_DEVELOPMENT
+    // A development tool (compiled only into development builds, FB_DEVELOPMENT, like the vote screen preview): shows the
+    // progress message with made-up progress, so the bar can be seen without a real update. It fills over
+    // PreviewDownloadSeconds, stays full for PreviewCheckSeconds, then shows the downloaded message with only OK, as
+    // the real update does with Quit now; nothing is downloaded or installed, and the game never quits.
+    private const string PreviewVersion = "9.9.9";
+    private const float PreviewDownloadSeconds = 12f;
+    private const float PreviewCheckSeconds = 3f;
+    private static float _previewStart = -1f;
+
+    internal static bool CanPreviewProgress => !InProgress && _previewStart < 0f;
+
+    internal static void StartProgressPreview()
+    {
+        if (!CanPreviewProgress)
+        {
+            return;
+        }
+
+        _previewStart = Time.unscaledTime;
+        MainThread.Enqueue(ShowProgressMessage);
+    }
+
+    private static void EndProgressPreview()
+    {
+        _previewStart = -1f;
+        _progressMessageText = null;
+        UpdateProgressBar.Remove();
+        ShowMessage(Gui.Format("Message/&UpdateQueued", PreviewVersion), "Message/&MessageOkTitle");
+    }
+#endif
 
     // asks before updating from the game's settings menu, which has no buttons, only toggles
     internal static void DisplayUpdateConfirmation()

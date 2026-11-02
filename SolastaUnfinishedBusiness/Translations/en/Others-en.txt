@@ -767,6 +767,7 @@ Message/&UpdateQuitNow=Quit now
 Message/&UpdateQueued=Version {0} is downloaded and verified. It is installed when you quit the game, and then the game starts again. If installing fails, the previous version stays and the next start says why.
 Message/&UpdateHideTitle=Hide
 Message/&UpdateProgressHint=Hide closes this message; the download goes on. When the update is ready, the game asks you to quit to install it.
+Message/&UpdateProgressDownloading=Downloading version {0}…
 Message/&UpdateInstalledRestart=Version {0} is installed. Restart the game to use it.
 Message/&UpdateFailed=The update to version {0} failed: {1}
 Message/&UpdateFailedRestored={0}. The previous version's files are in place; the backup is in {1}

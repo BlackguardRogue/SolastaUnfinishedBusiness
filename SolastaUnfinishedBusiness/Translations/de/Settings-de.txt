@@ -55,6 +55,7 @@ ModUi/&Category=Kategorie
 ModUi/&ChangeDragonbornElementalBreathUsages=Ändere die Verwendung des Elementaratems von <color=#D89555>Dragonborn</color> in einen CON-Modifikator pro kurzer Pause.
 ModUi/&ChangeSleetStormToCube=Ändern Sie <color=#D89555>Schneeregen</color>, um einen Würfel statt eines Zylinders zu verwenden.
 ModUi/&Changelog=<b><color=#D89555>Änderungsprotokoll</color></b>
+ModUi/&UpdateProgressPreview=Update-Fortschritt ansehen
 ModUi/&Character=Charakter
 ModUi/&CharactersPool=Charaktere-Pool
 ModUi/&Classes=Klassen
