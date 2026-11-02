@@ -3,7 +3,7 @@
   <PropertyGroup>
     <LangVersion>13</LangVersion>
     <TargetFramework>net481</TargetFramework>
-    <AssemblyVersion>1.10.1</AssemblyVersion>
+    <AssemblyVersion>1.10.0</AssemblyVersion>
     <RepositoryUrl>https://github.com/SolastaMods/SolastaUnfinishedBusiness</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <Configurations>Debug Install;Release Install;Release Workflow</Configurations>
@@ -63,6 +63,15 @@
     <DefineConstants>$(DefineConstants);RELEASE</DefineConstants>
     <PlatformTarget>x64</PlatformTarget>
     <DebugType>portable</DebugType>
+  </PropertyGroup>
+
+  <!-- Development builds (user directions, 2026-11-02): debug builds and builds made with -p:FbDevelopmentBuild=true.
+       Off by default, so a release build is never one; the workflow turns it on for every build but a version tag's.
+       A development build has the development-only tools (FB_DEVELOPMENT, such as the multiplayer vote screen preview)
+       and its version marked "-dev.<commit>" (StampBuildVersion). -->
+  <PropertyGroup Condition="'$(FbDevelopmentBuild)'=='true' or '$(Configuration)'=='Debug Install'">
+    <FbDevelopment>true</FbDevelopment>
+    <DefineConstants>$(DefineConstants);FB_DEVELOPMENT</DefineConstants>
   </PropertyGroup>
 
   <ItemGroup>
@@ -308,6 +317,51 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>
+
+  <!-- The built Info.json's version (user direction, 2026-11-02): the source Info.json holds the last release's version,
+       raised only when releasing; a development build's copy gets "-dev." and the first 8 characters of the commit it
+       was built from, e.g. 1.10.0-dev.649e587d. Unity Mod Manager reads only the first three dot-separated parts and
+       drops their non-digits (UnityModManager.ParseVersion), so it sees 1.10.0; the commit must stay after a dot, or
+       its digits would join the patch number. Written on every build, so a release build after a development build in
+       the same folder doesn't keep the mark. -->
+  <UsingTask TaskName="StampBuildVersionTask" TaskFactory="RoslynCodeTaskFactory"
+             AssemblyFile="$(MSBuildToolsPath)/Microsoft.Build.Tasks.Core.dll">
+    <ParameterGroup>
+      <Source ParameterType="System.String" Required="true" />
+      <Destination ParameterType="System.String" Required="true" />
+      <Development ParameterType="System.Boolean" />
+      <Commit ParameterType="System.String" />
+      <BuildVersion ParameterType="System.String" Output="true" />
+    </ParameterGroup>
+    <Task>
+      <Using Namespace="System.IO" />
+      <Using Namespace="System.Text.RegularExpressions" />
+      <Code Type="Fragment" Language="cs"><![CDATA[
+        var text = File.ReadAllText(Source);
+        var key = new Regex("(\"Version\"\\s*:\\s*\")([^\"]+)(\")");
+        var version = key.Match(text).Groups[2].Value;
+        var commit = (Commit ?? string.Empty).Trim();
+
+        BuildVersion = Development
+            ? version + "-dev." + (commit.Length >= 8 ? commit.Substring(0, 8) : "unknown")
+            : version;
+        File.WriteAllText(Destination,
+            key.Replace(text, m => m.Groups[1].Value + BuildVersion + m.Groups[3].Value, 1));
+      ]]></Code>
+    </Task>
+  </UsingTask>
+
+  <Target Name="StampBuildVersion" AfterTargets="CopyFilesToOutputDirectory">
+    <Exec Condition="'$(FbDevelopment)'=='true'" Command="git rev-parse HEAD" ConsoleToMSBuild="true"
+          WorkingDirectory="$(MSBuildProjectDirectory)" StandardOutputImportance="low" ContinueOnError="true">
+      <Output TaskParameter="ConsoleOutput" PropertyName="FbBuildCommit" />
+    </Exec>
+    <StampBuildVersionTask Source="$(MSBuildProjectDirectory)/Info.json" Destination="$(OutDir)Info.json"
+                           Development="$(FbDevelopment.Equals('true'))" Commit="$(FbBuildCommit)">
+      <Output TaskParameter="BuildVersion" PropertyName="FbBuildVersion" />
+    </StampBuildVersionTask>
+    <Message Importance="high" Text="Finishing Business build version: $(FbBuildVersion)" />
+  </Target>
 
   <Target Name="PostBuild" AfterTargets="PostBuildEvent" Condition="('$(Configuration)|$(Platform)' == 'Release|AnyCPU' Or '$(Configuration)|$(Platform)' == 'Release Install|AnyCPU')">
     <Exec Command="call ZipRelease.bat" />
