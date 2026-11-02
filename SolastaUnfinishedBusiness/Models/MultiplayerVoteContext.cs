@@ -58,6 +58,16 @@ internal static class MultiplayerVoteContext
     private const string VoteIdMarker = "\u0003FinishingBusinessVote";
     // longer than the request window's own 20 second timer, so only a request that was never shown runs into it
     private const float VoteDeadlineSeconds = 30f;
+    // a computer that was asked forgets a vote after this long, whatever happened: the asking computer has cancelled
+    // it by then (Codex review, 2026-11-02: a cancel overtaking its request left the request's vote here for good)
+    private const float OtherDeadlineSeconds = 45f;
+    // ... or this long after refusing it, when no outcome came
+    private const float RefusedForgetSeconds = 5f;
+    // votes remembered as ended, per asking player and ID
+    private const int EndedVotesKept = 32;
+
+    private static readonly HashSet<(int, int)> EndedVotes = [];
+    private static readonly Queue<(int, int)> EndedVoteOrder = new();
 
     private static Vote _vote;
     private static bool _eventHandlerRegistered;
@@ -104,6 +114,9 @@ internal static class MultiplayerVoteContext
     internal static void OnJoinedRoom()
     {
         Reset();
+        // actor numbers belong to a room
+        EndedVotes.Clear();
+        EndedVoteOrder.Clear();
         RegisterEventHandler();
     }
 
@@ -121,8 +134,9 @@ internal static class MultiplayerVoteContext
         }
         else
         {
+            // the vote protocol, not the mod version: test builds between two releases share a version
             var otherBuilds = PhotonNetwork.PlayerListOthers
-                .Where(x => MultiplayerSessionContext.GetPlayerVersion(x) != MultiplayerSessionContext.BuildVersion)
+                .Where(x => MultiplayerSessionContext.GetPlayerVoteProtocol(x) != MultiplayerSessionContext.VoteProtocol)
                 .Select(x => x.NickName)
                 .ToList();
 
@@ -235,6 +249,20 @@ internal static class MultiplayerVoteContext
             return false;
         }
 
+        // the request waits for a command tick, but a cancel or outcome arrives at once: a vote that already ended on
+        // the asking computer isn't shown when its request comes after (nobody would answer it any more)
+        if (EndedVotes.Contains((askerId, voteId)))
+        {
+            return false;
+        }
+
+        // an asking computer that speaks another vote protocol can't read this computer's answers
+        if (MultiplayerSessionContext.GetPlayerVoteProtocol(PhotonNetwork.CurrentRoom?.GetPlayer(askerId)) !=
+            MultiplayerSessionContext.VoteProtocol)
+        {
+            return false;
+        }
+
         if (_vote != null)
         {
             if (_vote.AskerId != askerId || _vote.Id != voteId)
@@ -271,6 +299,22 @@ internal static class MultiplayerVoteContext
         if (accepted)
         {
             ShowVoteScreenToOther();
+        }
+        else
+        {
+            OnLocalRefusal();
+        }
+    }
+
+    // this computer refused (the request window's Refuse or its timer, or the vote screen's Cancel): a refused vote
+    // can't pass, and the asking computer's outcome normally ends it here at once; if that outcome never comes (the
+    // asking computer had already ended the vote), it is forgotten after RefusedForgetSeconds so it can't block the
+    // next vote
+    private static void OnLocalRefusal()
+    {
+        if (_vote is { LocalIsAsker: false } && _vote.RefusedTime < 0f)
+        {
+            _vote.RefusedTime = Time.unscaledTime;
         }
     }
 
@@ -325,15 +369,38 @@ internal static class MultiplayerVoteContext
         screen.Show(false);
     }
 
-    // called every network frame on a computer that was asked: the vote is over if the asking player left
+    // called every network frame on a computer that was asked: the vote is over if the asking player left, if this
+    // computer refused it and no outcome came, or once it ran longer than the asking computer allows any vote (its own
+    // deadline cancels it at VoteDeadlineSeconds; a lost outcome or cancel can't keep it here past that)
     private static void UpdateOther()
     {
-        if (PhotonNetwork.CurrentRoom?.GetPlayer(_vote.AskerId) != null)
+        var now = Time.unscaledTime;
+
+        if (PhotonNetwork.CurrentRoom?.GetPlayer(_vote.AskerId) != null &&
+            (_vote.RefusedTime < 0f || now - _vote.RefusedTime < RefusedForgetSeconds) &&
+            now - _vote.StartTime < OtherDeadlineSeconds)
         {
             return;
         }
 
+        RememberEnded(_vote.AskerId, _vote.Id);
         Reset();
+    }
+
+    // a vote that ended on its asking computer (or was given up here), so its request isn't shown if it comes late
+    private static void RememberEnded(int askerId, int voteId)
+    {
+        if (!EndedVotes.Add((askerId, voteId)))
+        {
+            return;
+        }
+
+        EndedVoteOrder.Enqueue((askerId, voteId));
+
+        while (EndedVoteOrder.Count > EndedVotesKept)
+        {
+            EndedVotes.Remove(EndedVoteOrder.Dequeue());
+        }
     }
 
     #endregion
@@ -468,6 +535,8 @@ internal static class MultiplayerVoteContext
     // request window closing), then the vote screen closes
     private static void OnOutcome(int voteId, int senderId, bool passed, int refusedBy)
     {
+        RememberEnded(senderId, voteId);
+
         if (_vote is not { LocalIsAsker: false, Preview: false } || _vote.Id != voteId || _vote.AskerId != senderId)
         {
             return;
@@ -490,6 +559,9 @@ internal static class MultiplayerVoteContext
     // the asking player cancelled: the others are told who (the game named the host), and their screens close
     private static void OnCancelled(int voteId, int senderId)
     {
+        // also when the request hasn't arrived yet: it is then not shown when it does
+        RememberEnded(senderId, voteId);
+
         if (_vote is not { LocalIsAsker: false, Preview: false } || _vote.Id != voteId || _vote.AskerId != senderId)
         {
             return;
@@ -550,6 +622,7 @@ internal static class MultiplayerVoteContext
         _vote.ShownToLocal = false;
         screen.Hide();
         SendLocalAnswer(false);
+        OnLocalRefusal();
 
         return false;
     }
@@ -963,6 +1036,8 @@ internal static class MultiplayerVoteContext
         internal bool Answered;
         // a computer that was asked: the vote screen shows this vote (after Accept)
         internal bool ShownToLocal;
+        // a computer that was asked: when it refused the vote, -1 until then
+        internal float RefusedTime = -1f;
 
         // the single-player preview (StartPreview): made-up players, nothing sent
         internal bool Preview;
