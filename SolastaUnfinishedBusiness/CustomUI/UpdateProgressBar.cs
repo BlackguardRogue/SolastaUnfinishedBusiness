@@ -89,23 +89,6 @@ internal static class UpdateProgressBar
         label.name = "FbUpdateProgressPercent";
         _label = label.GetComponent<GuiLabel>();
 
-        var labelRect = (RectTransform)label.transform;
-
-        labelRect.anchorMin = Vector2.zero;
-        labelRect.anchorMax = Vector2.one;
-        labelRect.pivot = new Vector2(0.5f, 0.5f);
-        labelRect.offsetMin = labelRect.offsetMax = Vector2.zero;
-
-        var text = label.GetComponent<TextMeshProUGUI>();
-
-        if (text)
-        {
-            text.alignment = TextAlignmentOptions.Center;
-            text.enableWordWrapping = false;
-            text.overflowMode = TextOverflowModes.Overflow;
-            text.raycastTarget = false;
-        }
-
         // in the reserved lines at the bottom of the message's label, as wide as the label's text area
         var lineHeight = source.TMP_Text ? source.TMP_Text.fontSize * 1.2f : 24f;
         var height = lineHeight * HeightInLines;
@@ -128,10 +111,43 @@ internal static class UpdateProgressBar
         Object.Destroy(holder);
         _bar = bar;
 
+        // only now, once active: GuiLabel.Awake runs GuiStyleEnforcer.ApplyStyles, which writes the message style's
+        // text settings (its top-left alignment among them) over the copy, so settings made before activation were
+        // lost and the percentage sat at the bar's left end (seen in game, f27a2d17)
+        CentreLabel(label);
+
         Main.Info($"Update progress bar: label {((RectTransform)source.transform).rect.size}, " +
                   $"font {(source.TMP_Text ? source.TMP_Text.fontSize : 0f)}, bar height {height}");
 
         return true;
+    }
+
+    // the percentage across the whole bar, centred, on one line, in the message's light text colour with a dark outline
+    // so it reads over both the bar's light fill and its dark empty part
+    private static void CentreLabel(GameObject label)
+    {
+        var rect = (RectTransform)label.transform;
+
+        rect.anchorMin = Vector2.zero;
+        rect.anchorMax = Vector2.one;
+        rect.pivot = new Vector2(0.5f, 0.5f);
+        rect.offsetMin = rect.offsetMax = Vector2.zero;
+
+        var text = label.GetComponent<TextMeshProUGUI>();
+
+        if (!text)
+        {
+            return;
+        }
+
+        text.alignment = TextAlignmentOptions.Center;
+        text.margin = Vector4.zero;
+        text.enableWordWrapping = false;
+        text.overflowMode = TextOverflowModes.Overflow;
+        text.raycastTarget = false;
+        // these two make TextMeshPro give this text its own copy of the font material, so the message's text is unchanged
+        text.outlineWidth = 0.25f;
+        text.outlineColor = new Color32(0, 0, 0, 255);
     }
 
     // fraction 0..1 of the bar filled, and the text on it
