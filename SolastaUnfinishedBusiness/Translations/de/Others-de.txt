@@ -716,6 +716,7 @@ Message/&CampfireGatherFailed=Die Gruppe konnte nicht per Schnellreise zum Lager
 Message/&CampfireLeaderDead={0} ist tot. Schnellreise nicht möglich.
 Message/&CampfireLeaderDying={0} liegt im Sterben. Schnellreise nicht möglich.
 Message/&CampfireLeaderUnconscious={0} ist bewusstlos. Schnellreise nicht möglich.
+Message/&CampfireCharacterOutOfRange={0} ist außer Reichweite für eine lange Rast.
 Screen/&CampfireFastTravelWaypointTitle=Lagerfeuer
 Message/&MultiplayerApprovalBusyDescription=Die Aktion wurde nicht ausgeführt: {0}\n\nVersuchen Sie es erneut, wenn es vorbei ist.
 Message/&MultiplayerApprovalBusyTitle=Zustimmung kann nicht angefragt werden

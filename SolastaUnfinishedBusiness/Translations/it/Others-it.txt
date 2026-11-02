@@ -716,6 +716,7 @@ Message/&CampfireGatherFailed=Il gruppo non è riuscito a raggiungere il falò c
 Message/&CampfireLeaderDead={0} è morto. Impossibile effettuare il viaggio rapido.
 Message/&CampfireLeaderDying={0} sta morendo. Impossibile effettuare il viaggio rapido.
 Message/&CampfireLeaderUnconscious={0} è privo di sensi. Impossibile effettuare il viaggio rapido.
+Message/&CampfireCharacterOutOfRange={0} è fuori portata per un riposo lungo.
 Screen/&CampfireFastTravelWaypointTitle=Falò
 Message/&MultiplayerApprovalBusyDescription=L'azione non è stata eseguita: {0}\n\nRiprova quando sarà finita.
 Message/&MultiplayerApprovalBusyTitle=Impossibile chiedere l'approvazione

@@ -716,6 +716,7 @@ Message/&CampfireGatherFailed=파티가 모닥불로 빠른 이동을 할 수 �
 Message/&CampfireLeaderDead={0}이(가) 사망했습니다. 빠른 이동을 할 수 없습니다.
 Message/&CampfireLeaderDying={0}이(가) 빈사 상태입니다. 빠른 이동을 할 수 없습니다.
 Message/&CampfireLeaderUnconscious={0}이(가) 의식을 잃었습니다. 빠른 이동을 할 수 없습니다.
+Message/&CampfireCharacterOutOfRange={0}이(가) 긴 휴식 범위 밖에 있습니다.
 Screen/&CampfireFastTravelWaypointTitle=모닥불
 Message/&MultiplayerApprovalBusyDescription=행동이 실행되지 않았습니다: {0}\n\n끝난 뒤 다시 시도하세요.
 Message/&MultiplayerApprovalBusyTitle=승인을 요청할 수 없습니다

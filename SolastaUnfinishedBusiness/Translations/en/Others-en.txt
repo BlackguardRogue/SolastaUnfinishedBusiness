@@ -822,6 +822,7 @@ Message/&CampfireGatherFailed=The party couldn't fast travel to the campfire, so
 Message/&CampfireLeaderDead={0} is dead. Unable to fast travel.
 Message/&CampfireLeaderDying={0} is dying. Unable to fast travel.
 Message/&CampfireLeaderUnconscious={0} is unconscious. Unable to fast travel.
+Message/&CampfireCharacterOutOfRange={0} is out of range for a long rest.
 Screen/&CampfireFastTravelWaypointTitle=Campfire
 Message/&CraftingStartWarningTitle=Start crafting?
 Message/&CraftingStartWarningDescription=Crafting <b>{0}</b> uses up all its ingredients now.\n\nEach crafting hour rolls a check against DC <b>{1}</b>. A failed roll adds no progress, so it can take longer than <b>{2}</b> hours. Failed rolls never lose the ingredients, but aborting the crafting does.

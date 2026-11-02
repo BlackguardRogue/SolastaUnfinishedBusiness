@@ -716,6 +716,7 @@ Message/&CampfireGatherFailed=El grupo no pudo viajar rápido hasta la hoguera, 
 Message/&CampfireLeaderDead={0} está muerto. No se puede viajar rápido.
 Message/&CampfireLeaderDying={0} está moribundo. No se puede viajar rápido.
 Message/&CampfireLeaderUnconscious={0} está inconsciente. No se puede viajar rápido.
+Message/&CampfireCharacterOutOfRange={0} está fuera del alcance para un descanso largo.
 Screen/&CampfireFastTravelWaypointTitle=Hoguera
 Message/&MultiplayerApprovalBusyDescription=La acción no se realizó: {0}\n\nInténtalo de nuevo cuando termine.
 Message/&MultiplayerApprovalBusyTitle=No se puede pedir aprobación
