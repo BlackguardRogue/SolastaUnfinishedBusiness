@@ -21,8 +21,8 @@ namespace SolastaUnfinishedBusiness.Models;
 // - otherwise, when the party is out of range, a temporary waypoint is added next to the campfire's user with the
 //   game's own GameLocation.AddWaypoint
 //   (the game builds its waypoints from the map's WorldNodes when a location loads; none of them is saved, so a
-//   temporary one can't reach a save). It is removed once a fast travel ends, a long rest starts, another campfire is
-//   used, or the location unloads.
+//   temporary one can't reach a save). It is removed once the fast travel to it ends, a long rest starts, another
+//   campfire is used, or the location unloads.
 // The destination is set where the campfire's functor runs, which is on every computer in the lockstep: in
 // multiplayer every computer must have the waypoint, as the game's fast travel looks it up by position on each one.
 //
@@ -53,6 +53,15 @@ internal static class CampfireFastTravelContext
     // computer; the asking computer uses them to know its travel really arrived
     private static int _arrivals;
     private static bool _lastArrivalInterrupted;
+
+    // where the running fast travel goes (OnFastTravelStarting), and where the last one that placed the party went, on
+    // every computer. In multiplayer another player's fast travel, agreed before the campfire's and queued at an earlier
+    // command tick, can still run first here: the game doesn't refuse a second travel request
+    // (FastTravelManager.NetworkedFastTravel), and the travels run in tick order. Its arrival isn't the gather's, so the
+    // gather compares where an arrival went with its own waypoint (Codex's 1.11.0 release review, 2026-11-02; found by
+    // reading the game's code, not seen in a game).
+    private static int3? _travelTarget;
+    private static int3? _lastArrivalTarget;
 
     // SetupPartyOnDestination is running: the game clears IsFastTraveling and asks for the exploration state at the
     // start of that arrival step (IL_009b), and only then places the party and fades back in over later frames, so
@@ -291,6 +300,7 @@ internal static class CampfireFastTravelContext
         driver.IsWanted = isWanted;
         driver.Travelled = travelled;
         driver.ArrivalsAtStart = _arrivals;
+        driver.Target = waypoint.Position;
 
         return true;
     }
@@ -312,30 +322,43 @@ internal static class CampfireFastTravelContext
         return accessor.sector == sector;
     }
 
+    // GameLocationMapManager's IGameLocationMapService.FastTravel, on every computer: a fast travel's route starts.
+    // Its only caller is MapWaypointItem.ExecuteTravel, which passes the waypoint's Position, and the game runs one
+    // fast travel at a time (fastTravelCoroutine), so the next arrival is this travel's.
+    internal static void OnFastTravelStarting(int3 gridPosition)
+    {
+        _travelTarget = gridPosition;
+    }
+
     // GameLocationMapManager.SetupPartyOnDestination runs a step: the travel's arrival is under way
     internal static void OnArrivalStep()
     {
         _arriving = true;
     }
 
-    // GameLocationMapManager.SetupPartyOnDestination's end, on every computer: a fast travel placed the party, so a
-    // temporary campfire waypoint has done its job
+    // GameLocationMapManager.SetupPartyOnDestination's end, on every computer: a fast travel placed the party. A
+    // temporary campfire waypoint has done its job once the travel to it arrived; another travel's arrival leaves it,
+    // as the campfire's own travel may still be queued after it (it then goes at the other lockstep points: a long
+    // rest, the next campfire, the location unloading).
     internal static void OnFastTravelEnded()
     {
         _arriving = false;
         _arrivals++;
         _lastArrivalInterrupted =
             ServiceRepository.GetService<IGameLocationMapService>() is GameLocationMapManager { interrupted: true };
+        _lastArrivalTarget = _travelTarget;
+        _travelTarget = null;
 
-        if (_destination is { Temporary: true })
+        if (_destination is { Temporary: true } destination && _lastArrivalTarget == destination.Waypoint.Position)
         {
             RemoveDestination();
         }
     }
 
     // the gather ended without a rest: in single player the temporary waypoint goes at once. In multiplayer it stays
-    // until a lockstep point removes it on every computer (a long rest, a fast travel, the next campfire, the location
-    // unloading), as a player could still fast travel to it from the map and every computer must still have it then.
+    // until a lockstep point removes it on every computer (a long rest, the fast travel to it, the next campfire, the
+    // location unloading), as a player could still fast travel to it from the map and every computer must still have it
+    // then.
     internal static void OnGatherAbandoned()
     {
         if (!Global.IsMultiplayer)
@@ -348,6 +371,7 @@ internal static class CampfireFastTravelContext
     internal static void Reset()
     {
         _arriving = false;
+        _travelTarget = null;
         RemoveDestination();
     }
 
@@ -381,6 +405,9 @@ internal static class CampfireFastTravelContext
 
         internal int ArrivalsAtStart;
         internal Func<bool> IsWanted;
+
+        // the campfire waypoint's position: only an arrival there is this gather's
+        internal int3 Target;
         internal Action<bool> Travelled;
         private bool _began;
         private float _startTime;
@@ -399,10 +426,22 @@ internal static class CampfireFastTravelContext
                 return;
             }
 
-            // the arrival step ran to its end since this travel was asked for
+            // an arrival step ran to its end since this travel was asked for
             if (_arrivals > ArrivalsAtStart)
             {
-                Finish(!_lastArrivalInterrupted);
+                if (_lastArrivalTarget == Target)
+                {
+                    Finish(!_lastArrivalInterrupted);
+
+                    return;
+                }
+
+                // another fast travel, queued before this one, arrived first (multiplayer): not this gather's. Wait
+                // for this one from here, with a new start time limit, as it only starts now. If it never runs (the
+                // game dropped it), the limit ends the gather without a rest.
+                ArrivalsAtStart = _arrivals;
+                _began = false;
+                _startTime = Time.unscaledTime;
 
                 return;
             }
