@@ -23,9 +23,14 @@ internal static class UpdateProgressBar
     // the bar's height, in lines of the message text, centred in the reserved lines
     private const float HeightInLines = 1.25f;
 
+    // the percentage's colour over the bar's light fill: near black, a little warm, like the game's dark panels
+    private static readonly Color DarkColour = new Color32(32, 28, 22, 255);
+
     private static GameObject _bar;
     private static Image _fill;
     private static GuiLabel _label;
+    private static TextMeshProUGUI _text;
+    private static Color _lightColour = Color.white;
 
     // the lines that make the room, added to the end of the message text
     internal static string Room => string.Concat(Enumerable.Repeat("\n ", ReservedLines));
@@ -122,8 +127,10 @@ internal static class UpdateProgressBar
         return true;
     }
 
-    // the percentage across the whole bar, centred, on one line, in the message's light text colour with a dark outline
-    // so it reads over both the bar's light fill and its dark empty part
+    // the percentage across the whole bar, centred, on one line. Its colour follows what is under it (Set): the
+    // message's light text colour while the bar is less than half full (the text sits over the dark empty part), a
+    // dark colour once the fill reaches it. One colour can't do both: in game (b9f3d5b1) the light text with a thin
+    // outline nearly vanished on the full bar, and with a thick outline (141b52e7) it read dark on the empty part
     private static void CentreLabel(GameObject label)
     {
         var rect = (RectTransform)label.transform;
@@ -145,11 +152,8 @@ internal static class UpdateProgressBar
         text.enableWordWrapping = false;
         text.overflowMode = TextOverflowModes.Overflow;
         text.raycastTarget = false;
-        // these two make TextMeshPro give this text its own copy of the font material, so the message's text is unchanged.
-        // Thin: at the message's font size a 0.25 outline covered almost all of the light face, so the percentage read
-        // dark and nearly vanished over the bar's dark empty part (seen in game, 141b52e7)
-        text.outlineWidth = 0.12f;
-        text.outlineColor = new Color32(0, 0, 0, 255);
+        _text = text;
+        _lightColour = text.color;
     }
 
     // fraction 0..1 of the bar filled, and the text on it
@@ -166,6 +170,11 @@ internal static class UpdateProgressBar
         {
             _label.Text = text;
         }
+
+        if (_text)
+        {
+            _text.color = fraction >= 0.5f ? DarkColour : _lightColour;
+        }
     }
 
     internal static void Remove()
@@ -178,5 +187,6 @@ internal static class UpdateProgressBar
         _bar = null;
         _fill = null;
         _label = null;
+        _text = null;
     }
 }

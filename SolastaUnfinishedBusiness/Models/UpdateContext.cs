@@ -898,13 +898,19 @@ internal static class UpdateContext
     // the same frame when the next message comes from the main-thread queue, which runs just before this)
     private static void RefreshProgressMessage()
     {
+#if FB_DEVELOPMENT
+        // a preview runs on after Hide, like a real download, and ends with the downloaded message either way
+        if (_previewStart >= 0f && Time.unscaledTime - _previewStart >= PreviewDownloadSeconds + PreviewCheckSeconds)
+        {
+            EndProgressPreview();
+
+            return;
+        }
+#endif
+
         if (_progressMessageText == null || Gui.GuiService == null)
         {
             UpdateProgressBar.Remove();
-#if FB_DEVELOPMENT
-            // Hide stops a preview
-            _previewStart = -1f;
-#endif
 
             return;
         }
@@ -919,15 +925,6 @@ internal static class UpdateContext
 
             return;
         }
-
-#if FB_DEVELOPMENT
-        if (_previewStart >= 0f && Time.unscaledTime - _previewStart >= PreviewDownloadSeconds + PreviewCheckSeconds)
-        {
-            EndProgressPreview();
-
-            return;
-        }
-#endif
 
         if (_progressMessageHasBar)
         {
