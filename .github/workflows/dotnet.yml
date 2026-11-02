@@ -2,8 +2,10 @@
 # The tag must match Info.json's Version and must not have been released before; the release notes are that
 # version's entry in ChangelogHistory.txt, and the title is the version plus the Solasta version it was built for.
 # A failed release can be re-run by hand from the Actions tab by choosing the version tag as the ref.
-# A push to the develop branch (or a run by hand on a branch) only builds: the zip is kept as the run's artifact
-# "SolastaUnfinishedBusiness-<version>-dev.<commit>" for testing, and nothing is released.
+# A push to any branch (or a run by hand on a branch) only builds: the zip is kept as the run's artifact
+# "SolastaUnfinishedBusiness-<version>-dev.<commit>" for testing, and nothing is released. Artifacts are kept for a
+# limited time (user direction, 2026-11-02: "build from any branch, but ensure that the lifespan of artifacts will be
+# limited"): 14 days for develop's builds, which are the release candidates, and 5 days for every other branch's.
 # Versions (user direction, 2026-11-02): Info.json holds the last release's version between releases; the release
 # commit raises it and renames ChangelogHistory.txt's "Unreleased:" entry to it. A development build (every build but
 # a tag's) is marked "<version>-dev.<first 8 characters of the commit>" in its built Info.json (the project file's
@@ -14,7 +16,7 @@ name: .NET
 on:
   push:
       branches:
-        - develop
+        - '**'
       tags:
         - '*'
   workflow_dispatch:
@@ -106,7 +108,7 @@ jobs:
         with:
           name: ${{ env.ARTIFACT }}
           path: SolastaUnfinishedBusiness.zip
-          retention-days: 30
+          retention-days: ${{ github.ref == 'refs/heads/develop' && 14 || 5 }}
       - name: Check a release build has no development-only tools
         if: github.ref_type != 'tag'
         # builds the code once more as a version tag would (after the test build was kept, so its files can be
