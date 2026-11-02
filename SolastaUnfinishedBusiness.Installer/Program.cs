@@ -189,7 +189,13 @@ internal static class Program
         File.Move(temporary, path);
     }
 
-    // Steam can refuse a launch right after the game exits, so it waits a little first
+    // Steam can refuse a launch right after the game exits, so it waits a little first.
+    // The game is started without the environment variables Unity Doorstop (the mod loader, winhttp.dll beside the
+    // game) set in the old game: this program inherits them from the game that started it, and Doorstop 4 does nothing
+    // in a process where DOORSTOP_INITIALIZED is already set ("DOORSTOP_INITIALIZED is set! Skipping!"), so a game
+    // started with them ran without Unity Mod Manager or any mod (found testing the 1.10.0 to 1.11.0 update). Setting a
+    // child's environment needs UseShellExecute false; the working directory stays the game's folder, which Doorstop's
+    // relative target_assembly path in doorstop_config.ini depends on.
     private static void Relaunch(string executable)
     {
         if (string.IsNullOrEmpty(executable) || !File.Exists(executable))
@@ -200,16 +206,37 @@ internal static class Program
         try
         {
             Thread.Sleep(5000);
-            Log($"Starting {executable}");
-            Process.Start(new ProcessStartInfo(executable)
+
+            var start = new ProcessStartInfo(executable)
             {
-                WorkingDirectory = Path.GetDirectoryName(executable) ?? string.Empty, UseShellExecute = true
-            });
+                WorkingDirectory = Path.GetDirectoryName(executable) ?? string.Empty, UseShellExecute = false
+            };
+            var removed = RemoveDoorstopVariables(start);
+
+            Log($"Starting {executable}" + (removed.Count > 0 ? $" without {string.Join(", ", removed)}" : string.Empty));
+            Process.Start(start)?.Dispose();
         }
         catch (Exception e)
         {
             Log($"Couldn't start the game: {e.Message}");
         }
+    }
+
+    // every DOORSTOP_* variable (Doorstop 4 sets DOORSTOP_INITIALIZED, DOORSTOP_INVOKE_DLL_PATH,
+    // DOORSTOP_MANAGED_FOLDER_DIR, DOORSTOP_PROCESS_PATH and DOORSTOP_DLL_SEARCH_DIRS); a fresh start sets its own.
+    // Returns the names removed, for the log
+    private static List<string> RemoveDoorstopVariables(ProcessStartInfo start)
+    {
+        var names = start.EnvironmentVariables.Keys.Cast<string>()
+            .Where(x => x.StartsWith("DOORSTOP_", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        foreach (var name in names)
+        {
+            start.EnvironmentVariables.Remove(name);
+        }
+
+        return names;
     }
 
     private static void Log(string line)
