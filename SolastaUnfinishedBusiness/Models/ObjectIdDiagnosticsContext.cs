@@ -179,7 +179,7 @@ internal static class ObjectIdDiagnosticsContext
                 CounterAfter = Counter,
                 Guid = guid,
                 Type = entity?.GetType().Name,
-                Name = entity?.SystemName,
+                Name = NameOf(entity),
                 Note = note,
                 Stack = stack && InWindow ? ShortStack() : null
             };
@@ -195,6 +195,27 @@ internal static class ObjectIdDiagnosticsContext
         {
             // a diagnostic never interrupts the game
             Main.Error($"[ObjectIds] record failed: {e.Message}");
+        }
+    }
+
+    // The game's SystemName reads the object's definition without checking it (RulesetItem.itemDefinition,
+    // RulesetCondition.conditionDefinition and most others), so an object registered before its definition is set
+    // throws there. The mod registers such objects while it builds its content at start-up: in game (9260c5b3) that lost
+    // 299 records with "Object reference not set", all before the mod finished loading. The record is kept without a name.
+    private static string NameOf(RulesetEntity entity)
+    {
+        if (entity == null)
+        {
+            return null;
+        }
+
+        try
+        {
+            return entity.SystemName;
+        }
+        catch (NullReferenceException)
+        {
+            return "(no definition yet)";
         }
     }
 
