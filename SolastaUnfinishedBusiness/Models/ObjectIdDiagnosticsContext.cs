@@ -109,9 +109,18 @@ internal static class ObjectIdDiagnosticsContext
         Add("unregister", Counter, entity?.Guid ?? 0, entity, false);
     }
 
+    // reading the counter from a save opens the window: it happens just before the "game loaded" marker, and the value
+    // read is the one every computer should start from (in game, 9260c5b3, it fell outside the window)
     internal static void CounterSerialized(string mode)
     {
-        Marker($"counter {mode}");
+        if (mode == "Read")
+        {
+            Transition("counter read from save");
+        }
+        else
+        {
+            Marker($"counter {mode}");
+        }
     }
 
     internal static void CounterReset()
@@ -229,9 +238,13 @@ internal static class ObjectIdDiagnosticsContext
             return null;
         }
 
+        // in game (9260c5b3) the first two frames were the patch's postfix and Harmony's patched copy
+        // ("RulesetEntity.Register_Patch2"): neither says who registered the object
         return string.Join(" < ", frames
             .Select(x => x.GetMethod())
             .Where(x => x != null && x.DeclaringType != typeof(ObjectIdDiagnosticsContext) &&
+                        x.DeclaringType?.DeclaringType != typeof(Patches.ObjectIdDiagnosticsPatcher) &&
+                        !x.Name.Contains("_Patch") &&
                         !(x.DeclaringType?.FullName ?? string.Empty).StartsWith("HarmonyLib"))
             .Take(StackFrames)
             .Select(x => $"{x.DeclaringType?.Name}.{x.Name}"));
