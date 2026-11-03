@@ -295,6 +295,8 @@ internal static class MultiplayerDesyncContext
         var details = string.Join("\n", confirmed.Select(x => x.Description).Take(6));
 
         Main.Error($"Multiplayer state desync with {playerName} at tick {host.Tick}:\n{details}");
+        // TEMPORARY: each computer saves its recent object-ID records for comparison
+        ObjectIdDiagnosticsContext.DesyncDetected("state-desync", (ulong)host.Tick);
 
         if (!PhotonNetwork.IsMasterClient)
         {

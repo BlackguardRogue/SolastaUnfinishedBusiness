@@ -227,6 +227,8 @@ internal static class MultiplayerContext
 
         _desyncReported = true;
         Main.Error($"Multiplayer desync detected at tick {localTick}: entity guid {firstGuid} vs {incomingGuid}");
+        // TEMPORARY: each computer saves its recent object-ID records for comparison
+        ObjectIdDiagnosticsContext.DesyncDetected("id-desync", localTick);
         Gui.GuiService.ShowAlert("Message/&MultiplayerDesyncDetected", Gui.ColorFailure, 10f);
     }
 
