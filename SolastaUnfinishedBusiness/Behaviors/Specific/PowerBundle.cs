@@ -388,8 +388,20 @@ internal static class PowerBundle
         entry = new LiveEffectEntry { Description = result, Generation = generation };
         entries[metamagicName] = entry;
 
-        // the stale check's starting point, while the situation is still the one this result was worked out for
-        CheckLiveEffect(entry, original, definition, caster, effect, metamagic);
+        // The stale check's starting point, now, while the situation is still the one this result was worked out for. It
+        // isn't subject to the check's budget: taken later, a change in between would become the starting point and be
+        // missed. This runs once per result, so uses bound it, not frames.
+        if (ObjectIdDiagnosticsContext.StaleEffectChecksActive)
+        {
+            try
+            {
+                entry.Baseline = SummarizeWithoutEffect(original, definition, caster, metamagic);
+            }
+            catch (Exception e)
+            {
+                ObjectIdDiagnosticsContext.EffectCheckFailed(definition, e);
+            }
+        }
 
         // an unmodified effect is the definition's own, the same everywhere
         if (ObjectIdDiagnosticsContext.Active && !ReferenceEquals(result, original))
@@ -409,8 +421,8 @@ internal static class PowerBundle
     // that only when handed a live power (Codex's review found this; the earlier version here replayed with the live effect
     // and did write). With no effect they run exactly as for a tooltip. A listing of every assignment and call in all 70
     // bodies shows no other write; called helpers were checked by their names, not read through.
-    // It compares two no-effect results, the first with the latest. A modifier's effect-dependent part isn't seen, but the
-    // effect itself doesn't change in its life: what can go stale here is the caster's situation.
+    // It compares two no-effect results, the first with the latest, so it sees changes in the caster's situation. It can't
+    // see a modifier's effect-dependent part, such as points spent on this use or the save DC those three set.
     private static void CheckLiveEffect(
         LiveEffectEntry entry,
         EffectDescription original,
@@ -426,7 +438,7 @@ internal static class PowerBundle
 
         var frame = Time.frameCount;
 
-        if (entry.Baseline != null && frame - entry.LastCheckedFrame < LiveEffectCheckIntervalFrames)
+        if (frame - entry.LastCheckedFrame < LiveEffectCheckIntervalFrames)
         {
             return;
         }
@@ -447,17 +459,14 @@ internal static class PowerBundle
 
         try
         {
-            var fresh = BuildModifiedEffect(original, definition, caster, null, metamagic);
+            var summary = SummarizeWithoutEffect(original, definition, caster, metamagic);
 
-            // Unmodified results are only marked, not described: the definition's own description is what some code
-            // changes on purpose (gambits' RangeType), and that isn't an out-of-date result.
-            var summary = ReferenceEquals(fresh, original)
-                ? UnmodifiedEffect
-                : ObjectIdDiagnosticsContext.SummarizeEffect(fresh);
-
+            // The check was off when this result was worked out, or that failed. This is only as far back as it can see,
+            // not how the effect began, so reports from it say so.
             if (entry.Baseline == null)
             {
                 entry.Baseline = summary;
+                entry.BaselineIsLate = true;
 
                 return;
             }
@@ -465,7 +474,8 @@ internal static class PowerBundle
             if (summary != entry.Baseline && summary != entry.ReportedSummary)
             {
                 entry.ReportedSummary = summary;
-                ObjectIdDiagnosticsContext.EffectStale(caster, definition, effect, entry.Baseline, summary);
+                ObjectIdDiagnosticsContext.EffectStale(
+                    caster, definition, effect, entry.Baseline, summary, entry.BaselineIsLate);
             }
         }
         catch (Exception e)
@@ -473,6 +483,19 @@ internal static class PowerBundle
             // a modifier may not expect to run this late; the diagnostic never interrupts the game
             ObjectIdDiagnosticsContext.EffectCheckFailed(definition, e);
         }
+    }
+
+    private static string SummarizeWithoutEffect(
+        EffectDescription original,
+        BaseDefinition definition,
+        RulesetCharacter caster,
+        BaseDefinition metamagic)
+    {
+        var result = BuildModifiedEffect(original, definition, caster, null, metamagic);
+
+        // Unmodified results are only marked, not described: the definition's own description is what some code changes on
+        // purpose (gambits' RangeType), and that isn't an out-of-date result.
+        return ReferenceEquals(result, original) ? UnmodifiedEffect : ObjectIdDiagnosticsContext.SummarizeEffect(result);
     }
 
     private static EffectDescription BuildModifiedEffect(
@@ -527,6 +550,7 @@ internal static class PowerBundle
     private sealed class LiveEffectEntry
     {
         internal string Baseline;
+        internal bool BaselineIsLate;
         internal EffectDescription Description;
         internal int Generation;
         internal int LastCheckedFrame = -1;

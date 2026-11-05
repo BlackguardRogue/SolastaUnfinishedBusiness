@@ -284,7 +284,7 @@ internal static class ObjectIdDiagnosticsContext
     // reported once per effect (see PowerBundle), and the totals
     // are capped so a repeating case can't push allocation records out of the ring or fill the log.
     internal static void EffectStale(RulesetCharacter caster, BaseDefinition definition, RulesetEffect effect,
-        string kept, string now)
+        string kept, string now, bool keptIsLate)
     {
         _effectsStale++;
 
@@ -293,7 +293,8 @@ internal static class ObjectIdDiagnosticsContext
             return;
         }
 
-        var note = $"{definition?.Name} on {caster?.Name}: kept [{kept}] but now [{now}]";
+        var note = $"{definition?.Name} on {caster?.Name}: " +
+                   $"{(keptIsLate ? "first seen, not from its start" : "kept")} [{kept}] but now [{now}]";
 
         Add("effect-stale", Counter, effect?.Guid ?? 0, caster, true, note);
         Main.Info($"[EffectCache] stale at tick {Tick}, frame {Time.frameCount}: {note}");
