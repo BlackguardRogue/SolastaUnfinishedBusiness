@@ -64,7 +64,16 @@ internal static class ObjectIdDiagnosticsContext
     // result. Nested registrations (an object registering its parts) each get their own record.
     [ThreadStatic] private static Stack<ulong> _countersBefore;
 
-    internal static bool Active
+    // The switches are on the mod menu's Logging tab. The save patch's own result isn't behind them: it's one line per
+    // launch, and an error there means a fix isn't in place.
+    internal static bool Active =>
+        Main.Settings is { EnableAdditionalLogging: true, LogObjectIdRecords: true } && InScope;
+
+    // PowerBundle's stale effect check. It works effects out a second time, so it has its own switch.
+    internal static bool StaleEffectChecksActive =>
+        Main.Settings is { EnableAdditionalLogging: true, LogStaleEffectChecks: true } && InScope;
+
+    private static bool InScope
     {
         get
         {

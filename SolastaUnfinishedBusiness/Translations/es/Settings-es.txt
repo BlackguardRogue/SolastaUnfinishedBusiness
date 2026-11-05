@@ -562,6 +562,12 @@ ModUi/&MultiplayerHostSettingsBanner=<b><color=#E0A040>Estos son los ajustes del
 ModUi/&MultiplayerHostSettingsThisLaunchBanner=<b><color=#E0A040>Este inicio usa los ajustes del ANFITRIÓN (Settings/Host.xml). Aquí son de solo lectura y tu propio Settings.xml no cambia; el próximo inicio vuelve a usar tus ajustes.</color></b>
 ModUi/&MultiplayerInitialTickBuffer=<color=white>Retraso de acción inicial en ticks</color> <i><color=#F0DAA0>[6 por defecto en el juego]</color></i>
 ModUi/&MultiplayerLagTitle=<color=#F0DAA0>Retraso de acción:</color>
+ModUi/&Logging=Registro
+ModUi/&LoggingHelp=Registros adicionales para encontrar problemas del modo multijugador. No cambian el juego. En una sala multijugador, los clientes usan las opciones del anfitrión.
+ModUi/&EnableAdditionalLogging=Activar registro adicional
+ModUi/&LogObjectIdRecords=Registros de ID de objetos <i><color=#F0DAA0>[nuevos objetos del juego, cambios de estados de luz y resultados de poderes o conjuros, guardados en archivos para comparar equipos]</color></i>
+ModUi/&LogStaleEffectChecks=Efectos de poderes y conjuros desactualizados <i><color=#F0DAA0>[anota en el registro cuando un efecto activo ya no coincide con la situación actual; vuelve a comprobar los efectos activos, por lo que afecta algo al rendimiento]</color></i>
+ModUi/&LogPerception=Percepción <i><color=#F0DAA0>[solicitudes y tiradas de percepción en el registro]</color></i>
 ModUi/&MultiplayerMenu=Multijugador
 ModUi/&MultiplayerMinimumTickBuffer=<color=white>Retraso de acción mínimo en ticks</color> <i><color=#F0DAA0>[4 por defecto en el juego, solo se usa cuando todos los pings lo permiten]</color></i>
 ModUi/&MultiplayerMovementTitle=<color=#F0DAA0>Movimiento</color> <i><color=#F0DAA0>[solo partidas multijugador, el modo de un jugador conserva las reglas del juego]</color></i><color=#F0DAA0>:</color>

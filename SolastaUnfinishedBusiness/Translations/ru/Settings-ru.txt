@@ -562,6 +562,12 @@ ModUi/&MultiplayerHostSettingsBanner=<b><color=#E0A040>Это настройки
 ModUi/&MultiplayerHostSettingsThisLaunchBanner=<b><color=#E0A040>Этот запуск использует настройки ХОСТА (Settings/Host.xml). Здесь они только для чтения, а ваш собственный Settings.xml не изменяется; следующий запуск снова использует ваши настройки.</color></b>
 ModUi/&MultiplayerInitialTickBuffer=<color=white>Начальная задержка действий в тиках</color> <i><color=#F0DAA0>[по умолчанию в игре 6]</color></i>
 ModUi/&MultiplayerLagTitle=<color=#F0DAA0>Задержка действий:</color>
+ModUi/&Logging=Журнал
+ModUi/&LoggingHelp=Дополнительные записи для поиска проблем в сетевой игре. Они не меняют игру. В сетевой комнате клиенты используют выбор хоста.
+ModUi/&EnableAdditionalLogging=Включить дополнительный журнал
+ModUi/&LogObjectIdRecords=Записи ID объектов <i><color=#F0DAA0>[новые игровые объекты, изменения состояний освещения и результаты способностей или заклинаний, сохраняются в файлы для сравнения компьютеров]</color></i>
+ModUi/&LogStaleEffectChecks=Устаревшие эффекты способностей и заклинаний <i><color=#F0DAA0>[отмечает в журнале, когда активный эффект больше не соответствует текущей ситуации; повторно проверяет активные эффекты, поэтому немного влияет на производительность]</color></i>
+ModUi/&LogPerception=Восприятие <i><color=#F0DAA0>[запросы и броски восприятия в журнале]</color></i>
 ModUi/&MultiplayerMenu=Мультиплеер
 ModUi/&MultiplayerMinimumTickBuffer=<color=white>Минимальная задержка действий в тиках</color> <i><color=#F0DAA0>[по умолчанию в игре 4, используется, только если позволяет пинг каждого]</color></i>
 ModUi/&MultiplayerMovementTitle=<color=#F0DAA0>Перемещение</color> <i><color=#F0DAA0>[только сетевые игры, одиночная игра сохраняет правила игры]</color></i><color=#F0DAA0>:</color>

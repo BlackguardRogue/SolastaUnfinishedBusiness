@@ -378,7 +378,7 @@ internal static class PowerBundle
         entry = new LiveEffectEntry { Description = result };
         entries.Add(key, entry);
 
-        if (ObjectIdDiagnosticsContext.Active)
+        if (ObjectIdDiagnosticsContext.Active || ObjectIdDiagnosticsContext.StaleEffectChecksActive)
         {
             entry.Summary = ObjectIdDiagnosticsContext.SummarizeEffect(result);
 
@@ -394,8 +394,8 @@ internal static class PowerBundle
 
     // Diagnostic only, for "when does a kept result go stale" (user, 2026-11-05): an effect's result is kept for its life,
     // so a change made during that life, with no RefreshAll, still isn't seen. This works the effect out again, at most
-    // once a frame per effect, and records any difference. It only runs where the object-ID diagnostics run, so it must
-    // never change what the game gets: a computer with diagnostics and one without have to agree. Reworking is safe
+    // once a frame per effect, and records any difference. It runs only when switched on (mod menu, Logging), so it must
+    // never change what the game gets: a computer with it on and one with it off have to agree. Reworking is safe
     // because a search of all 70 modifiers' GetEffectDescription found none changing anything but the copy it's given.
     private static void CheckLiveEffect(
         LiveEffectEntry entry,
@@ -405,7 +405,7 @@ internal static class PowerBundle
         RulesetEffect effect,
         BaseDefinition metamagic)
     {
-        if (!ObjectIdDiagnosticsContext.Active ||
+        if (!ObjectIdDiagnosticsContext.StaleEffectChecksActive ||
             _checkingLiveEffect ||
             effect.Terminated ||
             entry.LastCheckedFrame == Time.frameCount)

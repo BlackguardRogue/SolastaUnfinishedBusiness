@@ -717,6 +717,12 @@ internal static class PerceptionContext
 
     private static void Trace(string text)
     {
+        // mod menu, Logging: only the record is skipped, never what's being recorded
+        if (Main.Settings is not { EnableAdditionalLogging: true, LogPerception: true })
+        {
+            return;
+        }
+
         var tick = (ServiceRepository.GetService<INetworkingService>() as NetworkingManager)?.tick?.LocalTick ?? 0;
         var line = $"[Perception] peer={PhotonNetwork.LocalPlayer?.ActorNumber ?? 0} " +
                    $"host={PhotonNetwork.IsMasterClient} tick={tick} phase={CurrentPhase} {text}";

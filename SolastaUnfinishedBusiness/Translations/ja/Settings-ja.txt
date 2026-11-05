@@ -562,6 +562,12 @@ ModUi/&MultiplayerHostSettingsBanner=<b><color=#E0A040>これはこのマルチ�
 ModUi/&MultiplayerHostSettingsThisLaunchBanner=<b><color=#E0A040>この起動ではホストの設定（Settings/Host.xml）を使っています。ここでは読み取り専用で、あなた自身のSettings.xmlは変更されません。次回の起動では再びあなたの設定を使います。</color></b>
 ModUi/&MultiplayerInitialTickBuffer=<color=white>初期の行動遅延（ティック）</color> <i><color=#F0DAA0>[ゲームの既定値6]</color></i>
 ModUi/&MultiplayerLagTitle=<color=#F0DAA0>行動遅延：</color>
+ModUi/&Logging=ログ
+ModUi/&LoggingHelp=マルチプレイの問題を調べるための追加記録です。ゲーム内容は変わりません。マルチプレイのルームでは、クライアントはホストの選択を使用します。
+ModUi/&EnableAdditionalLogging=追加ログを有効にする
+ModUi/&LogObjectIdRecords=オブジェクトIDの記録 <i><color=#F0DAA0>[新しいゲームオブジェクト、光の状態の変化、パワーや呪文の結果をファイルに保存し、コンピューター間で比較できるようにします]</color></i>
+ModUi/&LogStaleEffectChecks=古くなったパワーと呪文の効果 <i><color=#F0DAA0>[有効な効果が現在の状況と一致しなくなったときにログに記録します。有効な効果を再確認するため、パフォーマンスにわずかに影響します]</color></i>
+ModUi/&LogPerception=知覚 <i><color=#F0DAA0>[知覚の要求と判定をログに記録します]</color></i>
 ModUi/&MultiplayerMenu=マルチプレイ
 ModUi/&MultiplayerMinimumTickBuffer=<color=white>最小の行動遅延（ティック）</color> <i><color=#F0DAA0>[ゲームの既定値4、全員のpingが許す場合のみ使用]</color></i>
 ModUi/&MultiplayerMovementTitle=<color=#F0DAA0>移動</color> <i><color=#F0DAA0>[マルチプレイのみ、シングルプレイはゲームのルールのまま]</color></i><color=#F0DAA0>:</color>

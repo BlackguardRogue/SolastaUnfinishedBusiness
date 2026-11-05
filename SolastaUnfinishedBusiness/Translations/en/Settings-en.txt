@@ -519,6 +519,12 @@ ModUi/&WeaponMasterySystemCustomizeToggle=Customize weapon mastery properties
 ModUi/&WeaponMasterySystemCustomizeResetAll=Reset All
 ModUi/&WeaponMasterySystemCustomizeResetAllWarning=Will reset all weapon mastery properties to default
 ModUi/&WideScreenBattleUI=Enable Wide Screen Battle UI <i><color=#F0DAA0>(For resolutions with an Aspect Ratio greater than 16:9)</color></i>
+ModUi/&Logging=Logging
+ModUi/&LoggingHelp=Extra records for finding multiplayer problems. They don't change the game. In a multiplayer room, clients use the host's choices.
+ModUi/&EnableAdditionalLogging=Enable additional logging
+ModUi/&LogObjectIdRecords=Object ID records <i><color=#F0DAA0>[new game objects, light condition changes and power or spell results, saved to files for comparing computers]</color></i>
+ModUi/&LogStaleEffectChecks=Out-of-date power and spell effects <i><color=#F0DAA0>[notes in the log when an active effect no longer matches the current situation; rechecks active effects, so it costs a little performance]</color></i>
+ModUi/&LogPerception=Perception <i><color=#F0DAA0>[perception requests and rolls in the log]</color></i>
 ModUi/&MultiplayerMenu=Multiplayer
 ModUi/&MultiplayerDescription=Fixes and changes for multiplayer. Every player must use the same mod build and the same settings, as the game runs the same simulation on every computer.
 ModUi/&MultiplayerAlwaysOnFixes=<color=#F0DAA0>Always applied:</color> Wild Magic random target uses the synced dice, the SHIFT choice of warlock or regular slots is sent to every computer with the cast, reaction or conversion, reaction timestamps are not stored in multiplayer, each hero gets one role per conversation, a hero never says two lines in a row for different roles, and heroes 5 and 6 get their own cutscene placement.

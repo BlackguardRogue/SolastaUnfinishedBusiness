@@ -5,6 +5,7 @@ Unreleased:
 - Light conditions, such as Light Sensitivity on Dark Kobolds, Dark Elves and Gray Dwarves, are now changed only when they need to change, instead of being removed and made again on every check. Hovering over a location or an enemy no longer touches them.
 - Powers and spells whose effect depends on the current situation (for example points spent on this use, College of Audacity's Masterful Whirl, remaining movement) now work out their effect for each use. Before, a later use could get an earlier use's result, or a tooltip's, until the character next refreshed, and computers could disagree.
 - Multiplayer, temporary diagnostics: the record files and the mod's log now note when a spell or power's kept effect has gone out of date while it was active.
+- Mod menu: a new Logging tab switches the extra records on or off, together or one by one: object ID records, out-of-date power and spell effects, and perception. All are on by default, and they don't change the game. In a multiplayer room, clients use the host's choices.
 
 1.12.1:
 - Multiplayer, temporary diagnostics for the desyncs where computers number new game objects differently: in a multiplayer room, each computer keeps a record of the objects it creates and saves it to FinishingBusinessDiagnostics in the game's data folder (beside Player.log) after each map change or load, and when the mod detects a desync. Comparing two players' files shows which object only one computer made. It changes nothing in the game and will be removed once the cause is found
