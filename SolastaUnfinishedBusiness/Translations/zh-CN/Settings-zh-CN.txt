@@ -563,7 +563,8 @@ ModUi/&MultiplayerHostSettingsThisLaunchBanner=<b><color=#E0A040>本次启动使
 ModUi/&MultiplayerInitialTickBuffer=<color=white>初始行动延迟（帧刻）</color> <i><color=#F0DAA0>[游戏默认6]</color></i>
 ModUi/&MultiplayerLagTitle=<color=#F0DAA0>行动延迟：</color>
 ModUi/&Logging=日志
-ModUi/&LoggingHelp=用于查找多人游戏问题的额外记录。它们不会改变游戏。在多人游戏房间中，客户端使用主机的选择。
+ModUi/&LoggingHelp=用于查找多人游戏问题的额外记录。它们不会改变游戏。
+ModUi/&LoggingHostWarning=<color=#F0DAA0>警告：在多人游戏房间中，主机的选择适用于所有玩家，因此无论你自己的设置如何，日志都可能被开启或关闭。</color>
 ModUi/&EnableAdditionalLogging=启用额外日志
 ModUi/&LogObjectIdRecords=对象ID记录 <i><color=#F0DAA0>[新游戏对象、光照状态变化以及能力或法术的结果，保存到文件以便比较各台电脑]</color></i>
 ModUi/&LogStaleEffectChecks=过期的能力和法术效果 <i><color=#F0DAA0>[当生效的效果不再符合当前情况时记入日志；会重新检查生效的效果，因此略微影响性能]</color></i>

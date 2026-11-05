@@ -520,7 +520,8 @@ ModUi/&WeaponMasterySystemCustomizeResetAll=Reset All
 ModUi/&WeaponMasterySystemCustomizeResetAllWarning=Will reset all weapon mastery properties to default
 ModUi/&WideScreenBattleUI=Enable Wide Screen Battle UI <i><color=#F0DAA0>(For resolutions with an Aspect Ratio greater than 16:9)</color></i>
 ModUi/&Logging=Logging
-ModUi/&LoggingHelp=Extra records for finding multiplayer problems. They don't change the game. In a multiplayer room, clients use the host's choices.
+ModUi/&LoggingHelp=Extra records for finding multiplayer problems. They don't change the game.
+ModUi/&LoggingHostWarning=<color=#F0DAA0>Warning: in a multiplayer room, the host's choices here apply to every player, so your logging may be on or off regardless of your own switches.</color>
 ModUi/&EnableAdditionalLogging=Enable additional logging
 ModUi/&LogObjectIdRecords=Object ID records <i><color=#F0DAA0>[new game objects, light condition changes and power or spell results, saved to files for comparing computers]</color></i>
 ModUi/&LogStaleEffectChecks=Out-of-date power and spell effects <i><color=#F0DAA0>[notes in the log when an active effect no longer matches the current situation; rechecks active effects, so it costs a little performance]</color></i>

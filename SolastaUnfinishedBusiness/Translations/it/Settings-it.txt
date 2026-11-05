@@ -563,7 +563,8 @@ ModUi/&MultiplayerHostSettingsThisLaunchBanner=<b><color=#E0A040>Questo avvio us
 ModUi/&MultiplayerInitialTickBuffer=<color=white>Ritardo d'azione iniziale in tick</color> <i><color=#F0DAA0>[predefinito del gioco 6]</color></i>
 ModUi/&MultiplayerLagTitle=<color=#F0DAA0>Ritardo d'azione:</color>
 ModUi/&Logging=Registro
-ModUi/&LoggingHelp=Registrazioni aggiuntive per trovare i problemi del multigiocatore. Non modificano il gioco. In una stanza multigiocatore, i client usano le scelte dell'host.
+ModUi/&LoggingHelp=Registrazioni aggiuntive per trovare i problemi del multigiocatore. Non modificano il gioco.
+ModUi/&LoggingHostWarning=<color=#F0DAA0>Attenzione: in una stanza multigiocatore, le scelte dell'host valgono per tutti i giocatori, quindi la tua registrazione può essere attiva o disattiva indipendentemente dalle tue impostazioni.</color>
 ModUi/&EnableAdditionalLogging=Attiva registrazione aggiuntiva
 ModUi/&LogObjectIdRecords=Registrazioni degli ID oggetto <i><color=#F0DAA0>[nuovi oggetti di gioco, cambiamenti degli stati di luce e risultati di poteri o incantesimi, salvati su file per confrontare i computer]</color></i>
 ModUi/&LogStaleEffectChecks=Effetti di poteri e incantesimi non aggiornati <i><color=#F0DAA0>[annota nel registro quando un effetto attivo non corrisponde più alla situazione attuale; ricontrolla gli effetti attivi, quindi pesa un po' sulle prestazioni]</color></i>

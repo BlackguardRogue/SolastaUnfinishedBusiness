@@ -563,7 +563,8 @@ ModUi/&MultiplayerHostSettingsThisLaunchBanner=<b><color=#E0A040>Esta inicializa
 ModUi/&MultiplayerInitialTickBuffer=<color=white>Atraso de ação inicial em ticks</color> <i><color=#F0DAA0>[padrão do jogo 6]</color></i>
 ModUi/&MultiplayerLagTitle=<color=#F0DAA0>Atraso de ação:</color>
 ModUi/&Logging=Registro
-ModUi/&LoggingHelp=Registros adicionais para encontrar problemas no multijogador. Eles não alteram o jogo. Em uma sala multijogador, os clientes usam as escolhas do anfitrião.
+ModUi/&LoggingHelp=Registros adicionais para encontrar problemas no multijogador. Eles não alteram o jogo.
+ModUi/&LoggingHostWarning=<color=#F0DAA0>Aviso: em uma sala multijogador, as escolhas do anfitrião valem para todos os jogadores, portanto seu registro pode estar ativado ou desativado independentemente das suas opções.</color>
 ModUi/&EnableAdditionalLogging=Ativar registro adicional
 ModUi/&LogObjectIdRecords=Registros de IDs de objetos <i><color=#F0DAA0>[novos objetos do jogo, mudanças de estados de luz e resultados de poderes ou magias, salvos em arquivos para comparar computadores]</color></i>
 ModUi/&LogStaleEffectChecks=Efeitos de poderes e magias desatualizados <i><color=#F0DAA0>[anota no registro quando um efeito ativo não corresponde mais à situação atual; verifica novamente os efeitos ativos, por isso afeta um pouco o desempenho]</color></i>

@@ -563,7 +563,8 @@ ModUi/&MultiplayerHostSettingsThisLaunchBanner=<b><color=#E0A040>この起動で
 ModUi/&MultiplayerInitialTickBuffer=<color=white>初期の行動遅延（ティック）</color> <i><color=#F0DAA0>[ゲームの既定値6]</color></i>
 ModUi/&MultiplayerLagTitle=<color=#F0DAA0>行動遅延：</color>
 ModUi/&Logging=ログ
-ModUi/&LoggingHelp=マルチプレイの問題を調べるための追加記録です。ゲーム内容は変わりません。マルチプレイのルームでは、クライアントはホストの選択を使用します。
+ModUi/&LoggingHelp=マルチプレイの問題を調べるための追加記録です。ゲーム内容は変わりません。
+ModUi/&LoggingHostWarning=<color=#F0DAA0>警告: マルチプレイのルームでは、ホストの選択が全プレイヤーに適用されます。自分の設定に関係なく、ログが有効または無効になる場合があります。</color>
 ModUi/&EnableAdditionalLogging=追加ログを有効にする
 ModUi/&LogObjectIdRecords=オブジェクトIDの記録 <i><color=#F0DAA0>[新しいゲームオブジェクト、光の状態の変化、パワーや呪文の結果をファイルに保存し、コンピューター間で比較できるようにします]</color></i>
 ModUi/&LogStaleEffectChecks=古くなったパワーと呪文の効果 <i><color=#F0DAA0>[有効な効果が現在の状況と一致しなくなったときにログに記録します。有効な効果を再確認するため、パフォーマンスにわずかに影響します]</color></i>

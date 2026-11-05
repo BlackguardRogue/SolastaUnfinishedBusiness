@@ -11,6 +11,8 @@ internal static class LoggingDisplay
     {
         UI.Label();
         UI.Label(Gui.Localize("ModUi/&LoggingHelp"));
+        // user, 2026-11-05: the host deciding the clients' logging is fine, with a warning
+        UI.Label(Gui.Localize("ModUi/&LoggingHostWarning"));
         UI.Label();
 
         var toggle = Main.Settings.EnableAdditionalLogging;
