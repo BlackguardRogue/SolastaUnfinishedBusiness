@@ -396,7 +396,7 @@ internal static class PowerBundle
     // so a change made during that life, with no RefreshAll, still isn't seen. This works the effect out again, at most
     // once a frame per effect, and records any difference. It only runs where the object-ID diagnostics run, so it must
     // never change what the game gets: a computer with diagnostics and one without have to agree. Reworking is safe
-    // because no modifier's GetEffectDescription changes anything but the copy it's given (all 70 were read for this).
+    // because a search of all 70 modifiers' GetEffectDescription found none changing anything but the copy it's given.
     private static void CheckLiveEffect(
         LiveEffectEntry entry,
         EffectDescription original,
