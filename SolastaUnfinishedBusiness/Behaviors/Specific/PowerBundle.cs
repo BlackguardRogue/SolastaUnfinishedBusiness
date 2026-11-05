@@ -2,6 +2,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using JetBrains.Annotations;
 using SolastaUnfinishedBusiness.Api.GameExtensions;
 using SolastaUnfinishedBusiness.Builders;
@@ -28,9 +29,21 @@ internal static class PowerBundle
     // - how long a result lasted depended on which computer's panel called RefreshAll.
     // Each use now makes a new RulesetEffect, so it gets a result worked out for it. The object stays the same for that
     // effect's life, because code changes a live effect's description and expects the change to last (gambits' RangeType,
-    // the teleport cursor's targeting). RefreshAll still empties a caster's entries, as before.
-    private static readonly Dictionary<ulong, Dictionary<(RulesetEffect, BaseDefinition), LiveEffectEntry>> LiveEffects =
-        [];
+    // the teleport cursor's targeting). RefreshAll still drops a caster's results, as before: it moves the caster's
+    // generation on, and a result from an older generation is worked out again.
+    // Weak keys: a result goes when its effect does, however that effect ends and whether or not its caster refreshes
+    // again. Nothing in the entries points back at the effect.
+    private static readonly ConditionalWeakTable<RulesetEffect, Dictionary<string, LiveEffectEntry>> LiveEffects = new();
+
+    // one small number per caster seen in this launch
+    private static readonly Dictionary<ulong, int> CasterGenerations = [];
+
+    // The stale check's cost is bounded: an effect is looked at once per this many frames, and only so many in a frame.
+    private const int LiveEffectCheckIntervalFrames = 30;
+    private const int LiveEffectChecksPerFrame = 4;
+
+    private static int _liveEffectChecksFrame = -1;
+    private static int _liveEffectChecksThisFrame;
 
     // Tooltips have no live effect. They ask often while drawing, and nothing in the rules reads this, so one frame's
     // result is reused for that frame only: a tooltip can't go on showing an old value.
@@ -38,8 +51,7 @@ internal static class PowerBundle
 
     private static int _guiEffectsFrame = -1;
 
-    // true while the diagnostic below works an effect out again, so that a modifier reading the effect doesn't repeat it
-    private static bool _checkingLiveEffect;
+    private const string UnmodifiedEffect = "(unmodified)";
 
     private static Transform _parent;
 
@@ -336,7 +348,8 @@ internal static class PowerBundle
 
     internal static void ClearSpellEffectCache(RulesetCharacter caster)
     {
-        LiveEffects.Remove(caster.Guid);
+        CasterGenerations.TryGetValue(caster.Guid, out var generation);
+        CasterGenerations[caster.Guid] = generation + 1;
         GuiEffects.Remove(caster.Guid);
     }
 
@@ -358,15 +371,12 @@ internal static class PowerBundle
         }
 
         var metamagic = effect is RulesetEffectSpell spell ? spell.MetamagicOption : null;
-        var key = (effect, metamagic);
+        var metamagicName = metamagic ? metamagic.Name : string.Empty;
+        var entries = LiveEffects.GetOrCreateValue(effect);
 
-        if (!LiveEffects.TryGetValue(caster.Guid, out var entries))
-        {
-            entries = new Dictionary<(RulesetEffect, BaseDefinition), LiveEffectEntry>();
-            LiveEffects.Add(caster.Guid, entries);
-        }
+        CasterGenerations.TryGetValue(caster.Guid, out var generation);
 
-        if (entries.TryGetValue(key, out var entry))
+        if (entries.TryGetValue(metamagicName, out var entry) && entry.Generation == generation)
         {
             CheckLiveEffect(entry, original, definition, caster, effect, metamagic);
 
@@ -375,28 +385,32 @@ internal static class PowerBundle
 
         var result = BuildModifiedEffect(original, definition, caster, effect, metamagic);
 
-        entry = new LiveEffectEntry { Description = result };
-        entries.Add(key, entry);
+        entry = new LiveEffectEntry { Description = result, Generation = generation };
+        entries[metamagicName] = entry;
 
-        if (ObjectIdDiagnosticsContext.Active || ObjectIdDiagnosticsContext.StaleEffectChecksActive)
+        // the stale check's starting point, while the situation is still the one this result was worked out for
+        CheckLiveEffect(entry, original, definition, caster, effect, metamagic);
+
+        // an unmodified effect is the definition's own, the same everywhere
+        if (ObjectIdDiagnosticsContext.Active && !ReferenceEquals(result, original))
         {
-            entry.Summary = ObjectIdDiagnosticsContext.SummarizeEffect(result);
-
-            // an unmodified effect is the definition's own, the same everywhere
-            if (!ReferenceEquals(result, original))
-            {
-                ObjectIdDiagnosticsContext.EffectWorkedOut(caster, definition, effect, entry.Summary);
-            }
+            ObjectIdDiagnosticsContext.EffectWorkedOut(caster, definition, effect, result);
         }
 
         return result;
     }
 
     // Diagnostic only, for "when does a kept result go stale" (user, 2026-11-05): an effect's result is kept for its life,
-    // so a change made during that life, with no RefreshAll, still isn't seen. This works the effect out again, at most
-    // once a frame per effect, and records any difference. It runs only when switched on (mod menu, Logging), so it must
-    // never change what the game gets: a computer with it on and one with it off have to agree. Reworking is safe
-    // because a search of all 70 modifiers' GetEffectDescription found none changing anything but the copy it's given.
+    // so a change made during that life, with no RefreshAll, still isn't seen. This records when the modifiers would now
+    // give something different. It runs only when switched on (mod menu, Logging), so it must never change anything: a
+    // computer with it on and one with it off have to agree.
+    // So it never gives the modifiers the live effect. Three of the 70 write outside their copy
+    // (ModifyEffectDescriptionSavingThrowRogue, a Gambits one and Dragon Breath set usablePower.saveDC), and all three do
+    // that only when handed a live power (Codex's review found this; the earlier version here replayed with the live effect
+    // and did write). With no effect they run exactly as for a tooltip. A listing of every assignment and call in all 70
+    // bodies shows no other write; called helpers were checked by their names, not read through.
+    // It compares two no-effect results, the first with the latest. A modifier's effect-dependent part isn't seen, but the
+    // effect itself doesn't change in its life: what can go stale here is the caster's situation.
     private static void CheckLiveEffect(
         LiveEffectEntry entry,
         EffectDescription original,
@@ -405,46 +419,59 @@ internal static class PowerBundle
         RulesetEffect effect,
         BaseDefinition metamagic)
     {
-        if (!ObjectIdDiagnosticsContext.StaleEffectChecksActive ||
-            _checkingLiveEffect ||
-            effect.Terminated ||
-            entry.LastCheckedFrame == Time.frameCount)
+        if (!ObjectIdDiagnosticsContext.StaleEffectChecksActive || effect.Terminated)
         {
             return;
         }
 
-        entry.LastCheckedFrame = Time.frameCount;
-        _checkingLiveEffect = true;
+        var frame = Time.frameCount;
+
+        if (entry.Baseline != null && frame - entry.LastCheckedFrame < LiveEffectCheckIntervalFrames)
+        {
+            return;
+        }
+
+        if (_liveEffectChecksFrame != frame)
+        {
+            _liveEffectChecksFrame = frame;
+            _liveEffectChecksThisFrame = 0;
+        }
+
+        if (_liveEffectChecksThisFrame >= LiveEffectChecksPerFrame)
+        {
+            return;
+        }
+
+        _liveEffectChecksThisFrame++;
+        entry.LastCheckedFrame = frame;
 
         try
         {
-            entry.Summary ??= ObjectIdDiagnosticsContext.SummarizeEffect(entry.Description);
+            var fresh = BuildModifiedEffect(original, definition, caster, null, metamagic);
 
-            var fresh = BuildModifiedEffect(original, definition, caster, effect, metamagic);
+            // Unmodified results are only marked, not described: the definition's own description is what some code
+            // changes on purpose (gambits' RangeType), and that isn't an out-of-date result.
+            var summary = ReferenceEquals(fresh, original)
+                ? UnmodifiedEffect
+                : ObjectIdDiagnosticsContext.SummarizeEffect(fresh);
 
-            // the same object: unmodified both times. Compared with the summary made when it was worked out, so code
-            // changing the live description on purpose (see above) doesn't count as stale.
-            if (ReferenceEquals(fresh, entry.Description))
+            if (entry.Baseline == null)
             {
+                entry.Baseline = summary;
+
                 return;
             }
 
-            var summary = ObjectIdDiagnosticsContext.SummarizeEffect(fresh);
-
-            if (summary != entry.Summary && summary != entry.ReportedSummary)
+            if (summary != entry.Baseline && summary != entry.ReportedSummary)
             {
                 entry.ReportedSummary = summary;
-                ObjectIdDiagnosticsContext.EffectStale(caster, definition, effect, entry.Summary, summary);
+                ObjectIdDiagnosticsContext.EffectStale(caster, definition, effect, entry.Baseline, summary);
             }
         }
         catch (Exception e)
         {
             // a modifier may not expect to run this late; the diagnostic never interrupts the game
             ObjectIdDiagnosticsContext.EffectCheckFailed(definition, e);
-        }
-        finally
-        {
-            _checkingLiveEffect = false;
         }
     }
 
@@ -481,7 +508,17 @@ internal static class PowerBundle
                 EffectDescriptionBuilder
                     .Create(result)
                     .Build(),
-                (current, f) => f.GetEffectDescription(definition, current, caster, effect));
+                (current, f) =>
+                {
+                    var next = f.GetEffectDescription(definition, current, caster, effect);
+
+                    // Some modifiers return an object of their own instead of the copy they were given (an upgrade kept in
+                    // ModifyEffectDescriptionOnLevels). A later modifier, or code changing a live description, must not
+                    // change that stored object, and modifiers now run once per use rather than once per refresh.
+                    return ReferenceEquals(next, current)
+                        ? next
+                        : EffectDescriptionBuilder.Create(next).Build();
+                });
         }
 
         return result;
@@ -489,10 +526,11 @@ internal static class PowerBundle
 
     private sealed class LiveEffectEntry
     {
+        internal string Baseline;
         internal EffectDescription Description;
+        internal int Generation;
         internal int LastCheckedFrame = -1;
         internal string ReportedSummary;
-        internal string Summary;
     }
 
     /**Modifies spell/power description for GUI purposes.*/

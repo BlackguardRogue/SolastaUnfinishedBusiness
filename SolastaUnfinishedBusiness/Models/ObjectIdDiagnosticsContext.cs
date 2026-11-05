@@ -205,8 +205,9 @@ internal static class ObjectIdDiagnosticsContext
             $"refreshed={character.CharacterRefreshed?.GetInvocationList().Length ?? 0}");
     }
 
-    // A short text of what a power's or spell's effect comes to, in the things modifiers change. Two computers' texts for
-    // the same use should be equal; a difference means they'd apply different rules.
+    // A short text of what a power's or spell's effect comes to, in the main things modifiers change. Two computers' texts
+    // for the same use should be equal; a difference means they'd apply different rules. It's partial: equal texts don't
+    // prove equal effects.
     internal static string SummarizeEffect(EffectDescription effect)
     {
         try
@@ -215,15 +216,17 @@ internal static class ObjectIdDiagnosticsContext
 
             text.Append("range=").Append(effect.RangeType).Append(':').Append(effect.RangeParameter)
                 .Append(" target=").Append(effect.TargetType).Append(':').Append(effect.TargetParameter)
-                .Append(',').Append(effect.TargetParameter2)
+                .Append(',').Append(effect.TargetParameter2).Append(':').Append(effect.TargetSide)
                 .Append(" duration=").Append(effect.DurationType).Append(':').Append(effect.DurationParameter)
                 .Append(" save=").Append(effect.HasSavingThrow).Append(':').Append(effect.SavingThrowAbility)
                 .Append(':').Append(effect.FixedSavingThrowDifficultyClass)
+                .Append(':').Append(effect.DifficultyClassComputation)
+                .Append(':').Append(effect.SavingThrowDifficultyAbility)
                 .Append(" forms=");
 
             foreach (var form in effect.EffectForms)
             {
-                text.Append('[').Append(form.FormType);
+                text.Append('[').Append(form.FormType).Append(form.HasSavingThrow ? " save" : string.Empty);
 
                 // ReSharper disable once SwitchStatementMissingSomeEnumCasesNoDefault
                 switch (form.FormType)
@@ -242,6 +245,14 @@ internal static class ObjectIdDiagnosticsContext
                     case EffectForm.EffectFormType.Condition when form.ConditionForm != null:
                         text.Append(' ').Append(form.ConditionForm.ConditionDefinition?.Name);
                         break;
+                    case EffectForm.EffectFormType.TemporaryHitPoints when form.TemporaryHitPointsForm != null:
+                        text.Append(' ').Append(form.TemporaryHitPointsForm.BonusHitPoints);
+                        break;
+                    case EffectForm.EffectFormType.Summon when form.SummonForm != null:
+                        text.Append(' ').Append(form.SummonForm.monsterDefinitionName).Append(' ')
+                            .Append(form.SummonForm.effectProxyDefinitionName).Append(' ')
+                            .Append(form.SummonForm.number);
+                        break;
                 }
 
                 text.Append(']');
@@ -255,16 +266,22 @@ internal static class ObjectIdDiagnosticsContext
         }
     }
 
-    // a live effect's modified description was worked out. Goes in the ring to compare computers, but not the log.
+    // A live effect's modified description was worked out. Goes in the ring to compare computers, but not the log.
+    // Reads the power's save DC field directly: some modifiers set it, and the rules read it for this use.
     internal static void EffectWorkedOut(RulesetCharacter caster, BaseDefinition definition, RulesetEffect effect,
-        string summary)
+        EffectDescription description)
     {
         _effectsWorkedOut++;
-        Add("effect", Counter, effect?.Guid ?? 0, caster, false, $"{definition?.Name}: {summary}");
+
+        var saveDc = effect is RulesetEffectPower power ? $" powerSaveDC={power.usablePower?.saveDC}" : string.Empty;
+
+        Add("effect", Counter, effect?.Guid ?? 0, caster, false,
+            $"{definition?.Name}: {SummarizeEffect(description)}{saveDc}");
     }
 
-    // A kept result no longer matches what the modifiers give now: a stale effect. The player's game still uses the kept
-    // one, and that use can be wrong. Each kind of change is reported once per effect (see PowerBundle), and the totals
+    // The modifiers would now give something other than when the effect's result was kept: it's out of date, though an
+    // effect may be meant to keep what it started with. The game still uses the kept result. Each kind of change is
+    // reported once per effect (see PowerBundle), and the totals
     // are capped so a repeating case can't push allocation records out of the ring or fill the log.
     internal static void EffectStale(RulesetCharacter caster, BaseDefinition definition, RulesetEffect effect,
         string kept, string now)
