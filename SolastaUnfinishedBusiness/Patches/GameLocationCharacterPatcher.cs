@@ -740,32 +740,61 @@ public static class GameLocationCharacterPatcher
     }
 
     //PATCH: supports RaceLightSensitivityApplyOutdoorsOnly
+    //PATCH: changes only what differs, so a check that changes nothing uses no object ID (object-ID desyncs)
+    // The game's version, and the mod's copy of it, removed the character's light conditions and effects and made new ones
+    // on every call, even when nothing had changed. Each new condition takes a new object ID, and IDs are never given back,
+    // so one computer calling this more often than another shifted all its later IDs. RefreshAll calls this through
+    // GameLocationCharacter.CharacterRefreshed, so every one-sided refresh of such a hero used an ID.
+    // Now it works out what the character should have, compares that with what it has, and touches only the difference.
+    // Computers that see the same lighting changes make the same changes, however many times each one checks. This covers
+    // every light affinity (the game's and the mod's), not only the races the mod's setting is about.
     [HarmonyPatch(typeof(GameLocationCharacter), nameof(GameLocationCharacter.CheckLightingAffinityEffects))]
     [SuppressMessage("Minor Code Smell", "S101:Types should be named in PascalCase", Justification = "Patch")]
     [UsedImplicitly]
     public static class CheckLightingAffinityEffects_Patch
     {
+        // Characters whose conditions and effects are being changed right now. Adding or removing a condition runs
+        // handlers that could call this again and see a half-finished change; such a call does nothing. The RefreshAll at
+        // the end is outside this on purpose: the check it causes finds nothing left to do.
+        private static readonly HashSet<GameLocationCharacter> Updating = [];
+
         [UsedImplicitly]
         public static bool Prefix(GameLocationCharacter __instance)
         {
-            var rulesetCharacter = __instance.RulesetCharacter;
-
-            rulesetCharacter.TryGetFirstConditionOfCategory(AttributeDefinitions.TagLightSensitivity,
-                out var activeCondition);
-            rulesetCharacter.RemoveAllConditionsOfCategory(AttributeDefinitions.TagLightSensitivity, false);
-
-            for (var index = __instance.affectingLightEffects.Count - 1; index >= 0; --index)
+            if (!Updating.Add(__instance))
             {
-                __instance.affectingLightEffects[index].Terminate(false);
+                return false;
             }
 
-            __instance.affectingLightEffects.Clear();
+            bool conditionsChanged;
 
-            var affinityFeatures = rulesetCharacter.GetLightAffinityFeatures();
+            try
+            {
+                conditionsChanged = Update(__instance);
+            }
+            finally
+            {
+                Updating.Remove(__instance);
+            }
 
-            RulesetCondition newCondition = null;
+            // as before, only a change of conditions refreshes the character, not a change of effects alone
+            if (conditionsChanged)
+            {
+                __instance.RulesetCharacter.RefreshAll();
+            }
 
-            foreach (var lightingEffectAndConditionList in affinityFeatures
+            return false;
+        }
+
+        private static bool Update(GameLocationCharacter __instance)
+        {
+            var rulesetCharacter = __instance.RulesetCharacter;
+            var wantedConditions = new List<ConditionDefinition>();
+            var wantedEffects = new List<EnvironmentEffectDefinition>();
+
+            // read fully before changing anything: GetLightAffinityFeatures returns a list the game reuses for other
+            // feature queries, which the handlers of a condition change could run
+            foreach (var lightingEffectAndConditionList in rulesetCharacter.GetLightAffinityFeatures()
                          .Select(featureDefinition =>
                              (featureDefinition as ILightingAffinityProvider)?.LightingEffectAndConditionList)
                          .Where(lightingEffectAndConditionList => lightingEffectAndConditionList != null))
@@ -804,45 +833,116 @@ public static class GameLocationCharacterPatcher
 
                     if (effectAndCondition.condition)
                     {
-                        newCondition = RulesetCondition.CreateActiveCondition(
-                            rulesetCharacter.Guid,
-                            effectAndCondition.condition,
-                            DurationType.Irrelevant,
-                            0,
-                            TurnOccurenceType.StartOfTurn,
-                            __instance.Guid,
-                            rulesetCharacter.CurrentFaction.Name);
-
-                        rulesetCharacter.AddConditionOfCategory(
-                            AttributeDefinitions.TagLightSensitivity, newCondition, false);
+                        wantedConditions.Add(effectAndCondition.condition);
                     }
 
                     if (effectAndCondition.effect != null)
                     {
-                        var implementationService =
-                            ServiceRepository.GetService<IRulesetImplementationService>();
-
-                        __instance.affectingLightEffects.Add(implementationService
-                            .InstantiateEffectEnvironment(
-                                rulesetCharacter, effectAndCondition.effect, -1, 0, false, new BoxInt(),
-                                new int3(), string.Empty, false));
+                        wantedEffects.Add(effectAndCondition.effect);
                     }
 
                     break;
                 }
             }
 
-            if ((activeCondition == null || (newCondition != null &&
-                                             newCondition.ConditionDefinition.Name ==
-                                             activeCondition.ConditionDefinition.Name)) &&
-                (activeCondition != null || newCondition == null))
+            // start with everything the character has as surplus, then take off what's still wanted
+            var surplusConditions = rulesetCharacter.ConditionsByCategory.TryGetValue(
+                AttributeDefinitions.TagLightSensitivity, out var liveConditions)
+                ? new List<RulesetCondition>(liveConditions)
+                : [];
+            var conditionsToAdd = new List<ConditionDefinition>();
+            var satisfiedConditions = new List<ConditionDefinition>();
+
+            foreach (var wanted in wantedConditions)
             {
+                var index = surplusConditions.FindIndex(x => x.ConditionDefinition == wanted);
+
+                if (index >= 0)
+                {
+                    surplusConditions.RemoveAt(index);
+                    satisfiedConditions.Add(wanted);
+                }
+                // AddConditionOfCategory drops a second copy of a condition that doesn't allow several, so two features
+                // giving the same one mean one on the character. Asking for two would never match and would keep making
+                // a new one.
+                else if (wanted.AllowMultipleInstances || !satisfiedConditions.Contains(wanted))
+                {
+                    conditionsToAdd.Add(wanted);
+                    satisfiedConditions.Add(wanted);
+                }
+            }
+
+            // an effect that has already ended counts as gone and is replaced, as the old code's rebuild did
+            var surplusEffects = new List<RulesetEffect>(__instance.affectingLightEffects);
+            var effectsToAdd = new List<EnvironmentEffectDefinition>();
+
+            foreach (var wanted in wantedEffects)
+            {
+                var index = surplusEffects.FindIndex(x =>
+                    x is RulesetEffectEnvironment { Terminated: false } effect &&
+                    effect.EnvironmentEffectDefinition == wanted);
+
+                if (index >= 0)
+                {
+                    surplusEffects.RemoveAt(index);
+                }
+                else
+                {
+                    effectsToAdd.Add(wanted);
+                }
+            }
+
+            if (surplusConditions.Count == 0 && conditionsToAdd.Count == 0 &&
+                surplusEffects.Count == 0 && effectsToAdd.Count == 0)
+            {
+                ObjectIdDiagnosticsContext.LightingUnchanged();
+
                 return false;
             }
 
-            rulesetCharacter.RefreshAll();
+            ObjectIdDiagnosticsContext.LightingChanged(
+                rulesetCharacter,
+                __instance.lightingState,
+                surplusConditions.Select(x => x.ConditionDefinition?.Name),
+                conditionsToAdd.Select(x => x.Name),
+                surplusEffects.Count,
+                effectsToAdd.Count);
 
-            return false;
+            foreach (var condition in surplusConditions)
+            {
+                rulesetCharacter.RemoveConditionOfCategory(
+                    AttributeDefinitions.TagLightSensitivity, condition, false, true, false);
+            }
+
+            foreach (var effect in surplusEffects)
+            {
+                effect.Terminate(false);
+                __instance.affectingLightEffects.Remove(effect);
+            }
+
+            foreach (var condition in conditionsToAdd)
+            {
+                rulesetCharacter.AddConditionOfCategory(
+                    AttributeDefinitions.TagLightSensitivity,
+                    RulesetCondition.CreateActiveCondition(
+                        rulesetCharacter.Guid,
+                        condition,
+                        DurationType.Irrelevant,
+                        0,
+                        TurnOccurenceType.StartOfTurn,
+                        __instance.Guid,
+                        rulesetCharacter.CurrentFaction.Name),
+                    false);
+            }
+
+            foreach (var effect in effectsToAdd)
+            {
+                __instance.affectingLightEffects.Add(ServiceRepository.GetService<IRulesetImplementationService>()
+                    .InstantiateEffectEnvironment(
+                        rulesetCharacter, effect, -1, 0, false, new BoxInt(), new int3(), string.Empty, false));
+            }
+
+            return surplusConditions.Count > 0 || conditionsToAdd.Count > 0;
         }
     }
 }

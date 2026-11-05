@@ -581,12 +581,91 @@ public static class RulesetCharacterPatcher
     [UsedImplicitly]
     public static class SerializeElements_Patch
     {
+        // Handed to the game's two subscription loops when writing: they then have nothing to subscribe to. Never added
+        // to: a foreach only reads them.
+        private static readonly List<RulesetEffectSpell> NoSpells = [];
+        private static readonly List<RulesetEffectPower> NoPowers = [];
+
         [UsedImplicitly]
         public static void Postfix(RulesetCharacter __instance, IElementsSerializer serializer)
         {
             //PATCH: allow marking  some powers to read their uses attribute on load even if uses determination is not AbilityBonusPlusFixed
             //used for BG3 mode toggle in Abjuration wizard's Arcane Ward
             ForceUsesAttributeDeserialization.Process(__instance, serializer);
+
+            // development builds only: lets a test read how many "effect ended" handlers each active effect has
+            if (serializer.Mode == Serializer.SerializationMode.Write)
+            {
+                ObjectIdDiagnosticsContext.RecordEffectHandlers(__instance);
+            }
+        }
+
+        //PATCH: writing a save no longer adds "effect ended" handlers (object-ID desyncs, cause 1)
+        // The game ends this method with one loop per list that adds ActiveSpellTerminatedSelf or
+        // ActivePowerTerminatedSelf to every active effect. It's meant for loading, where the effects are new objects
+        // with no handlers, but it sits outside the method's Mode checks, so it also runs on every write. Nothing removes
+        // the extras: an effect that ends runs its handler 1 + (saves since it started) times, and each run calls
+        // RefreshAll. A quick save writes on one computer only, so that computer then refreshes the hero more often and,
+        // through the light condition, uses more object IDs than the others.
+        // Effects that start in play subscribe in AddActiveSpell/AddActivePower, and reading is unchanged, so every effect
+        // still has exactly one handler. Saves hold no handlers, so their contents don't change.
+        // Only the two list reads change, so the rest of the method (and any other patch on it) stays as it is. If the
+        // game's code doesn't look as expected nothing is changed: the old behaviour stays, and the log says so.
+        [UsedImplicitly]
+        public static IEnumerable<CodeInstruction> Transpiler([NotNull] IEnumerable<CodeInstruction> instructions)
+        {
+            var code = instructions.ToList();
+            var spellsGetter =
+                AccessTools.PropertyGetter(typeof(RulesetCharacter), nameof(RulesetCharacter.SpellsCastByMe));
+            var powersGetter =
+                AccessTools.PropertyGetter(typeof(RulesetCharacter), nameof(RulesetCharacter.PowersUsedByMe));
+            var spellHandler = AccessTools.Method(typeof(RulesetCharacter), "ActiveSpellTerminatedSelf");
+            var powerHandler = AccessTools.Method(typeof(RulesetCharacter), "ActivePowerTerminatedSelf");
+            var spellRead = code.FindIndex(x => x.Calls(spellsGetter));
+            var powerRead = code.FindIndex(x => x.Calls(powersGetter));
+            var spellLoop = code.FindIndex(x => x.opcode == OpCodes.Ldftn && Equals(x.operand, spellHandler));
+            var powerLoop = code.FindIndex(x => x.opcode == OpCodes.Ldftn && Equals(x.operand, powerHandler));
+
+            // each list is read through its property exactly once, right before its own loop
+            var expected =
+                spellRead >= 0 && code.Count(x => x.Calls(spellsGetter)) == 1 &&
+                powerRead >= 0 && code.Count(x => x.Calls(powersGetter)) == 1 &&
+                spellRead < spellLoop && spellLoop < powerRead && powerRead < powerLoop;
+
+            if (!expected)
+            {
+                ObjectIdDiagnosticsContext.SaveHandlerPatchResult(false,
+                    $"unexpected code: reads {spellRead}, {powerRead}; loops {spellLoop}, {powerLoop}");
+
+                return code;
+            }
+
+            var spellsToSubscribe = new Func<RulesetCharacter, IElementsSerializer, List<RulesetEffectSpell>>(
+                SpellsToSubscribe).Method;
+            var powersToSubscribe = new Func<RulesetCharacter, IElementsSerializer, List<RulesetEffectPower>>(
+                PowersToSubscribe).Method;
+
+            // later index first, so the earlier one stays valid. The character is already on the stack.
+            code[powerRead] = new CodeInstruction(OpCodes.Call, powersToSubscribe);
+            code.Insert(powerRead, new CodeInstruction(OpCodes.Ldarg_1));
+            code[spellRead] = new CodeInstruction(OpCodes.Call, spellsToSubscribe);
+            code.Insert(spellRead, new CodeInstruction(OpCodes.Ldarg_1));
+
+            ObjectIdDiagnosticsContext.SaveHandlerPatchResult(true, "applied");
+
+            return code;
+        }
+
+        private static List<RulesetEffectSpell> SpellsToSubscribe(
+            RulesetCharacter character, IElementsSerializer serializer)
+        {
+            return serializer.Mode == Serializer.SerializationMode.Write ? NoSpells : character.SpellsCastByMe;
+        }
+
+        private static List<RulesetEffectPower> PowersToSubscribe(
+            RulesetCharacter character, IElementsSerializer serializer)
+        {
+            return serializer.Mode == Serializer.SerializationMode.Write ? NoPowers : character.PowersUsedByMe;
         }
     }
 

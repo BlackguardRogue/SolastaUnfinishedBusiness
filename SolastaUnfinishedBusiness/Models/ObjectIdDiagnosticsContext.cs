@@ -51,6 +51,11 @@ internal static class ObjectIdDiagnosticsContext
     private static int _registerDepth;
     private static float _lastDesyncDump = -1000f;
 
+    // Written to each file's header, so they can't push allocation records out of the ring. Counted since the launch.
+    private static string _saveHandlerPatch = "not reached";
+    private static long _lightingUnchanged;
+    private static long _lightingPreviewSkipped;
+
     // Register (via the patches) records whatever it allocated: in the prefix, the counter before; in the postfix, the
     // result. Nested registrations (an object registering its parts) each get their own record.
     [ThreadStatic] private static Stack<ulong> _countersBefore;
@@ -121,6 +126,70 @@ internal static class ObjectIdDiagnosticsContext
         {
             Marker($"counter {mode}");
         }
+    }
+
+    // Whether the patch stopping saves adding "effect ended" handlers really changed the game's code. It runs while the
+    // mod loads, before any room exists, so it goes to the mod's log now and into each record file's header.
+    internal static void SaveHandlerPatchResult(bool applied, string detail)
+    {
+        _saveHandlerPatch = applied ? "applied" : $"NOT applied ({detail})";
+
+        if (applied)
+        {
+            Main.Info("[ObjectIds] save handler patch applied");
+        }
+        else
+        {
+            Main.Error($"[ObjectIds] save handler patch NOT applied: {detail}");
+        }
+    }
+
+    // a light check that found nothing to change, which before would have used an ID: only counted, as there are many
+    internal static void LightingUnchanged()
+    {
+        _lightingUnchanged++;
+    }
+
+    // a preview of the light that no longer touches the character: only counted, as there are many
+    internal static void LightingPreviewSkipped()
+    {
+        _lightingPreviewSkipped++;
+    }
+
+    // a real change of a character's light conditions or effects. These should be the same on every computer, in order.
+    internal static void LightingChanged(RulesetCharacter character, LocationDefinitions.LightingState state,
+        IEnumerable<string> removed, IEnumerable<string> added, int effectsRemoved, int effectsAdded)
+    {
+        Add("lighting", Counter, character?.Guid ?? 0, character, false,
+            $"state={state} removed=[{string.Join(",", removed)}] added=[{string.Join(",", added)}] " +
+            $"effects -{effectsRemoved} +{effectsAdded}");
+    }
+
+    // Development builds only (a test's direct count, too costly to leave in players' builds). After a save: how many
+    // handlers each active effect has. Every number should be 1, however many saves were made.
+    [Conditional("FB_DEVELOPMENT")]
+    internal static void RecordEffectHandlers(RulesetCharacter character)
+    {
+        if (character.SpellsCastByMe.Count + character.PowersUsedByMe.Count == 0)
+        {
+            return;
+        }
+
+        var spells = character.SpellsCastByMe.Select(x => x.TerminatedSelf?.GetInvocationList().Length ?? 0);
+        var powers = character.PowersUsedByMe.Select(x => x.TerminatedSelf?.GetInvocationList().Length ?? 0);
+
+        Add("handlers", Counter, character.Guid, character, false,
+            $"after save: spells=[{string.Join(",", spells)}] powers=[{string.Join(",", powers)}]");
+    }
+
+    // Development builds only. How many handlers a character has after a panel binds or unbinds: these should go back
+    // down on unbind, including for a hero downed while bound.
+    [Conditional("FB_DEVELOPMENT")]
+    internal static void RecordPanelHandlers(RulesetCharacter character, string when)
+    {
+        Add("handlers", Counter, character.Guid, character, false,
+            $"{when}: powerActivated={character.PowerActivated?.GetInvocationList().Length ?? 0} " +
+            $"refreshed={character.CharacterRefreshed?.GetInvocationList().Length ?? 0}");
     }
 
     internal static void CounterReset()
@@ -327,6 +396,8 @@ internal static class ObjectIdDiagnosticsContext
             text.AppendLine($"# player={PhotonNetwork.LocalPlayer?.NickName} actor=" +
                             $"{PhotonNetwork.LocalPlayer?.ActorNumber ?? 0} role={role} " +
                             $"location={locationName} counter={Counter} tick={Tick}");
+            text.AppendLine($"# saveHandlerPatch={_saveHandlerPatch} lightingUnchanged={_lightingUnchanged} " +
+                            $"lightingPreviewSkipped={_lightingPreviewSkipped}");
             text.AppendLine($"# records={records.Count} dropped={Math.Max(0, dropped)} " +
                             "(dropped > 0: the window outgrew the ring; the first records are missing)");
             text.AppendLine("# seq\ttick\tframe\tkind\tcounterBefore\tcounterAfter\tguid\ttype\tname\tnote\tstack");

@@ -1,3 +1,9 @@
+Unreleased:
+- Multiplayer, the desyncs where computers number new game objects differently: fixed the causes found so far, so the numbers no longer drift apart in these cases. All players need this version and should start from the same save.
+- Saving no longer makes a spell or power run its "effect ended" step extra times when it ends. Each save added one more run (a game bug), and a quick save happens on one computer only.
+- Using a power no longer recalculates the hero on the computer showing that hero's portrait panel. The panel just redraws.
+- Light conditions, such as Light Sensitivity on Dark Kobolds, Dark Elves and Gray Dwarves, are now changed only when they need to change, instead of being removed and made again on every check. Hovering over a location or an enemy no longer touches them.
+
 1.12.1:
 - Multiplayer, temporary diagnostics for the desyncs where computers number new game objects differently: in a multiplayer room, each computer keeps a record of the objects it creates and saves it to FinishingBusinessDiagnostics in the game's data folder (beside Player.log) after each map change or load, and when the mod detects a desync. Comparing two players' files shows which object only one computer made. It changes nothing in the game and will be removed once the cause is found
 - Tested in game (single player, in a development build, where the records also run outside a multiplayer room): loading a save writes the record file with no errors, and two loads of the same save record the same objects in the same order. Not tested: a real multiplayer room, including the files written at a desync, and the records of characters being revealed
