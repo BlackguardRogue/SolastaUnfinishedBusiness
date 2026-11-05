@@ -630,7 +630,10 @@ public static class RulesetCharacterPatcher
             var expected =
                 spellRead >= 0 && code.Count(x => x.Calls(spellsGetter)) == 1 &&
                 powerRead >= 0 && code.Count(x => x.Calls(powersGetter)) == 1 &&
-                spellRead < spellLoop && spellLoop < powerRead && powerRead < powerLoop;
+                spellRead < spellLoop && spellLoop < powerRead && powerRead < powerLoop &&
+                // nothing jumps to these reads, so nothing can skip the argument inserted before them
+                code[spellRead].labels.Count == 0 && code[spellRead].blocks.Count == 0 &&
+                code[powerRead].labels.Count == 0 && code[powerRead].blocks.Count == 0;
 
             if (!expected)
             {

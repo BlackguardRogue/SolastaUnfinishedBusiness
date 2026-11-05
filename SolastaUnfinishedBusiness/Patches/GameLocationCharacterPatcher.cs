@@ -758,6 +758,12 @@ public static class GameLocationCharacterPatcher
         // the end is outside this on purpose: the check it causes finds nothing left to do.
         private static readonly HashSet<GameLocationCharacter> Updating = [];
 
+        // Characters being refreshed by the RefreshAll below. If a handler or a forced category takes a wanted condition
+        // away again, the check that refresh causes adds it again, and refreshing again would never end. No current light
+        // condition does this (Codex's review); the old code would have looped too. Such a nested check still corrects
+        // the condition but doesn't start another refresh.
+        private static readonly HashSet<GameLocationCharacter> Refreshing = [];
+
         [UsedImplicitly]
         public static bool Prefix(GameLocationCharacter __instance)
         {
@@ -778,9 +784,18 @@ public static class GameLocationCharacterPatcher
             }
 
             // as before, only a change of conditions refreshes the character, not a change of effects alone
-            if (conditionsChanged)
+            if (!conditionsChanged || !Refreshing.Add(__instance))
+            {
+                return false;
+            }
+
+            try
             {
                 __instance.RulesetCharacter.RefreshAll();
+            }
+            finally
+            {
+                Refreshing.Remove(__instance);
             }
 
             return false;

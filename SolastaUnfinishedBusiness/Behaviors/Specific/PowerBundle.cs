@@ -18,7 +18,28 @@ internal static class PowerBundle
     private static readonly Dictionary<FeatureDefinitionPower, SpellDefinition> Powers2Spells = [];
     private static readonly Dictionary<FeatureDefinitionPower, Bundle> Bundles = [];
 
-    private static readonly Dictionary<ulong, Dictionary<string, EffectDescription>> SpellEffectCache = [];
+    // Modified effects are kept per live effect, not per power or spell (object-ID desyncs review).
+    // This cache used to be keyed by caster, definition and metamagic only, and only a RefreshAll emptied it. That had
+    // three faults:
+    // - later uses of a power got the first use's result, although modifiers read things that change between uses: the
+    //   points spent on this use, a toggle such as College of Audacity's Masterful Whirl, remaining movement;
+    // - a tooltip filled it (with no live effect, so modifiers skipped what depends on one), and the next real use on
+    //   that computer got the tooltip's result. Tooltips run on one computer only, so computers could disagree on rules;
+    // - how long a result lasted depended on which computer's panel called RefreshAll.
+    // Each use now makes a new RulesetEffect, so it gets a result worked out for it. The object stays the same for that
+    // effect's life, because code changes a live effect's description and expects the change to last (gambits' RangeType,
+    // the teleport cursor's targeting). RefreshAll still empties a caster's entries, as before.
+    private static readonly Dictionary<ulong, Dictionary<(RulesetEffect, BaseDefinition), LiveEffectEntry>> LiveEffects =
+        [];
+
+    // Tooltips have no live effect. They ask often while drawing, and nothing in the rules reads this, so one frame's
+    // result is reused for that frame only: a tooltip can't go on showing an old value.
+    private static readonly Dictionary<ulong, Dictionary<string, EffectDescription>> GuiEffects = [];
+
+    private static int _guiEffectsFrame = -1;
+
+    // true while the diagnostic below works an effect out again, so that a modifier reading the effect doesn't repeat it
+    private static bool _checkingLiveEffect;
 
     private static Transform _parent;
 
@@ -313,37 +334,10 @@ internal static class PowerBundle
         return key;
     }
 
-    private static EffectDescription GetCachedEffect(
-        RulesetEntity caster,
-        BaseDefinition definition,
-        BaseDefinition metamagic)
-    {
-        if (!SpellEffectCache.TryGetValue(caster.Guid, out var effects))
-        {
-            return null;
-        }
-
-        return effects.TryGetValue(Key(definition, metamagic), out var effect) ? effect : null;
-    }
-
-    private static void CacheEffect(
-        RulesetEntity caster,
-        BaseDefinition definition,
-        BaseDefinition metamagic,
-        EffectDescription effect)
-    {
-        if (!SpellEffectCache.TryGetValue(caster.Guid, out var value))
-        {
-            value = new Dictionary<string, EffectDescription>();
-            SpellEffectCache.Add(caster.Guid, value);
-        }
-
-        value.AddOrReplace(Key(definition, metamagic), effect);
-    }
-
     internal static void ClearSpellEffectCache(RulesetCharacter caster)
     {
-        SpellEffectCache.Remove(caster.Guid);
+        LiveEffects.Remove(caster.Guid);
+        GuiEffects.Remove(caster.Guid);
     }
 
     private static EffectDescription ModifyMagicEffect(
@@ -357,14 +351,110 @@ internal static class PowerBundle
             return original;
         }
 
-        var metamagic = effect is RulesetEffectSpell spell ? spell.MetamagicOption : null;
-        var cached = GetCachedEffect(caster, definition, metamagic);
-
-        if (cached != null)
+        // not tied to a live effect: nothing to keep it for, and a rules question gets today's answer
+        if (effect == null)
         {
-            return cached;
+            return BuildModifiedEffect(original, definition, caster, null, null);
         }
 
+        var metamagic = effect is RulesetEffectSpell spell ? spell.MetamagicOption : null;
+        var key = (effect, metamagic);
+
+        if (!LiveEffects.TryGetValue(caster.Guid, out var entries))
+        {
+            entries = new Dictionary<(RulesetEffect, BaseDefinition), LiveEffectEntry>();
+            LiveEffects.Add(caster.Guid, entries);
+        }
+
+        if (entries.TryGetValue(key, out var entry))
+        {
+            CheckLiveEffect(entry, original, definition, caster, effect, metamagic);
+
+            return entry.Description;
+        }
+
+        var result = BuildModifiedEffect(original, definition, caster, effect, metamagic);
+
+        entry = new LiveEffectEntry { Description = result };
+        entries.Add(key, entry);
+
+        if (ObjectIdDiagnosticsContext.Active)
+        {
+            entry.Summary = ObjectIdDiagnosticsContext.SummarizeEffect(result);
+
+            // an unmodified effect is the definition's own, the same everywhere
+            if (!ReferenceEquals(result, original))
+            {
+                ObjectIdDiagnosticsContext.EffectWorkedOut(caster, definition, effect, entry.Summary);
+            }
+        }
+
+        return result;
+    }
+
+    // Diagnostic only, for "when does a kept result go stale" (user, 2026-11-05): an effect's result is kept for its life,
+    // so a change made during that life, with no RefreshAll, still isn't seen. This works the effect out again, at most
+    // once a frame per effect, and records any difference. It only runs where the object-ID diagnostics run, so it must
+    // never change what the game gets: a computer with diagnostics and one without have to agree. Reworking is safe
+    // because no modifier's GetEffectDescription changes anything but the copy it's given (all 70 were read for this).
+    private static void CheckLiveEffect(
+        LiveEffectEntry entry,
+        EffectDescription original,
+        BaseDefinition definition,
+        RulesetCharacter caster,
+        RulesetEffect effect,
+        BaseDefinition metamagic)
+    {
+        if (!ObjectIdDiagnosticsContext.Active ||
+            _checkingLiveEffect ||
+            effect.Terminated ||
+            entry.LastCheckedFrame == Time.frameCount)
+        {
+            return;
+        }
+
+        entry.LastCheckedFrame = Time.frameCount;
+        _checkingLiveEffect = true;
+
+        try
+        {
+            entry.Summary ??= ObjectIdDiagnosticsContext.SummarizeEffect(entry.Description);
+
+            var fresh = BuildModifiedEffect(original, definition, caster, effect, metamagic);
+
+            // the same object: unmodified both times. Compared with the summary made when it was worked out, so code
+            // changing the live description on purpose (see above) doesn't count as stale.
+            if (ReferenceEquals(fresh, entry.Description))
+            {
+                return;
+            }
+
+            var summary = ObjectIdDiagnosticsContext.SummarizeEffect(fresh);
+
+            if (summary != entry.Summary && summary != entry.ReportedSummary)
+            {
+                entry.ReportedSummary = summary;
+                ObjectIdDiagnosticsContext.EffectStale(caster, definition, effect, entry.Summary, summary);
+            }
+        }
+        catch (Exception e)
+        {
+            // a modifier may not expect to run this late; the diagnostic never interrupts the game
+            ObjectIdDiagnosticsContext.EffectCheckFailed(definition, e);
+        }
+        finally
+        {
+            _checkingLiveEffect = false;
+        }
+    }
+
+    private static EffectDescription BuildModifiedEffect(
+        EffectDescription original,
+        BaseDefinition definition,
+        RulesetCharacter caster,
+        RulesetEffect effect,
+        BaseDefinition metamagic)
+    {
         //collect all valid modifiers from caster
         var result = original;
         var modifiers = new List<IModifyEffectDescription>();
@@ -394,9 +484,15 @@ internal static class PowerBundle
                 (current, f) => f.GetEffectDescription(definition, current, caster, effect));
         }
 
-        CacheEffect(caster, definition, metamagic, result);
-
         return result;
+    }
+
+    private sealed class LiveEffectEntry
+    {
+        internal EffectDescription Description;
+        internal int LastCheckedFrame = -1;
+        internal string ReportedSummary;
+        internal string Summary;
     }
 
     /**Modifies spell/power description for GUI purposes.*/
@@ -404,7 +500,34 @@ internal static class PowerBundle
         EffectDescription original,
         [NotNull] BaseDefinition definition)
     {
-        return ModifyMagicEffect(original, definition, Global.CurrentCharacter, null);
+        var caster = Global.CurrentCharacter;
+
+        if (caster == null)
+        {
+            return original;
+        }
+
+        if (_guiEffectsFrame != Time.frameCount)
+        {
+            _guiEffectsFrame = Time.frameCount;
+            GuiEffects.Clear();
+        }
+
+        if (!GuiEffects.TryGetValue(caster.Guid, out var effects))
+        {
+            effects = new Dictionary<string, EffectDescription>();
+            GuiEffects.Add(caster.Guid, effects);
+        }
+
+        var key = Key(definition, null);
+
+        if (!effects.TryGetValue(key, out var result))
+        {
+            result = BuildModifiedEffect(original, definition, caster, null, null);
+            effects.Add(key, result);
+        }
+
+        return result;
     }
 
     internal static bool ValidatePrerequisites(

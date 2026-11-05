@@ -37,6 +37,7 @@ internal static class ObjectIdDiagnosticsContext
     private const float WindowSeconds = 120f;
     private const int StackFrames = 8;
     private const int MaxFilesPerLaunch = 40;
+    private const int MaxStaleEffectReports = 64;
 
     private static readonly Record[] Ring = new Record[RingSize];
     private static readonly string LaunchStamp = DateTime.Now.ToString("yyyyMMdd-HHmmss");
@@ -55,6 +56,9 @@ internal static class ObjectIdDiagnosticsContext
     private static string _saveHandlerPatch = "not reached";
     private static long _lightingUnchanged;
     private static long _lightingPreviewSkipped;
+    private static long _effectsWorkedOut;
+    private static long _effectsStale;
+    private static long _effectChecksFailed;
 
     // Register (via the patches) records whatever it allocated: in the prefix, the counter before; in the postfix, the
     // result. Nested registrations (an object registering its parts) each get their own record.
@@ -190,6 +194,93 @@ internal static class ObjectIdDiagnosticsContext
         Add("handlers", Counter, character.Guid, character, false,
             $"{when}: powerActivated={character.PowerActivated?.GetInvocationList().Length ?? 0} " +
             $"refreshed={character.CharacterRefreshed?.GetInvocationList().Length ?? 0}");
+    }
+
+    // A short text of what a power's or spell's effect comes to, in the things modifiers change. Two computers' texts for
+    // the same use should be equal; a difference means they'd apply different rules.
+    internal static string SummarizeEffect(EffectDescription effect)
+    {
+        try
+        {
+            var text = new StringBuilder();
+
+            text.Append("range=").Append(effect.RangeType).Append(':').Append(effect.RangeParameter)
+                .Append(" target=").Append(effect.TargetType).Append(':').Append(effect.TargetParameter)
+                .Append(',').Append(effect.TargetParameter2)
+                .Append(" duration=").Append(effect.DurationType).Append(':').Append(effect.DurationParameter)
+                .Append(" save=").Append(effect.HasSavingThrow).Append(':').Append(effect.SavingThrowAbility)
+                .Append(':').Append(effect.FixedSavingThrowDifficultyClass)
+                .Append(" forms=");
+
+            foreach (var form in effect.EffectForms)
+            {
+                text.Append('[').Append(form.FormType);
+
+                // ReSharper disable once SwitchStatementMissingSomeEnumCasesNoDefault
+                switch (form.FormType)
+                {
+                    case EffectForm.EffectFormType.Damage when form.DamageForm != null:
+                        var damage = form.DamageForm;
+                        text.Append(' ').Append(damage.DamageType).Append(' ').Append(damage.DiceNumber)
+                            .Append(damage.DieType).Append('+').Append(damage.BonusDamage)
+                            .Append(damage.OverrideWithBardicInspirationDie ? " inspiration" : string.Empty);
+                        break;
+                    case EffectForm.EffectFormType.Healing when form.HealingForm != null:
+                        var healing = form.HealingForm;
+                        text.Append(' ').Append(healing.DiceNumber).Append(healing.DieType).Append('+')
+                            .Append(healing.BonusHealing);
+                        break;
+                    case EffectForm.EffectFormType.Condition when form.ConditionForm != null:
+                        text.Append(' ').Append(form.ConditionForm.ConditionDefinition?.Name);
+                        break;
+                }
+
+                text.Append(']');
+            }
+
+            return text.ToString();
+        }
+        catch (Exception e)
+        {
+            return $"(no summary: {e.Message})";
+        }
+    }
+
+    // a live effect's modified description was worked out. Goes in the ring to compare computers, but not the log.
+    internal static void EffectWorkedOut(RulesetCharacter caster, BaseDefinition definition, RulesetEffect effect,
+        string summary)
+    {
+        _effectsWorkedOut++;
+        Add("effect", Counter, effect?.Guid ?? 0, caster, false, $"{definition?.Name}: {summary}");
+    }
+
+    // A kept result no longer matches what the modifiers give now: a stale effect. The player's game still uses the kept
+    // one, and that use can be wrong. Each kind of change is reported once per effect (see PowerBundle), and the totals
+    // are capped so a repeating case can't push allocation records out of the ring or fill the log.
+    internal static void EffectStale(RulesetCharacter caster, BaseDefinition definition, RulesetEffect effect,
+        string kept, string now)
+    {
+        _effectsStale++;
+
+        if (_effectsStale > MaxStaleEffectReports)
+        {
+            return;
+        }
+
+        var note = $"{definition?.Name} on {caster?.Name}: kept [{kept}] but now [{now}]";
+
+        Add("effect-stale", Counter, effect?.Guid ?? 0, caster, true, note);
+        Main.Info($"[EffectCache] stale at tick {Tick}, frame {Time.frameCount}: {note}");
+    }
+
+    internal static void EffectCheckFailed(BaseDefinition definition, Exception e)
+    {
+        _effectChecksFailed++;
+
+        if (_effectChecksFailed <= MaxStaleEffectReports)
+        {
+            Main.Info($"[EffectCache] couldn't check {definition?.Name}: {e.GetType().Name}: {e.Message}");
+        }
     }
 
     internal static void CounterReset()
@@ -397,7 +488,9 @@ internal static class ObjectIdDiagnosticsContext
                             $"{PhotonNetwork.LocalPlayer?.ActorNumber ?? 0} role={role} " +
                             $"location={locationName} counter={Counter} tick={Tick}");
             text.AppendLine($"# saveHandlerPatch={_saveHandlerPatch} lightingUnchanged={_lightingUnchanged} " +
-                            $"lightingPreviewSkipped={_lightingPreviewSkipped}");
+                            $"lightingPreviewSkipped={_lightingPreviewSkipped} " +
+                            $"effectsWorkedOut={_effectsWorkedOut} effectsStale={_effectsStale} " +
+                            $"effectChecksFailed={_effectChecksFailed}");
             text.AppendLine($"# records={records.Count} dropped={Math.Max(0, dropped)} " +
                             "(dropped > 0: the window outgrew the ring; the first records are missing)");
             text.AppendLine("# seq\ttick\tframe\tkind\tcounterBefore\tcounterAfter\tguid\ttype\tname\tnote\tstack");
