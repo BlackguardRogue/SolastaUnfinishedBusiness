@@ -194,6 +194,7 @@ public class Settings : UnityModManager.ModSettings
     public bool MultiplayerEnableDesyncDetection { get; set; } = true;
     public bool MultiplayerEnableStateFingerprint { get; set; } = true;
     public bool MultiplayerOfferHostResync { get; set; } = true;
+    public bool MultiplayerAutoResyncAfterMapLoad { get; set; }
     public bool MultiplayerEnableTickBufferTuning { get; set; } = true;
     public bool MultiplayerFlushCommandsImmediately { get; set; } = true;
     public bool MultiplayerPingBasedTickBuffer { get; set; } = true;

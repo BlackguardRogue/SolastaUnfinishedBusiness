@@ -746,6 +746,7 @@ UI/&PerceptionCheckPending=Wahrnehmungswurf läuft…
 Message/&MultiplayerDesyncExtra={0} existiert nur auf dem anderen Computer
 Message/&MultiplayerDesyncField={0}: {1} (Host {2}, anderer {3})
 Message/&MultiplayerDesyncHitPoints=TP
+Message/&MultiplayerDesyncIdResyncLine=Die Objektnummerierung unterscheidet sich zwischen den Computern.
 Message/&MultiplayerDesyncHostResyncing=Der Host synchronisiert das Spiel neu: Es wird gleich neu geladen.
 Message/&MultiplayerDesyncMissing={0} existiert nur beim Host
 Message/&MultiplayerDesyncPosition=Position

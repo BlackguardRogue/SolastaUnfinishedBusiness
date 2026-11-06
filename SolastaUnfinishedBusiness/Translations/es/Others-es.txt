@@ -746,6 +746,7 @@ UI/&PerceptionCheckPending=Tirada de Percepción en curso…
 Message/&MultiplayerDesyncExtra={0} solo existe en el otro ordenador
 Message/&MultiplayerDesyncField={0}: {1} (anfitrión {2}, otro {3})
 Message/&MultiplayerDesyncHitPoints=PG
+Message/&MultiplayerDesyncIdResyncLine=La numeración de objetos difiere entre los ordenadores.
 Message/&MultiplayerDesyncHostResyncing=El anfitrión está resincronizando la partida: se recargará en un momento.
 Message/&MultiplayerDesyncMissing={0} solo existe en el anfitrión
 Message/&MultiplayerDesyncPosition=posición

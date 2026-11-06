@@ -522,6 +522,7 @@ ModUi/&InfusionsOnlyOnNonMagicalItems=Инфузии изобретателя м
 ModUi/&MultiplayerAllowAlliesToPassThroughInCombat=Разрешить союзникам проходить друг сквозь друга в бою, пока оба двигаются
 ModUi/&MultiplayerAllowCharactersToOverlapOutOfCombat=Разрешить персонажам вне боя занимать одни клетки, чтобы отряд проходил лазы и двери вместе
 ModUi/&MultiplayerAllowPlayersToStartRests=Разрешить любому игроку начинать короткий или долгий отдых с экрана отдыха или у костра, а не только хосту <i><color=#F0DAA0>[хост по-прежнему применяет отдых для всех; отдых, начатый сюжетом, следует правилам игры]</color></i>
+ModUi/&MultiplayerAutoResyncAfterMapLoad=Автоматически синхронизировать после каждой смены карты <i><color=#F0DAA0>[когда новая карта готова, хост сохраняет игру и все загружаются из этого сохранения, поэтому при каждой смене карты будет второй экран загрузки]</color></i>
 ModUi/&MultiplayerVotePreviewTitle=<color=#F0DAA0>Предпросмотр голосования:</color>
 ModUi/&MultiplayerVotePreviewHelp=<i><color=#F0DAA0>Показывает окна голосования за путешествие и одобрение с вымышленными игроками, которые отвечают по очереди, чтобы проверить их вид. Только в одиночной игре, на локации; ничего не отправляется. Закройте это окно, чтобы увидеть его.</color></i>
 ModUi/&MultiplayerVotePreviewPlayers=Вымышленные игроки
@@ -576,7 +577,7 @@ ModUi/&MultiplayerNoFps=FPS: не сообщён
 ModUi/&MultiplayerNoHost=Не в сетевой комнате.
 ModUi/&MultiplayerNoPing=Пинг: не сообщён
 ModUi/&MultiplayerNoVersion=версия не сообщена
-ModUi/&MultiplayerOfferHostResync=Предлагать хосту пересинхронизацию в один клик, когда рассинхронизацию нельзя исправить <i><color=#F0DAA0>[хост быстро сохраняется и перезагружается; клиенты попадают в то же сохранение]</color></i>
+ModUi/&MultiplayerOfferHostResync=Предлагать хосту синхронизацию в один клик при обнаружении рассинхронизации <i><color=#F0DAA0>[хост сохраняет игру и загружает её; клиенты переходят в то же сохранение]</color></i>
 ModUi/&MultiplayerPing=Пинг: {0} мс
 ModUi/&MultiplayerPingBasedTickBuffer=Подбирать задержку действий по пингу каждого игрока <i><color=#F0DAA0>[повышает её до того, как кто-то начнёт ждать при медленном соединении, и позволяет быстрым группам опускаться до минимума ниже]</color></i>
 ModUi/&MultiplayerPingVisibleToHostOnly=Только хост видит пинг игроков и задержку действий <i><color=#F0DAA0>[иначе каждый игрок видит их на этой вкладке и на плашках игроков]</color></i>

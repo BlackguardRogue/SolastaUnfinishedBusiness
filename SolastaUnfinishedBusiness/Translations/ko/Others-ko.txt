@@ -746,6 +746,7 @@ UI/&PerceptionCheckPending=지각 판정 중…
 Message/&MultiplayerDesyncExtra={0}은(는) 다른 컴퓨터에만 존재합니다
 Message/&MultiplayerDesyncField={0}: {1} (호스트 {2}, 상대 {3})
 Message/&MultiplayerDesyncHitPoints=HP
+Message/&MultiplayerDesyncIdResyncLine=컴퓨터 간 오브젝트 번호가 다릅니다.
 Message/&MultiplayerDesyncHostResyncing=호스트가 게임을 재동기화하고 있습니다: 곧 다시 불러옵니다.
 Message/&MultiplayerDesyncMissing={0}은(는) 호스트에만 존재합니다
 Message/&MultiplayerDesyncPosition=위치

@@ -687,6 +687,7 @@ UI/&RecipeFilterUsableDevices=Usable Devices
 UI/&RecipeFilterWeapons=Weapons
 Message/&MultiplayerDesyncDetected=Multiplayer desync detected. Save and reload the game on the host to resynchronize.
 Message/&MultiplayerDesyncDetails=Desync with {0}:\n{1}
+Message/&MultiplayerDesyncIdResyncLine=Object numbering differs between computers.
 Message/&MultiplayerDesyncHostResyncing=The host is resyncing the game: it will reload in a moment.
 Message/&MultiplayerDesyncResyncTitle=Multiplayer Desync
 Message/&MultiplayerDesyncResyncDescription=The game differs between you and {0}:\n\n{1}\n\nResync now? The game is saved to a new recovery save and reloaded from it; every player is brought back into it. If the save can't be made, nothing is loaded.

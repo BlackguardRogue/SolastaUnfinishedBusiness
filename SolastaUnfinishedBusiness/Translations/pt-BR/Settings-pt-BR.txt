@@ -522,6 +522,7 @@ ModUi/&InfusionsOnlyOnNonMagicalItems=As infusões do artífice só podem ser co
 ModUi/&MultiplayerAllowAlliesToPassThroughInCombat=Permitir que aliados atravessem uns aos outros em combate enquanto ambos se movem
 ModUi/&MultiplayerAllowCharactersToOverlapOutOfCombat=Permitir que personagens dividam casas fora de combate, para o grupo passar junto por passagens estreitas e portas
 ModUi/&MultiplayerAllowPlayersToStartRests=Permitir que qualquer jogador comece um descanso curto ou longo na tela de descanso ou numa fogueira, não só o anfitrião <i><color=#F0DAA0>[o anfitrião continua aplicando o descanso para todos; descansos iniciados pela história seguem as regras do jogo]</color></i>
+ModUi/&MultiplayerAutoResyncAfterMapLoad=Ressincronizar automaticamente após cada troca de mapa <i><color=#F0DAA0>[quando o novo mapa está pronto, o anfitrião salva e todos recarregam desse salvamento, então cada troca de mapa tem uma segunda tela de carregamento]</color></i>
 ModUi/&MultiplayerVotePreviewTitle=<color=#F0DAA0>Prévia da votação:</color>
 ModUi/&MultiplayerVotePreviewHelp=<i><color=#F0DAA0>Mostra as janelas de votação de viagem e de aprovação com jogadores fictícios que respondem um após o outro, para conferir a aparência. Apenas no modo solo, em um local; nada é enviado. Feche esta janela para vê-la.</color></i>
 ModUi/&MultiplayerVotePreviewPlayers=Jogadores fictícios
@@ -576,7 +577,7 @@ ModUi/&MultiplayerNoFps=FPS: não informado
 ModUi/&MultiplayerNoHost=Não está em uma sala multijogador.
 ModUi/&MultiplayerNoPing=Ping: não informado
 ModUi/&MultiplayerNoVersion=nenhuma versão informada
-ModUi/&MultiplayerOfferHostResync=Oferecer ao anfitrião uma ressincronização com um clique quando uma dessincronização não puder ser corrigida <i><color=#F0DAA0>[o anfitrião salva rápido e recarrega; os clientes são trazidos para o mesmo salvamento]</color></i>
+ModUi/&MultiplayerOfferHostResync=Oferecer ao anfitrião ressincronizar com um clique quando uma dessincronização for detectada <i><color=#F0DAA0>[o anfitrião salva e recarrega; os clientes são trazidos para o mesmo salvamento]</color></i>
 ModUi/&MultiplayerPing=Ping: {0} ms
 ModUi/&MultiplayerPingBasedTickBuffer=Dimensionar o atraso de ação pelo ping de cada jogador <i><color=#F0DAA0>[aumenta antes que alguém espere quando uma conexão está lenta, e deixa grupos rápidos descerem até o mínimo abaixo]</color></i>
 ModUi/&MultiplayerPingVisibleToHostOnly=Só o anfitrião vê o ping dos jogadores e o atraso de ação <i><color=#F0DAA0>[senão cada jogador os vê nesta aba e nas placas de jogador]</color></i>

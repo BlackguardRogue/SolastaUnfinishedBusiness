@@ -746,6 +746,7 @@ UI/&PerceptionCheckPending=知覚判定中…
 Message/&MultiplayerDesyncExtra={0}はもう一方のコンピューターにしか存在しません
 Message/&MultiplayerDesyncField={0}：{1}（ホスト{2}、相手{3}）
 Message/&MultiplayerDesyncHitPoints=HP
+Message/&MultiplayerDesyncIdResyncLine=コンピューター間でオブジェクト番号が異なります。
 Message/&MultiplayerDesyncHostResyncing=ホストがゲームを再同期しています：まもなくロードし直します。
 Message/&MultiplayerDesyncMissing={0}はホストにしか存在しません
 Message/&MultiplayerDesyncPosition=位置

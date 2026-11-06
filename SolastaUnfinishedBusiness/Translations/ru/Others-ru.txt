@@ -746,6 +746,7 @@ UI/&PerceptionCheckPending=Проверка Восприятия…
 Message/&MultiplayerDesyncExtra={0} есть только на другом компьютере
 Message/&MultiplayerDesyncField={0}: {1} (хост {2}, другой {3})
 Message/&MultiplayerDesyncHitPoints=ОЗ
+Message/&MultiplayerDesyncIdResyncLine=Нумерация объектов на компьютерах различается.
 Message/&MultiplayerDesyncHostResyncing=Хост пересинхронизирует игру: она сейчас перезагрузится.
 Message/&MultiplayerDesyncMissing={0} есть только у хоста
 Message/&MultiplayerDesyncPosition=позиция

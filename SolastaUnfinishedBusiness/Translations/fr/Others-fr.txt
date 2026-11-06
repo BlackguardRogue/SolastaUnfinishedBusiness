@@ -746,6 +746,7 @@ UI/&PerceptionCheckPending=Jet de Perception en cours…
 Message/&MultiplayerDesyncExtra={0} n'existe que sur l'autre ordinateur
 Message/&MultiplayerDesyncField={0} : {1} (hôte {2}, autre {3})
 Message/&MultiplayerDesyncHitPoints=PV
+Message/&MultiplayerDesyncIdResyncLine=La numérotation des objets diffère entre les ordinateurs.
 Message/&MultiplayerDesyncHostResyncing=L'hôte resynchronise la partie : elle va se recharger dans un instant.
 Message/&MultiplayerDesyncMissing={0} n'existe que sur l'hôte
 Message/&MultiplayerDesyncPosition=position

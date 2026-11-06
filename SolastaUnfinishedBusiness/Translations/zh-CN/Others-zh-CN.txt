@@ -745,6 +745,7 @@ UI/&PerceptionCheckPending=感知检定进行中…
 Message/&MultiplayerDesyncExtra={0}只存在于另一台电脑上
 Message/&MultiplayerDesyncField={0}：{1}（主机{2}，另一方{3}）
 Message/&MultiplayerDesyncHitPoints=生命值
+Message/&MultiplayerDesyncIdResyncLine=各计算机之间的对象编号不一致。
 Message/&MultiplayerDesyncHostResyncing=主机正在重新同步游戏：即将重新加载。
 Message/&MultiplayerDesyncMissing={0}只存在于主机上
 Message/&MultiplayerDesyncPosition=位置

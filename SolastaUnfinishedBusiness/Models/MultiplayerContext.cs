@@ -230,6 +230,7 @@ internal static class MultiplayerContext
         // TEMPORARY: each computer saves its recent object-ID records for comparison
         ObjectIdDiagnosticsContext.DesyncDetected("id-desync", localTick);
         Gui.GuiService.ShowAlert("Message/&MultiplayerDesyncDetected", Gui.ColorFailure, 10f);
+        MultiplayerDesyncContext.OfferResyncForIdGap();
     }
 
     internal static void ResetDesyncDetection()

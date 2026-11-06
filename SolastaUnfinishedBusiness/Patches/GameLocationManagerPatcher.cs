@@ -28,8 +28,12 @@ public static class GameLocationManagerPatcher
         public static void Prefix(
             GameLocationManager __instance,
             string userLocationName,
-            string userCampaignName)
+            string userCampaignName,
+            bool fromSavedGame)
         {
+            // an automatic multiplayer resync may be due once this map is ready
+            MultiplayerDesyncContext.MapLoadStarting(fromSavedGame);
+
             if (!SettingsContext.GuiModManagerInstance.EnableSaveByLocation)
             {
                 return;
