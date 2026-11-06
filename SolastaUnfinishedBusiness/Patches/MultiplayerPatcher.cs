@@ -228,6 +228,19 @@ public static class MultiplayerPatcher
         }
     }
 
+    //PATCH: notes the tick of each lockstep command, so a quick correct can tell if one came after its capture (MULTIPLAYER)
+    [HarmonyPatch(typeof(NetworkingManager), nameof(NetworkingManager.AddDelayedCommand))]
+    [SuppressMessage("Minor Code Smell", "S101:Types should be named in PascalCase", Justification = "Patch")]
+    [UsedImplicitly]
+    public static class AddDelayedCommand_Patch
+    {
+        [UsedImplicitly]
+        public static void Prefix(NetworkingManager __instance, long tick)
+        {
+            MultiplayerDesyncContext.CommandQueued(__instance, tick);
+        }
+    }
+
     //PATCH: asks every player to approve a spell or power that passes a minute or more of in-game time (MULTIPLAYER)
     [HarmonyPatch(typeof(NetworkingManager), nameof(NetworkingManager.ExecuteAction))]
     [SuppressMessage("Minor Code Smell", "S101:Types should be named in PascalCase", Justification = "Patch")]

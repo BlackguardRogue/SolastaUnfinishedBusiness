@@ -31,10 +31,20 @@ internal static class MultiplayerDesyncContext
     private const byte AppliedKind = 5;
     private const byte ResyncCancelledKind = 6;
     private const ulong FingerprintTickInterval = 100;
-    private const int ValuesPerCharacter = 9;
+    private const int ValuesPerCharacter = 11;
 
     // a correction not verified this long after it was sent is reported as unverified
     private const float CorrectionTimeout = 60f;
+
+    // A correction that a command got in front of changes nothing, so it can safely be tried again at a later check. After
+    // this many, players who keep acting get the host's reload offer rather than corrections that never land.
+    private const int MaxCorrectionRetries = 3;
+
+    // the game ignores a command whose tick is further than this from the local tick (NetworkingManager.AddDelayedCommand)
+    private const long CommandTickWindow = 12;
+
+    // how far back queued commands are remembered; far more than a correction's wait for its tick
+    private const long CommandTicksKept = 256;
 
     // recovery saves take turns in a few slots of their own, so they never replace a player's save
     private const string RecoverySavePrefix = "FB Recovery ";
@@ -52,6 +62,15 @@ internal static class MultiplayerDesyncContext
 
     // players whose correction failed: not corrected automatically again until a check finds their game matching
     private static readonly HashSet<int> FailedActors = [];
+
+    // how many times each player's correction was given up because a command got in front of it
+    private static readonly Dictionary<int, int> CorrectionRetriesByActor = [];
+
+    // players whose condition IDs were already logged as differing, until a check finds them equal
+    private static readonly HashSet<int> ConditionIdsReported = [];
+
+    // the ticks of commands queued recently, which ApplyCorrection reads to see whether one came after its capture
+    private static readonly List<long> CommandTicks = [];
     private static readonly FieldInfo[] RandomStateFields =
         typeof(UnityEngine.Random.State).GetFields(BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)
             .Where(x => x.FieldType == typeof(int))
@@ -62,6 +81,7 @@ internal static class MultiplayerDesyncContext
     private static ulong _lastFingerprintTick = ulong.MaxValue;
     private static bool _resyncOffered;
     private static string _lastRecoverySave;
+    private static bool _queueingCorrection;
 
     // on a client: the correction the host is applying to this computer, until its outcome arrives
     private static string _clientCorrection;
@@ -74,7 +94,10 @@ internal static class MultiplayerDesyncContext
         Failed = 2,
         TimedOut = 3,
         Rejected = 4,
-        Cancelled = 5
+        Cancelled = 5,
+
+        // nothing was changed and the host will try again: not an outcome, so the player sees no message
+        Retrying = 6
     }
 
     internal static void Reset()
@@ -85,6 +108,9 @@ internal static class MultiplayerDesyncContext
         CorrectionsByActor.Clear();
         ReportedByActor.Clear();
         FailedActors.Clear();
+        CorrectionRetriesByActor.Clear();
+        ConditionIdsReported.Clear();
+        CommandTicks.Clear();
         _lastFingerprintTick = ulong.MaxValue;
         _resyncOffered = false;
         _clientCorrection = null;
@@ -234,7 +260,11 @@ internal static class MultiplayerDesyncContext
             return;
         }
 
-        var differences = Differences(host, other);
+        var allDifferences = Differences(host, other);
+
+        // Condition IDs are only logged: they don't change what a player sees or do anything to a correction's verdict,
+        // and a reload offer for them would come again with each new condition once the numbering has drifted.
+        var differences = allDifferences.Where(x => x.Type != DifferenceType.ConditionIds).ToList();
 
         PreviousDifferencesByActor.TryGetValue(otherActor, out var previous);
         PreviousDifferencesByActor[otherActor] = new HashSet<string>(differences.Select(x => x.Key));
@@ -243,15 +273,26 @@ internal static class MultiplayerDesyncContext
             ? PhotonNetwork.CurrentRoom?.GetPlayer(otherActor)?.NickName ?? "?"
             : Gui.Localize("ModUi/&MultiplayerHostRole").Trim();
 
+        ReportConditionIds(allDifferences.Where(x => x.Type == DifferenceType.ConditionIds).ToList(),
+            otherActor, playerName, host.Tick);
+
         // the first check after a correction's tick tells whether it held
         if (PhotonNetwork.IsMasterClient && CorrectionsByActor.TryGetValue(otherActor, out var correction) &&
             host.Tick > correction.ApplyTick)
         {
+            // Matching isn't verified until the player has said it applied. Its answer was sent before this fingerprint on
+            // the same reliable channel, so a missing one isn't merely late: the timeout then reports it as unverified.
+            if (differences.Count == 0 && !correction.Applied)
+            {
+                return;
+            }
+
             CorrectionsByActor.Remove(otherActor);
 
             if (differences.Count == 0)
             {
                 ReportedByActor.Remove(otherActor);
+                CorrectionRetriesByActor.Remove(otherActor);
                 Gui.GuiService.ShowAlert(
                     Gui.Format("Message/&MultiplayerDesyncCorrectionVerified", correction.PlayerName),
                     Gui.ColorAlmostWhite, 6f);
@@ -275,6 +316,7 @@ internal static class MultiplayerDesyncContext
             {
                 ReportedByActor.Remove(otherActor);
                 FailedActors.Remove(otherActor);
+                CorrectionRetriesByActor.Remove(otherActor);
             }
 
             return;
@@ -286,6 +328,15 @@ internal static class MultiplayerDesyncContext
         if (CorrectionsByActor.ContainsKey(otherActor) ||
             (!PhotonNetwork.IsMasterClient && ClientCorrectionPending()) ||
             (ReportedByActor.TryGetValue(otherActor, out var reported) && reported == signature))
+        {
+            return;
+        }
+
+        // A correction sends the host's state as it is when it's sent, not as it was at this check, so that state has to be
+        // a settled one. Nothing is reported yet: the next quiet check still finds this difference and comes back here.
+        var hostNow = PhotonNetwork.IsMasterClient ? Fingerprint.Capture(host.Tick) : null;
+
+        if (hostNow is { Quiet: false } && CanQuickCorrect(host, confirmed) && !FailedActors.Contains(otherActor))
         {
             return;
         }
@@ -306,9 +357,10 @@ internal static class MultiplayerDesyncContext
             return;
         }
 
-        if (CanQuickCorrect(host, confirmed) && !FailedActors.Contains(otherActor))
+        // hostNow, because a battle may have started since the check
+        if (CanQuickCorrect(hostNow, confirmed) && !FailedActors.Contains(otherActor))
         {
-            StartCorrection(otherActor, playerName, host, confirmed, details);
+            StartCorrection(otherActor, playerName, confirmed, details);
 
             return;
         }
@@ -377,6 +429,13 @@ internal static class MultiplayerDesyncContext
             {
                 Add("Conditions", DifferenceType.Other, "-", "-");
             }
+            // The same conditions under different object IDs or sources, which is what a numbering gap looks like. This
+            // text only goes to the log (see Compare), so it has no translations.
+            else if (hostCharacter.ConditionIds != otherCharacter.ConditionIds)
+            {
+                differences.Add(new Difference($"{hostCharacter.Guid}:ConditionIds", DifferenceType.ConditionIds,
+                    name));
+            }
         }
 
         foreach (var otherCharacter in other.Characters.Where(x => !host.TryGet(x.Guid, out _)))
@@ -386,6 +445,26 @@ internal static class MultiplayerDesyncContext
         }
 
         return differences;
+    }
+
+    private static void ReportConditionIds(List<Difference> differences, int actor, string playerName, ulong tick)
+    {
+        if (differences.Count == 0)
+        {
+            ConditionIdsReported.Remove(actor);
+
+            return;
+        }
+
+        if (!ConditionIdsReported.Add(actor))
+        {
+            return;
+        }
+
+        Main.Error($"Multiplayer condition IDs or sources differ with {playerName} at tick {tick}: " +
+                   string.Join(", ", differences.Select(x => x.Description)));
+        // TEMPORARY: each computer saves its recent object-ID records for comparison
+        ObjectIdDiagnosticsContext.DesyncDetected("condition-ids", tick);
     }
 
     private static string CharacterName(ulong guid)
@@ -409,7 +488,7 @@ internal static class MultiplayerDesyncContext
 
     // host only: a recovery save first, then the correction; without a confirmed save nothing is corrected
     private static void StartCorrection(
-        int actor, string playerName, Fingerprint host, List<Difference> confirmed, string details)
+        int actor, string playerName, List<Difference> confirmed, string details)
     {
         var correction = new Correction(Guid.NewGuid().ToString("N"), actor, playerName);
         var save = MakeRecoverySave(out var reason);
@@ -426,17 +505,20 @@ internal static class MultiplayerDesyncContext
         }
 
         correction.SaveName = save;
-        correction.ApplyTick = SendCorrection(host, confirmed, correction);
+        correction.ApplyTick = SendCorrection(confirmed, correction);
         correction.Deadline = Time.realtimeSinceStartup + CorrectionTimeout;
         CorrectionsByActor[actor] = correction;
         Gui.GuiService.ShowAlert(Gui.Format("Message/&MultiplayerDesyncCorrecting", playerName, details, save),
             Gui.ColorAlert, 10f);
     }
 
-    // the host's values are applied at a lockstep tick on every computer (the host included), like a command
-    private static ulong SendCorrection(Fingerprint host, List<Difference> differences, Correction correction)
+    // The host's values are applied at a lockstep tick on every computer (the host included), like a command. They're all
+    // read here, in one moment: hit points and position used to come from the earlier check while dice and spell slots were
+    // read now, so a correction could put together a state that never existed.
+    private static ulong SendCorrection(List<Difference> differences, Correction correction)
     {
         var networking = (NetworkingManager)ServiceRepository.GetService<INetworkingService>();
+        var host = Fingerprint.Capture(networking.tick.LocalTick);
         var guids = differences
             .Select(x => x.Key.Split(':')[0])
             .Where(x => ulong.TryParse(x, out _))
@@ -499,7 +581,99 @@ internal static class MultiplayerDesyncContext
         }
 
         PerceptionContext.HoldRequests((ulong)(long)data[1]);
-        networking.AddDelayedCommand(ApplyCorrection(data), (long)data[1]);
+
+        // queued like a command, but it mustn't count as one that got in front of itself
+        _queueingCorrection = true;
+
+        try
+        {
+            networking.AddDelayedCommand(ApplyCorrection(data), (long)data[1]);
+        }
+        finally
+        {
+            _queueingCorrection = false;
+        }
+    }
+
+    // Every lockstep command goes through NetworkingManager.AddDelayedCommand with the tick it runs at, so this sees the same
+    // commands on every computer, and all of those for a tick have arrived by the time that tick runs.
+    internal static void CommandQueued(NetworkingManager networking, long tick)
+    {
+        if (_queueingCorrection || !Global.IsMultiplayer)
+        {
+            return;
+        }
+
+        var localTick = (long)networking.tick.LocalTick;
+
+        // the game drops these, so they never run
+        if (localTick > CommandTickWindow && Math.Abs(tick - localTick) > CommandTickWindow)
+        {
+            return;
+        }
+
+        CommandTicks.RemoveAll(x => x + CommandTicksKept < localTick);
+        CommandTicks.Add(tick);
+    }
+
+    // Commands after the applying tick are left out: they may not have arrived everywhere yet, so counting them could split
+    // computers, and they run after the correction anyway.
+    private static bool CommandBetween(long fromTick, long toTick)
+    {
+        return CommandTicks.Any(x => x >= fromTick && x <= toTick);
+    }
+
+    // Host only: every computer in step gave this correction up with nothing changed. The difference is still there, so the
+    // next quiet check starts a new one, with a new capture and recovery save.
+    private static void RetryCorrection(string id)
+    {
+        var correction = CorrectionsByActor.Values.FirstOrDefault(x => x.Id == id);
+
+        if (correction == null)
+        {
+            return;
+        }
+
+        CorrectionsByActor.Remove(correction.Actor);
+        CorrectionRetriesByActor.TryGetValue(correction.Actor, out var retries);
+
+        if (retries >= MaxCorrectionRetries)
+        {
+            CorrectionRetriesByActor.Remove(correction.Actor);
+            FailCorrection(correction, CorrectionStatus.Rejected, null);
+
+            return;
+        }
+
+        CorrectionRetriesByActor[correction.Actor] = retries + 1;
+        ReportedByActor.Remove(correction.Actor);
+        SendStatus(correction, CorrectionStatus.Retrying);
+    }
+
+    // The corrected player always answers, so the host knows it applied. Anyone else only speaks up on failure: a computer
+    // that didn't apply it now differs from the ones that did, and the host has to hear that from it.
+    private static void ReportApplied(object[] data, bool applied)
+    {
+        if (data.Length < 8 || data[6] is not string id)
+        {
+            return;
+        }
+
+        if (PhotonNetwork.IsMasterClient)
+        {
+            if (!applied)
+            {
+                OnApplied(PhotonNetwork.LocalPlayer?.ActorNumber ?? 0, id, false);
+            }
+
+            return;
+        }
+
+        if (!applied || IsForThisComputer(data, out _))
+        {
+            PhotonNetwork.RaiseEvent(EventCode, new object[] { AppliedKind, id, applied },
+                new RaiseEventOptions { Receivers = ReceiverGroup.MasterClient }, SendOptions.SendReliable);
+        }
     }
 
     // slot records are (character index, repertoire index, slot level, used slots); indices must be in range
@@ -548,20 +722,23 @@ internal static class MultiplayerDesyncContext
             data[10] is not long captureTick || PerceptionContext.LastChangeTick >= (ulong)captureTick)
         {
             Main.Error("Multiplayer correction rejected: invalid data, or a perception check changed before it applied");
+            ReportApplied(data, false);
 
-            if (IsForThisComputer(data, out var rejectedId))
+            yield break;
+        }
+
+        // A command queued for a tick from the capture up to now (a move, a spell, a rest) has run or is due, and the host's
+        // captured values don't include it: applying them would undo it on every computer. Computers in step find the same
+        // commands, so all give up together, and only the host needs to act. One that isn't in step shows up at the next
+        // check, as it does when it applied alone. A capture-tick command may have come before the capture: rejecting is the
+        // safe side, as above.
+        if (CommandBetween(captureTick, (long)data[1]))
+        {
+            Main.Info("Multiplayer quick correct given up: a command came after its capture");
+
+            if (PhotonNetwork.IsMasterClient && data.Length >= 7 && data[6] is string retryId)
             {
-                PhotonNetwork.RaiseEvent(EventCode, new object[] { AppliedKind, rejectedId, false },
-                    new RaiseEventOptions { Receivers = ReceiverGroup.MasterClient }, SendOptions.SendReliable);
-            }
-            // the host rejecting its own correction fails it too, whatever the corrected player reports
-            else if (PhotonNetwork.IsMasterClient && data.Length >= 8 && data[6] is string hostId &&
-                     data[7] is int[] hostActors)
-            {
-                foreach (var actor in hostActors)
-                {
-                    OnApplied(actor, hostId, false);
-                }
+                RetryCorrection(retryId);
             }
 
             yield break;
@@ -600,6 +777,23 @@ internal static class MultiplayerDesyncContext
             character.RulesetCharacter.RefreshAll();
         }
 
+        // The records are all the host has for these characters, so a slot level only this computer has must go too, or the
+        // next check would still differ and the correction would fail on it.
+        foreach (var guid in guids)
+        {
+            var characterRepertoires = FindCharacter((ulong)guid)?.RulesetCharacter?.SpellRepertoires;
+
+            if (characterRepertoires == null)
+            {
+                continue;
+            }
+
+            foreach (var repertoire in characterRepertoires)
+            {
+                repertoire.usedSpellsSlots.Clear();
+            }
+        }
+
         for (var i = 0; i + 3 < slots.Length; i += 4)
         {
             var character = guids.Length > slots[i] ? FindCharacter((ulong)guids[slots[i]]) : null;
@@ -619,31 +813,34 @@ internal static class MultiplayerDesyncContext
         PerceptionContext.Restore(perception);
         Main.Info($"Multiplayer quick correct applied for {guids.Length} character(s), complete: {applied}");
 
-        // the corrected player tells the host whether every value found its character; applied isn't verified yet
-        if (IsForThisComputer(data, out var id))
-        {
-            PhotonNetwork.RaiseEvent(EventCode, new object[] { AppliedKind, id, applied },
-                new RaiseEventOptions { Receivers = ReceiverGroup.MasterClient }, SendOptions.SendReliable);
-        }
+        // whether every value found its character; applied isn't verified yet
+        ReportApplied(data, applied);
 
         yield break;
     }
 
+    // actor is who answered: the corrected player, or any computer reporting a failure (see ReportApplied)
     private static void OnApplied(int actor, string id, bool applied)
     {
-        if (!CorrectionsByActor.TryGetValue(actor, out var correction) || correction.Id != id)
+        var correction = CorrectionsByActor.Values.FirstOrDefault(x => x.Id == id);
+
+        if (correction == null)
         {
             return;
         }
 
         if (applied)
         {
-            correction.Applied = true;
+            if (actor == correction.Actor)
+            {
+                correction.Applied = true;
+            }
 
             return;
         }
 
-        CorrectionsByActor.Remove(actor);
+        Main.Error($"Multiplayer quick correct {id} for {correction.PlayerName} not applied by player {actor}");
+        CorrectionsByActor.Remove(correction.Actor);
         FailCorrection(correction, CorrectionStatus.Rejected, null);
     }
 
@@ -690,6 +887,16 @@ internal static class MultiplayerDesyncContext
     // on the corrected player's computer; a cancelled correction arrives without one being announced first
     private static void OnStatus(string id, CorrectionStatus status)
     {
+        if (status == CorrectionStatus.Retrying)
+        {
+            if (id == _clientCorrection)
+            {
+                _clientCorrection = null;
+            }
+
+            return;
+        }
+
         if (id == _lastStatus || (status != CorrectionStatus.Cancelled && id != _clientCorrection))
         {
             return;
@@ -941,7 +1148,8 @@ internal static class MultiplayerDesyncContext
         Correctable,
         Dice,
         Perception,
-        Other
+        Other,
+        ConditionIds
     }
 
     private sealed class Difference(string key, DifferenceType type, string description)
@@ -953,6 +1161,7 @@ internal static class MultiplayerDesyncContext
 
     private sealed class CharacterPrint
     {
+        internal long ConditionIds;
         internal long Conditions;
         internal ulong Guid;
         internal int HitPoints;
@@ -1013,6 +1222,12 @@ internal static class MultiplayerDesyncContext
                         .Select(x => $"{x.ConditionDefinition?.Name}:{x.RemainingRounds}")
                         .OrderBy(x => x)
                         .SelectMany(TextValues)),
+                    // apart from Conditions, so it can be told from a real difference in what a character has
+                    ConditionIds = Hash(ruleset.ConditionsByCategory
+                        .SelectMany(x => x.Value)
+                        .Select(x => $"{x.ConditionDefinition?.Name}:{x.Guid}:{x.SourceGuid}")
+                        .OrderBy(x => x, StringComparer.Ordinal)
+                        .SelectMany(TextValues)),
                     SpellSlots = Hash(SpellSlotEntries(character)
                         .SelectMany(x => new[] { x.repertoire, x.level, x.used }))
                 });
@@ -1039,6 +1254,8 @@ internal static class MultiplayerDesyncContext
                 values[o + 6] = (int)c.Conditions;
                 values[o + 7] = (int)(c.SpellSlots >> 32);
                 values[o + 8] = (int)c.SpellSlots;
+                values[o + 9] = (int)(c.ConditionIds >> 32);
+                values[o + 10] = (int)c.ConditionIds;
             }
 
             return
@@ -1072,7 +1289,8 @@ internal static class MultiplayerDesyncContext
                     TemporaryHitPoints = values[o + 1],
                     Position = new int3(values[o + 2], values[o + 3], values[o + 4]),
                     Conditions = ((long)values[o + 5] << 32) | (uint)values[o + 6],
-                    SpellSlots = ((long)values[o + 7] << 32) | (uint)values[o + 8]
+                    SpellSlots = ((long)values[o + 7] << 32) | (uint)values[o + 8],
+                    ConditionIds = ((long)values[o + 9] << 32) | (uint)values[o + 10]
                 });
             }
 
