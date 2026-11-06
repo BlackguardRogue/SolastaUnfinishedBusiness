@@ -11,16 +11,33 @@ namespace SolastaUnfinishedBusiness.Patches;
 public static class GameManagerPatcher
 {
     //PATCH: nothing static keeps a finished game in memory (leaving a game, or a load that replaces it)
+    // DestroyGame only starts the teardown, which goes on to read effects' descriptions as it unloads the location, so this
+    // has to wait for the game's GameDestroyed event, the last thing that teardown does.
     [HarmonyPatch(typeof(GameManager), nameof(GameManager.DestroyGame))]
     [SuppressMessage("Minor Code Smell", "S101:Types should be named in PascalCase", Justification = "Patch")]
     [UsedImplicitly]
     public static class DestroyGame_Patch
     {
+        private static bool _subscribed;
+
         [UsedImplicitly]
-        public static void Prefix()
+        public static void Prefix(GameManager __instance)
+        {
+            // the game manager lasts as long as the application, so once is enough
+            if (_subscribed)
+            {
+                return;
+            }
+
+            _subscribed = true;
+            __instance.GameDestroyed += OnGameDestroyed;
+        }
+
+        private static void OnGameDestroyed()
         {
             PowerBundle.ClearLiveEffects();
             MultiplayerDesyncContext.GameDestroyed();
+            ActiveCharacterPanelPatcher.ForgetDestroyedPanels();
         }
     }
 

@@ -36,7 +36,8 @@ internal static class LevelDownContext
         AttributeDefinitions.HitPoints
     ];
 
-    // Neither value refers to its hero, which WeakKeyTable needs: they hold definitions, names and numbers.
+    // Neither value may reach its hero, which WeakKeyTable needs, so they hold definitions, names and numbers. That rules out
+    // the repertoire itself: repertoire -> inventory -> proficiency validator -> hero.
     private static readonly WeakKeyTable<RulesetCharacterHero, LevelHistory> Histories = new();
     private static readonly WeakKeyTable<RulesetCharacterHero, HeroSnapshot> Snapshots = new();
 
@@ -525,7 +526,10 @@ internal static class LevelDownContext
             repertoire.extraSpellsByTag.ToDictionary(x => x.Key, x => new List<SpellDefinition>(x.Value));
 
         internal readonly List<SpellDefinition> Prepared = [.. repertoire.preparedSpells];
-        internal readonly RulesetSpellRepertoire Repertoire = repertoire;
+        internal readonly FeatureDefinitionCastSpell Feature = repertoire.spellCastingFeature;
+        internal readonly CharacterClassDefinition Class = repertoire.spellCastingClass;
+        internal readonly CharacterSubclassDefinition Subclass = repertoire.spellCastingSubclass;
+        internal readonly CharacterRaceDefinition Race = repertoire.spellCastingRace;
         internal readonly List<SpellDefinition> Spells = [.. repertoire.knownSpells];
     }
 
@@ -629,13 +633,12 @@ internal static class LevelDownContext
 
         internal static RepertoireChange Create(RepertoireSnapshot before, RepertoireSnapshot after)
         {
-            var repertoire = after.Repertoire;
             var change = new RepertoireChange
             {
-                Feature = repertoire.spellCastingFeature,
-                Class = repertoire.spellCastingClass,
-                Subclass = repertoire.spellCastingSubclass,
-                Race = repertoire.spellCastingRace,
+                Feature = after.Feature,
+                Class = after.Class,
+                Subclass = after.Subclass,
+                Race = after.Race,
                 Created = before == null
             };
 

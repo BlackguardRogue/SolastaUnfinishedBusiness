@@ -34,8 +34,9 @@ internal static class PowerBundle
     // keys or values (Codex tested the installed mono-2.0-bdwgc.dll: 256 of 256 survived, and 0 of 256 after Remove). So
     // every effect would have stayed in memory for the rest of the launch, with what it refers to. Instead, effects that
     // have ended are swept out as the table grows, and each map load and the game's end clear it, which also covers effects
-    // that never end, such as those the mod makes only to read their forms (the game's entity list holds those until then
-    // too). An effect that's still going then gets its result worked out again, as after any RefreshAll.
+    // that never report ending. An effect that's still going then gets its result worked out again, as after any RefreshAll.
+    // An effect made outside a location isn't in the game's entity list, so this table would be all that holds it: code that
+    // makes one only to read it calls ForgetEffect.
     private static readonly Dictionary<RulesetEffect, Dictionary<string, LiveEffectEntry>> LiveEffects = [];
 
     // the fewest effects worth sweeping for, and the size that starts the next sweep
@@ -360,6 +361,11 @@ internal static class PowerBundle
         LiveEffects.Clear();
         CasterGenerations.Clear();
         _liveEffectSweepAt = LiveEffectSweepMinimum;
+    }
+
+    internal static void ForgetEffect(RulesetEffect effect)
+    {
+        LiveEffects.Remove(effect);
     }
 
     // A read after an effect ended and was swept works its result out again, which only matters to code reading an ended

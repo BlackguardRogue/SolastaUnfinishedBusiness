@@ -16,24 +16,38 @@ public static class ActiveCharacterPanelPatcher
     // doesn't depend on the character's state or on what the panel points at by then. Before, Unbind tested the health
     // Bind tested: a hero downed while bound kept the handlers, and rebinding after recovery could add a second set.
     // A plain table, as its values refer to their panels through the handlers, so nothing weak would ever let go. Unbind
-    // removes an entry, and a panel destroyed without one is cleaned up at the next bind.
+    // removes an entry. A panel destroyed without one goes when its handler next runs, at the next bind or at the game's end.
     private static readonly Dictionary<ActiveCharacterPanel, PanelSubscription> Subscriptions = [];
 
-    private static void Subscribe(ActiveCharacterPanel panel, RulesetCharacter character)
+    // Unity's own null check: a panel tests false once it has been destroyed
+    internal static void ForgetDestroyedPanels()
     {
-        // Unity's own null check: true once a panel has been destroyed, which also stops its handlers running on a character
-        // that's still in play
         foreach (var destroyed in Subscriptions.Keys.Where(x => !x).ToList())
         {
             Unsubscribe(destroyed);
         }
+    }
 
+    private static void Subscribe(ActiveCharacterPanel panel, RulesetCharacter character)
+    {
+        ForgetDestroyedPanels();
         Unsubscribe(panel);
 
         var subscription = new PanelSubscription
         {
             Character = character,
-            Refreshed = panel.ConcentrationChanged,
+            // a live hero can outlast a destroyed panel, whose own method would then draw on what no longer exists
+            Refreshed = refreshed =>
+            {
+                if (panel)
+                {
+                    panel.ConcentrationChanged(refreshed);
+                }
+                else
+                {
+                    Unsubscribe(panel);
+                }
+            },
             // Upstream added this to update IconsOnPortrait on power use (its commit's title), by calling RefreshAll.
             // RefreshAll isn't only a redraw: it recalculates the character and, through the light condition, can use an
             // object ID. This handler runs only on a computer whose panel shows the hero, so that computer's IDs moved
@@ -41,7 +55,17 @@ public static class ActiveCharacterPanelPatcher
             // by UsePower, so only this computer's display needs updating here.
             // Marked for redraw, not redrawn now: PowerActivated fires inside UsePower, before the mod's postfix spends
             // a transformed hero's Rage or Ki. GuiPanel.Update redraws a marked panel at its next update.
-            PowerActivated = (_, _, _) => panel.Dirty = true
+            PowerActivated = (_, _, _) =>
+            {
+                if (panel)
+                {
+                    panel.Dirty = true;
+                }
+                else
+                {
+                    Unsubscribe(panel);
+                }
+            }
         };
 
         character.CharacterRefreshed += subscription.Refreshed;
