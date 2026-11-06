@@ -55,6 +55,10 @@ for (var i = 0; i < 4; i++) { GC.Collect(); GC.WaitForPendingFinalizers(); }
 weakTable.Purge();
 Check(weakTable.Count == 10, "weak table drops entries whose key died and keeps the live ones");
 Check(weakKept.All(x => weakTable.TryGetValue(x, out _)), "weak table keeps the live keys' values");
+weakTable.Clear();
+Check(weakTable.Count == 0 && !weakTable.TryGetValue(weakKept[0], out _), "weak table clears");
+weakTable.Add(weakKept[0], weakKept[1]);
+Check(weakTable.Count == 1 && weakTable.TryGetValue(weakKept[0], out _), "weak table works after a clear");
 
 var reports = new BoundedTickReports<string>(5, 400);
 Check(reports.Add(200, 100, "early"), "accept early report");

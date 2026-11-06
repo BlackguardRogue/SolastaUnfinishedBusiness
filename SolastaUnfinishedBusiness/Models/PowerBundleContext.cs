@@ -80,12 +80,8 @@ internal static class PowerBundleContext
                     var formsParams = new RulesetImplementationDefinitions.ApplyFormsParams();
 
                     formsParams.FillSourceAndTarget(ruleChar, ruleChar);
-                    // Made only to read its forms, on the campaign map, where the game doesn't list effects. Nothing ends it, so
-                    // the effect cache would be all that holds it.
-                    var effect = implementationService.InstantiateEffectPower(ruleChar, usablePower, false);
-
-                    formsParams.FillFromActiveEffect(effect);
-                    PowerBundle.ForgetEffect(effect);
+                    formsParams.FillFromActiveEffect(implementationService
+                        .InstantiateEffectPower(ruleChar, usablePower, false));
                     formsParams.effectSourceType = EffectSourceType.Power;
 
                     ruleChar.UsePower(usablePower);

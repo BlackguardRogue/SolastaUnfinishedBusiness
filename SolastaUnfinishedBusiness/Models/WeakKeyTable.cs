@@ -104,6 +104,13 @@ internal sealed class WeakKeyTable<TKey, TValue>
         return true;
     }
 
+    internal void Clear()
+    {
+        _buckets.Clear();
+        _count = 0;
+        _purgeAt = MinimumPurgeCount;
+    }
+
     // Drops entries whose key has died. The next purge is at twice what's left, so the work stays in proportion to the adds.
     internal void Purge()
     {

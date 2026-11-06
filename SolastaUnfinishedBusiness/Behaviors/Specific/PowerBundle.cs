@@ -30,18 +30,13 @@ internal static class PowerBundle
     // effect's life, because code changes a live effect's description and expects the change to last (gambits' RangeType,
     // the teleport cursor's targeting). RefreshAll still drops a caster's results, as before: it moves the caster's
     // generation on, and a result from an older generation is worked out again.
-    // Removed explicitly, not left to a ConditionalWeakTable: on the game's Boehm runtime such a table never lets go of its
-    // keys or values (Codex tested the installed mono-2.0-bdwgc.dll: 256 of 256 survived, and 0 of 256 after Remove). So
-    // every effect would have stayed in memory for the rest of the launch, with what it refers to. Instead, effects that
-    // have ended are swept out as the table grows, and each map load and the game's end clear it, which also covers effects
-    // that never report ending. An effect that's still going then gets its result worked out again, as after any RefreshAll.
-    // An effect made outside a location isn't in the game's entity list, so this table would be all that holds it: code that
-    // makes one only to read it calls ForgetEffect.
-    private static readonly Dictionary<RulesetEffect, Dictionary<string, LiveEffectEntry>> LiveEffects = [];
-
-    // the fewest effects worth sweeping for, and the size that starts the next sweep
-    private const int LiveEffectSweepMinimum = 64;
-    private static int _liveEffectSweepAt = LiveEffectSweepMinimum;
+    // Held by weak keys, so this table never decides how long an effect lives. Many effects never report ending: a spell
+    // targeted and then cancelled, or one made only to read its forms or to preview a position. Whatever holds such an effect
+    // goes, and its result goes with it. Not a ConditionalWeakTable, which never lets go on the game's Boehm runtime (see
+    // WeakKeyTable). Nothing in an entry refers to the effect, which that needs.
+    // Each map load and the game's end also clear it, to reset the generations below. An effect that's still going then gets
+    // its result worked out again, as after any RefreshAll.
+    private static readonly WeakKeyTable<RulesetEffect, Dictionary<string, LiveEffectEntry>> LiveEffects = new();
 
     // for casters that have kept results, until the next map load
     private static readonly Dictionary<ulong, int> CasterGenerations = [];
@@ -360,29 +355,6 @@ internal static class PowerBundle
     {
         LiveEffects.Clear();
         CasterGenerations.Clear();
-        _liveEffectSweepAt = LiveEffectSweepMinimum;
-    }
-
-    internal static void ForgetEffect(RulesetEffect effect)
-    {
-        LiveEffects.Remove(effect);
-    }
-
-    // A read after an effect ended and was swept works its result out again, which only matters to code reading an ended
-    // effect's description after enough other effects have come and gone.
-    private static void SweepLiveEffectsIfDue()
-    {
-        if (LiveEffects.Count < _liveEffectSweepAt)
-        {
-            return;
-        }
-
-        foreach (var ended in LiveEffects.Keys.Where(x => x.Terminated).ToList())
-        {
-            LiveEffects.Remove(ended);
-        }
-
-        _liveEffectSweepAt = Math.Max(LiveEffectSweepMinimum, LiveEffects.Count * 2);
     }
 
     internal static void ClearSpellEffectCache(RulesetCharacter caster)
@@ -419,7 +391,6 @@ internal static class PowerBundle
 
         if (!LiveEffects.TryGetValue(effect, out var entries))
         {
-            SweepLiveEffectsIfDue();
             entries = new Dictionary<string, LiveEffectEntry>();
             LiveEffects.Add(effect, entries);
         }
