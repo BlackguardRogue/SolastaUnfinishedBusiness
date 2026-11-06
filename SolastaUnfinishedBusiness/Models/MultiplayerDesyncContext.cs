@@ -351,10 +351,12 @@ internal static class MultiplayerDesyncContext
         // a settled one. That includes no command being queued or still running: one that began before the capture can
         // change things after it, and ApplyCorrection only looks for commands due from the capture on. Nothing is reported
         // yet: the next quiet check still finds this difference and comes back here.
+        // Whether it can be corrected is decided once, from the host's state now and not the check's: a check from during a
+        // battle can arrive after the battle ended, and must still wait for a settled moment.
         var hostNow = PhotonNetwork.IsMasterClient ? Fingerprint.Capture(host.Tick) : null;
+        var canCorrect = hostNow != null && CanQuickCorrect(hostNow, confirmed) && !FailedActors.Contains(otherActor);
 
-        if (hostNow != null && (!hostNow.Quiet || CommandsActive()) && CanQuickCorrect(host, confirmed) &&
-            !FailedActors.Contains(otherActor))
+        if (canCorrect && (!hostNow.Quiet || CommandsActive()))
         {
             return;
         }
@@ -375,8 +377,7 @@ internal static class MultiplayerDesyncContext
             return;
         }
 
-        // hostNow, because a battle may have started since the check
-        if (CanQuickCorrect(hostNow, confirmed) && !FailedActors.Contains(otherActor))
+        if (canCorrect)
         {
             StartCorrection(otherActor, playerName, confirmed, details);
 
@@ -555,16 +556,12 @@ internal static class MultiplayerDesyncContext
             .Where(x => x != null)
             .ToList();
         var slots = new List<int>();
-        var slotKeys = new List<string>();
 
         for (var i = 0; i < characters.Count; i++)
         {
-            var character = FindCharacter(characters[i].Guid);
-
-            foreach (var entry in SpellSlotEntries(character))
+            foreach (var entry in SpellSlotEntries(FindCharacter(characters[i].Guid)))
             {
                 slots.AddRange([i, entry.repertoire, entry.level, entry.used]);
-                slotKeys.Add(RepertoireKey(character.RulesetCharacter.SpellRepertoires[entry.repertoire]));
             }
         }
 
@@ -585,8 +582,8 @@ internal static class MultiplayerDesyncContext
             correction.Id, new[] { correction.Actor }, correction.SaveName, PerceptionContext.Capture(),
             // the tick it was captured at: a computer whose perception results changed at or after it rejects it
             (long)networking.tick.LocalTick,
-            // which repertoire each slot record is for, so a list in another order is refused rather than written wrongly
-            slotKeys.ToArray()
+            // each character's whole list of repertoires, unused ones too, as slot records refer to them by position
+            characters.Select(x => RepertoireRoster(FindCharacter(x.Guid))).ToArray()
         };
 
         PhotonNetwork.RaiseEvent(EventCode, data,
@@ -633,8 +630,12 @@ internal static class MultiplayerDesyncContext
     //   all through the server, the same way and in the same order as the sender's NotifyTickRPC (the sender hears its own).
     // - A computer stops ticking at its slowest known tick plus the wait buffer minus 1 (TimeDilatationValue). Until the
     //   command reaches it, the newest tick it can know of from that sender is the one sent before the command.
-    // - The send buffer is never below the wait buffer: UpdateCommandBufferTick raises send first and wait later, and lowers
-    //   wait first. So a computer can't reach a command's tick before it has that command.
+    // - The send buffer is never below the wait buffer: UpdateCommandBufferTick raises send first and wait as many ticks
+    //   later as the old wait, and lowers wait first. A buffer change is itself a command, so it happens at the same tick on
+    //   every computer, and a command sent before a rise is already covered by the old wait. So a computer can't reach a
+    //   command's tick before it has that command.
+    // - The wait only covers computers it knows. A computer that left no longer matters, and one that isn't known yet can only
+    //   be so just after a tick reset, well before the second check a correction needs.
     // This doesn't cover LoadGameInstantRPC, which bypasses the queue, but that replaces the whole game and resets all this.
     internal static void CommandQueued(NetworkingManager networking, long tick)
     {
@@ -721,27 +722,26 @@ internal static class MultiplayerDesyncContext
         return true;
     }
 
-    // the name of what the repertoire casts with, which is the same on every computer whatever the list's order
-    private static string RepertoireKey(RulesetSpellRepertoire repertoire)
+    // A character's repertoires in list order, each by the name of what it casts with, and how many there are. Applying
+    // clears every repertoire of a corrected character, so the whole list has to match, not just the ones with used slots.
+    private static string RepertoireRoster(GameLocationCharacter character)
     {
-        return repertoire?.SpellCastingFeature?.Name ?? string.Empty;
+        var repertoires = character?.RulesetCharacter?.SpellRepertoires;
+
+        return repertoires == null
+            ? "0"
+            : $"{repertoires.Count}|{string.Join("|", repertoires.Select(x => x?.SpellCastingFeature?.Name))}";
     }
 
-    // Whether every character and repertoire the correction names is here, so it's all checked before anything is written:
-    // a rejected correction leaves this computer as it was.
-    private static bool CanApply(long[] guids, int[] slots, string[] slotKeys)
+    // Whether every character the correction names is here with the host's repertoires, so it's all checked before anything
+    // is written: a rejected correction leaves this computer as it was.
+    private static bool CanApply(long[] guids, string[] rosters)
     {
-        if (guids.Any(x => FindCharacter((ulong)x)?.RulesetCharacter == null))
+        for (var i = 0; i < guids.Length; i++)
         {
-            return false;
-        }
+            var character = FindCharacter((ulong)guids[i]);
 
-        for (var i = 0; i + 3 < slots.Length; i += 4)
-        {
-            var repertoires = FindCharacter((ulong)guids[slots[i]]).RulesetCharacter.SpellRepertoires;
-
-            if (repertoires == null || slots[i + 1] >= repertoires.Count ||
-                RepertoireKey(repertoires[slots[i + 1]]) != slotKeys[i / 4])
+            if (character?.RulesetCharacter == null || RepertoireRoster(character) != rosters[i])
             {
                 return false;
             }
@@ -773,7 +773,7 @@ internal static class MultiplayerDesyncContext
             data[3] is not long[] correctionGuids ||
             data[4] is not int[] correctionValues || correctionValues.Length != correctionGuids.Length * 5 ||
             data[5] is not int[] correctionSlots || !ValidSlotRecords(correctionSlots, correctionGuids.Length) ||
-            data[11] is not string[] correctionSlotKeys || correctionSlotKeys.Length != correctionSlots.Length / 4 ||
+            data[11] is not string[] correctionRosters || correctionRosters.Length != correctionGuids.Length ||
             data[9] is not long[] perception || !PerceptionContext.CanRestore(perception) ||
             data[10] is not long captureTick || PerceptionContext.LastChangeTick >= (ulong)captureTick)
         {
@@ -795,7 +795,7 @@ internal static class MultiplayerDesyncContext
             yield break;
         }
 
-        if (!CanApply(correctionGuids, correctionSlots, correctionSlotKeys))
+        if (!CanApply(correctionGuids, correctionRosters))
         {
             Main.Error("Multiplayer correction rejected: a character or spell repertoire it names isn't on this computer");
             ReportOutcome(data, CorrectionOutcome.Failed);
