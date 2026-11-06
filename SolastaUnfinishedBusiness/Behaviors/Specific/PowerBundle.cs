@@ -33,8 +33,9 @@ internal static class PowerBundle
     // Removed explicitly, not left to a ConditionalWeakTable: on the game's Boehm runtime such a table never lets go of its
     // keys or values (Codex tested the installed mono-2.0-bdwgc.dll: 256 of 256 survived, and 0 of 256 after Remove). So
     // every effect would have stayed in memory for the rest of the launch, with what it refers to. Instead, effects that
-    // have ended are swept out as the table grows, and each map load clears it, which also covers effects that never
-    // reported ending. An effect that's still going then gets its result worked out again, as after any RefreshAll.
+    // have ended are swept out as the table grows, and each map load and the game's end clear it, which also covers effects
+    // that never end, such as those the mod makes only to read their forms (the game's entity list holds those until then
+    // too). An effect that's still going then gets its result worked out again, as after any RefreshAll.
     private static readonly Dictionary<RulesetEffect, Dictionary<string, LiveEffectEntry>> LiveEffects = [];
 
     // the fewest effects worth sweeping for, and the size that starts the next sweep

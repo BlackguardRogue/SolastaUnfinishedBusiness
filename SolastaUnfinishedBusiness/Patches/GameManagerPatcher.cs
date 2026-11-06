@@ -2,6 +2,7 @@
 using System.Linq;
 using HarmonyLib;
 using JetBrains.Annotations;
+using SolastaUnfinishedBusiness.Behaviors.Specific;
 using SolastaUnfinishedBusiness.Models;
 
 namespace SolastaUnfinishedBusiness.Patches;
@@ -9,6 +10,20 @@ namespace SolastaUnfinishedBusiness.Patches;
 [UsedImplicitly]
 public static class GameManagerPatcher
 {
+    //PATCH: nothing static keeps a finished game in memory (leaving a game, or a load that replaces it)
+    [HarmonyPatch(typeof(GameManager), nameof(GameManager.DestroyGame))]
+    [SuppressMessage("Minor Code Smell", "S101:Types should be named in PascalCase", Justification = "Patch")]
+    [UsedImplicitly]
+    public static class DestroyGame_Patch
+    {
+        [UsedImplicitly]
+        public static void Prefix()
+        {
+            PowerBundle.ClearLiveEffects();
+            MultiplayerDesyncContext.GameDestroyed();
+        }
+    }
+
     [HarmonyPatch(typeof(GameManager), nameof(GameManager.BindPostDatabase))]
     [SuppressMessage("Minor Code Smell", "S101:Types should be named in PascalCase", Justification = "Patch")]
     [UsedImplicitly]

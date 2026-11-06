@@ -113,6 +113,15 @@ internal static class MultiplayerDesyncContext
         _reofferWhenPossible = false;
     }
 
+    // The game is going away: nothing here should keep it alive, or go on describing it, until the next one.
+    internal static void GameDestroyed()
+    {
+        _reportedGame = null;
+        ReportedByActor.Clear();
+        _idDesyncReported = false;
+        _reofferWhenPossible = false;
+    }
+
     private static bool IsIronMan =>
         ServiceRepository.GetService<IGameService>()?.Game?.GameCampaign is { IronManMode: true };
 
@@ -720,6 +729,14 @@ internal static class MultiplayerDesyncContext
         return serialization.CanSave && serialization.loadDisabledTokens.Count == 0;
     }
 
+    // It comes back for a controller only after someone chose Resync at a bad moment, or a map change: choosing Later otherwise
+    // stays quiet. Nothing is reported again, and it waits until the game can save. Not for a save that failed while the game
+    // was willing, such as a full disk, or for a host role that moved: another try wouldn't go differently.
+    private static void ReofferIfOnlyABadMoment(GameSerializationManager serialization)
+    {
+        _reofferWhenPossible = Gui.GamepadActive && PhotonNetwork.IsMasterClient && !CanSaveAndLoad(serialization);
+    }
+
     // Every way to start a resync comes through here, the message and the log button alike.
     private static void StartResync()
     {
@@ -749,9 +766,7 @@ internal static class MultiplayerDesyncContext
             Main.Info("Multiplayer resync not started: the game can't save or load right now");
             Gui.GuiService.ShowAlert("Message/&MultiplayerDesyncResyncNotNow", Gui.ColorFailure, 10f);
 
-            // It comes back for a controller only after someone chose Resync at a bad moment, or a map change: choosing Later
-            // otherwise stays quiet. Nothing is reported again, and it waits until the game can save.
-            _reofferWhenPossible = Gui.GamepadActive;
+            ReofferIfOnlyABadMoment(serialization);
 
             return;
         }
@@ -776,6 +791,7 @@ internal static class MultiplayerDesyncContext
         {
             Main.Error($"Multiplayer resync cancelled: no save ({reason}), nothing was loaded");
             _resyncWaitUntil = 0f;
+            ReofferIfOnlyABadMoment(serialization);
             PhotonNetwork.RaiseEvent(EventCode, new object[] { ResyncCancelledKind },
                 new RaiseEventOptions { Receivers = ReceiverGroup.Others }, SendOptions.SendReliable);
             Gui.GuiService.ShowMessage(MessageModal.Severity.Serious3,
@@ -793,6 +809,7 @@ internal static class MultiplayerDesyncContext
         {
             Main.Error("Multiplayer resync cancelled: the game can't load right now, nothing was loaded");
             _resyncWaitUntil = 0f;
+            ReofferIfOnlyABadMoment(serialization);
             PhotonNetwork.RaiseEvent(EventCode, new object[] { ResyncCancelledKind },
                 new RaiseEventOptions { Receivers = ReceiverGroup.Others }, SendOptions.SendReliable);
             Gui.GuiService.ShowAlert("Message/&MultiplayerDesyncResyncNotNow", Gui.ColorFailure, 10f);
