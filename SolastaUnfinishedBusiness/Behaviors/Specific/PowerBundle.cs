@@ -388,9 +388,15 @@ internal static class PowerBundle
             return entry.Description;
         }
 
+        // Noted before the modifiers run, and never written back: a refresh during them has to make this result old, as it
+        // would with any other refresh, and writing the earlier number afterwards would make older results look current.
+        if (!CasterGenerations.ContainsKey(caster.Guid))
+        {
+            CasterGenerations[caster.Guid] = generation;
+        }
+
         var result = BuildModifiedEffect(original, definition, caster, effect, metamagic);
 
-        CasterGenerations[caster.Guid] = generation;
         entry = new LiveEffectEntry { Description = result, Generation = generation };
         entries[metamagicName] = entry;
 
