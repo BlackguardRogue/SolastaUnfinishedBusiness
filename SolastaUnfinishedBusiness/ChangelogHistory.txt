@@ -1,5 +1,6 @@
 Unreleased:
 - Respec: a character's Cells Travelled, Earned XP and Hit Accuracy stats are now kept, like their other campaign stats. They went back to 0.
+- Hero tooltip: the distance travelled is now right. It showed 1/25 of the real distance.
 
 1.13.0:
 - Multiplayer, the desyncs where computers number new game objects differently: fixed the causes found so far, so the numbers no longer drift apart in these cases. All players need this version and should start from the same save.

@@ -365,7 +365,9 @@ public static class GuiCharacterPatcher
             var sb = new StringBuilder();
             var totalAttacks = (float)hero.successfulAttacks + hero.failedAttacks;
             var hitAccuracy = totalAttacks > 0 ? hero.successfulAttacks / totalAttacks : 0;
-            var feet = hero.travelledCells / 5f;
+            // the game counts one travelled cell per move step, and a cell is 5 ft (the mod's own texts say "10 cells (50 ft)").
+            // This used to divide by 5, which showed 1/25 of the real distance.
+            var feet = hero.travelledCells * 5f;
             var meter = feet * 0.3048;
 
             sb.AppendLine(hero.Name);
