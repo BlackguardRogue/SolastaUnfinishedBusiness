@@ -393,6 +393,10 @@ internal static class PowerBundle
         // missed. This runs once per result, so uses bound it, not frames.
         if (ObjectIdDiagnosticsContext.StaleEffectChecksActive)
         {
+            // This counts as the entry's check, passed or failed: the first comparison or retry waits the usual interval,
+            // rather than spending another rebuild on the next read, which could be in this same frame.
+            entry.LastCheckedFrame = Time.frameCount;
+
             try
             {
                 entry.Baseline = SummarizeWithoutEffect(original, definition, caster, metamagic);
