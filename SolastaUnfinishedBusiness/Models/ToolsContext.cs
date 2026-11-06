@@ -438,6 +438,12 @@ internal static class ToolsContext
             newHero.restoredHealth = oldHero.restoredHealth;
             newHero.usedMagicAndPowers = oldHero.usedMagicAndPowers;
             newHero.knockOuts = oldHero.knockOuts;
+            // the game's other four campaign stats (RulesetCharacterHero.ResetStats and DumpStats list all twelve).
+            // The new hero starts them at 0, so without these a respec reset Cells Travelled, Earned XP and Hit Accuracy.
+            newHero.travelledCells = oldHero.travelledCells;
+            newHero.earnedXP = oldHero.earnedXP;
+            newHero.successfulAttacks = oldHero.successfulAttacks;
+            newHero.failedAttacks = oldHero.failedAttacks;
 
             //Handle conditions
             TransferConditionsOfCategory(oldHero, newHero, AttributeDefinitions.TagEffect);
@@ -525,6 +531,12 @@ internal static class ToolsContext
                 newHero.restoredHealth = oldHero.restoredHealth;
                 newHero.usedMagicAndPowers = oldHero.usedMagicAndPowers;
                 newHero.knockOuts = oldHero.knockOuts;
+                // the game's other four campaign stats (RulesetCharacterHero.ResetStats and DumpStats list all twelve).
+                // The new hero starts them at 0, so without these a respec reset Cells Travelled, Earned XP and Hit Accuracy.
+                newHero.travelledCells = oldHero.travelledCells;
+                newHero.earnedXP = oldHero.earnedXP;
+                newHero.successfulAttacks = oldHero.successfulAttacks;
+                newHero.failedAttacks = oldHero.failedAttacks;
 
                 TransferConditionsOfCategory(oldHero, newHero, AttributeDefinitions.TagEffect);
                 CleanupOldHeroConditions(oldHero, newHero);

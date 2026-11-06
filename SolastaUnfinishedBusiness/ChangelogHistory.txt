@@ -1,3 +1,6 @@
+Unreleased:
+- Respec: a character's Cells Travelled, Earned XP and Hit Accuracy stats are now kept, like their other campaign stats. They went back to 0.
+
 1.13.0:
 - Multiplayer, the desyncs where computers number new game objects differently: fixed the causes found so far, so the numbers no longer drift apart in these cases. All players need this version and should start from the same save.
 - Saving no longer makes a spell or power run its "effect ended" step extra times when it ends. Each save added one more run (a game bug), and a quick save happens on one computer only.
