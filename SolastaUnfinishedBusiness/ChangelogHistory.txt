@@ -1,6 +1,6 @@
 Unreleased:
 - Respec: a character's Cells Travelled, Earned XP and Hit Accuracy stats are now kept, like their other campaign stats. They went back to 0.
-- Hero tooltip: the distance travelled is now right. It showed 1/25 of the real distance.
+- Hero tooltip: Cells Traveled now shows the number of cells, like the end-of-adventure screen. It showed a distance, at 1/25 of the real one.
 - Respec: a party whose heroes have all respecced can no longer long rest a second time the same day.
 
 1.13.0:
