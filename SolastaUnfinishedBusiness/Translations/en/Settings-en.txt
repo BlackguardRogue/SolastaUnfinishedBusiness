@@ -556,7 +556,6 @@ ModUi/&MultiplayerCurrentDelay=<color=white>Current action delay:</color> {0} ti
 ModUi/&MultiplayerPing=Ping: {0} ms
 ModUi/&MultiplayerNoPing=Ping: not reported
 ModUi/&MultiplayerEnableStateFingerprint=Also compare every character's HP, position, conditions, spell slots and the dice sequence every 5 seconds, and say which character differs <i><color=#F0DAA0>[only checked when nothing is moving or acting]</color></i>
-ModUi/&MultiplayerQuickCorrectDesync=Out of combat, let the host correct small differences (HP, position, spell slots, dice) on every computer without reloading <i><color=#F0DAA0>[conditions or missing characters still need a resync]</color></i>
 ModUi/&MultiplayerOfferHostResync=Offer the host a one-click resync when a desync can't be corrected <i><color=#F0DAA0>[the host quick-saves and reloads; clients are brought into the same save]</color></i>
 ModUi/&MultiplayerTimeTitle=<color=#F0DAA0>Time and rests:</color>
 ModUi/&MultiplayerRequireApprovalForTimeConsumingActions=Ask every player to approve actions that pass in-game time: short and long rests, learning or scribing spells from scrolls, Mark Deity, rituals, and spells or powers that take a minute or more <i><color=#F0DAA0>[the popup says what is being done and for how long; nobody is asked while a character is in combat or a cutscene, and the player who asked is told which character]</color></i>

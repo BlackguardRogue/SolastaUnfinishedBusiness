@@ -581,7 +581,6 @@ ModUi/&MultiplayerPing=Ping: {0}ミリ秒
 ModUi/&MultiplayerPingBasedTickBuffer=各プレイヤーのpingから行動遅延を決める <i><color=#F0DAA0>[回線が遅いときは誰かが待つ前に引き上げ、速いグループは下の最小値まで下げられる]</color></i>
 ModUi/&MultiplayerPingVisibleToHostOnly=プレイヤーのpingと行動遅延はホストだけが見られる <i><color=#F0DAA0>[オフなら全プレイヤーがこのタブとプレイヤープレートで見られる]</color></i>
 ModUi/&MultiplayerPlayersVersions=<color=white>このルームのビルド：</color>
-ModUi/&MultiplayerQuickCorrectDesync=戦闘外では、ホストが各コンピューターの小さな違い（HP、位置、呪文スロット、ダイス）をロードし直さずに修正できる <i><color=#F0DAA0>[状態の違いやいないキャラクターには再同期が必要]</color></i>
 ModUi/&MultiplayerRequireApprovalForTimeConsumingActions=ゲーム内時間が経過する行動は全プレイヤーに承認を求める：小休憩と大休憩、巻物からの呪文の習得や筆写、神の聖印、儀式、1分以上かかる呪文や能力 <i><color=#F0DAA0>[ポップアップで何をどれだけの時間行うかを表示。キャラクターが戦闘中やカットシーン中は誰にも尋ねず、求めたプレイヤーにどのキャラクターかを伝える]</color></i>
 ModUi/&MultiplayerResolveOverlapsOnBattleStart=戦闘開始時、同じマスにいるキャラクターを最寄りの安全なマスへ移動する <i><color=#F0DAA0>[無償・無害で、忍び足中なら敵に気づかれない。どの敵からも見えないマスに忍び足のキャラクターが1人だけならそのマスに残り、それ以外は最初に作られたキャラクターが残る]</color></i>
 ModUi/&MultiplayerSecondsBeforeLowerTickBuffer=<color=white>遅延を下げるまでの待ちのない秒数</color> <i><color=#F0DAA0>[ゲームの既定値10]</color></i>

@@ -193,7 +193,6 @@ public class Settings : UnityModManager.ModSettings
     public bool MultiplayerEnemyTurnSpeedUp { get; set; } = true;
     public bool MultiplayerEnableDesyncDetection { get; set; } = true;
     public bool MultiplayerEnableStateFingerprint { get; set; } = true;
-    public bool MultiplayerQuickCorrectDesync { get; set; } = true;
     public bool MultiplayerOfferHostResync { get; set; } = true;
     public bool MultiplayerEnableTickBufferTuning { get; set; } = true;
     public bool MultiplayerFlushCommandsImmediately { get; set; } = true;

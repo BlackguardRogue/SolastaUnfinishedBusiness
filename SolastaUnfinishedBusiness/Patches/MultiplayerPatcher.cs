@@ -228,16 +228,16 @@ public static class MultiplayerPatcher
         }
     }
 
-    //PATCH: notes the tick of each lockstep command, so a quick correct can tell if one came after its capture (MULTIPLAYER)
-    [HarmonyPatch(typeof(NetworkingManager), nameof(NetworkingManager.AddDelayedCommand))]
+    //PATCH: runs the Resync button in the game log's desync line (MULTIPLAYER)
+    [HarmonyPatch(typeof(GuiConsoleLine), nameof(GuiConsoleLine.FragmentClicked))]
     [SuppressMessage("Minor Code Smell", "S101:Types should be named in PascalCase", Justification = "Patch")]
     [UsedImplicitly]
-    public static class AddDelayedCommand_Patch
+    public static class FragmentClicked_Patch
     {
         [UsedImplicitly]
-        public static void Prefix(NetworkingManager __instance, long tick)
+        public static bool Prefix(GuiConsoleLine __instance)
         {
-            MultiplayerDesyncContext.CommandQueued(__instance, tick);
+            return !MultiplayerDesyncContext.HandleLogClick(__instance.Entry);
         }
     }
 

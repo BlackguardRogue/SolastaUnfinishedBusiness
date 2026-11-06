@@ -581,7 +581,6 @@ ModUi/&MultiplayerPing=핑: {0}ms
 ModUi/&MultiplayerPingBasedTickBuffer=각 플레이어의 핑에 맞춰 행동 지연을 정함 <i><color=#F0DAA0>[연결이 느리면 누군가 기다리기 전에 올리고, 빠른 그룹은 아래의 최솟값까지 내릴 수 있음]</color></i>
 ModUi/&MultiplayerPingVisibleToHostOnly=플레이어의 핑과 행동 지연은 호스트만 봄 <i><color=#F0DAA0>[끄면 모든 플레이어가 이 탭과 플레이어 명패에서 봄]</color></i>
 ModUi/&MultiplayerPlayersVersions=<color=white>이 방의 빌드:</color>
-ModUi/&MultiplayerQuickCorrectDesync=전투 밖에서는 호스트가 각 컴퓨터의 작은 차이(HP, 위치, 주문 슬롯, 주사위)를 다시 불러오지 않고 수정 <i><color=#F0DAA0>[상태 차이나 없는 캐릭터는 여전히 재동기화가 필요]</color></i>
 ModUi/&MultiplayerRequireApprovalForTimeConsumingActions=게임 내 시간이 흐르는 행동은 모든 플레이어의 승인을 받음: 짧은 휴식과 긴 휴식, 두루마리에서 주문 습득이나 작성, 신 문양 새기기, 의식, 1분 이상 걸리는 주문이나 능력 <i><color=#F0DAA0>[창에 무엇을 얼마 동안 하는지 표시. 캐릭터가 전투나 컷신 중이면 아무에게도 묻지 않고, 요청한 플레이어에게 어느 캐릭터인지 알려 줌]</color></i>
 ModUi/&MultiplayerResolveOverlapsOnBattleStart=전투가 시작되면 같은 칸을 쓰는 캐릭터를 가장 가까운 안전한 칸으로 옮김 <i><color=#F0DAA0>[무료이며 해가 없고, 은신 중이면 적에게 들키지 않음. 어떤 적도 보지 못하는 칸에 은신자가 혼자 있으면 그 칸에 남고, 아니면 먼저 만들어진 캐릭터가 남음]</color></i>
 ModUi/&MultiplayerSecondsBeforeLowerTickBuffer=<color=white>지연을 낮추기 전 대기 없이 지나야 하는 초</color> <i><color=#F0DAA0>[게임 기본값 10]</color></i>

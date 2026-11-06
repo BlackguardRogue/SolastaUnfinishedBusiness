@@ -161,12 +161,6 @@ internal static class MultiplayerDisplay
                 Main.Settings.MultiplayerEnableStateFingerprint = toggle;
             }
 
-            toggle = Main.Settings.MultiplayerQuickCorrectDesync;
-            if (UI.Toggle(Gui.Localize("ModUi/&MultiplayerQuickCorrectDesync"), ref toggle, UI.AutoWidth()))
-            {
-                Main.Settings.MultiplayerQuickCorrectDesync = toggle;
-            }
-
             toggle = Main.Settings.MultiplayerOfferHostResync;
             if (UI.Toggle(Gui.Localize("ModUi/&MultiplayerOfferHostResync"), ref toggle, UI.AutoWidth()))
             {
