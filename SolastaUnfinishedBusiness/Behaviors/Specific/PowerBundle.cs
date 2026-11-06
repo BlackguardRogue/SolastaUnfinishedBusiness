@@ -348,8 +348,13 @@ internal static class PowerBundle
 
     internal static void ClearSpellEffectCache(RulesetCharacter caster)
     {
-        CasterGenerations.TryGetValue(caster.Guid, out var generation);
-        CasterGenerations[caster.Guid] = generation + 1;
+        // A caster with no entry has no kept results to make old. Monsters that never have any then add nothing here, which
+        // otherwise holds one entry for every character refreshed since the game started.
+        if (CasterGenerations.TryGetValue(caster.Guid, out var generation))
+        {
+            CasterGenerations[caster.Guid] = generation + 1;
+        }
+
         GuiEffects.Remove(caster.Guid);
     }
 
@@ -385,6 +390,7 @@ internal static class PowerBundle
 
         var result = BuildModifiedEffect(original, definition, caster, effect, metamagic);
 
+        CasterGenerations[caster.Guid] = generation;
         entry = new LiveEffectEntry { Description = result, Generation = generation };
         entries[metamagicName] = entry;
 

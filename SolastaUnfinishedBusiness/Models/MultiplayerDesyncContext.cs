@@ -65,6 +65,7 @@ internal static class MultiplayerDesyncContext
     private static ulong _lastFingerprintTick = ulong.MaxValue;
     private static bool _resyncOffered;
     private static string _lastRecoverySave;
+    private static string _lastRecoverySaveCampaign;
     private static float _resyncWaitUntil;
 
     // the entity ID check found a gap, which only a load clears, so a Resync button for it is still useful
@@ -201,7 +202,8 @@ internal static class MultiplayerDesyncContext
 
         switch (kind)
         {
-            case FingerprintKind:
+            case FingerprintKind when Main.Settings.MultiplayerEnableDesyncDetection &&
+                                      Main.Settings.MultiplayerEnableStateFingerprint:
                 OnFingerprint(Fingerprint.FromEvent(data), sender);
                 break;
             case ResyncKind when sender is { IsMasterClient: true }:
@@ -215,8 +217,7 @@ internal static class MultiplayerDesyncContext
 
     private static void OnFingerprint(Fingerprint received, Player sender)
     {
-        if (received == null || sender == null || !Main.Settings.MultiplayerEnableDesyncDetection ||
-            !Main.Settings.MultiplayerEnableStateFingerprint)
+        if (received == null || sender == null)
         {
             return;
         }
@@ -496,6 +497,7 @@ internal static class MultiplayerDesyncContext
 
         Main.Info($"Multiplayer recovery save written: {path}");
         _lastRecoverySave = name;
+        _lastRecoverySaveCampaign = Gui.GameCampaign?.CampaignGuid;
 
         return name;
 
@@ -503,6 +505,20 @@ internal static class MultiplayerDesyncContext
         {
             saved = true;
         }
+    }
+
+    // The last recovery save, for telling the host what it can load by hand. Slots are shared by every game on this computer,
+    // so it only counts if it's from this game and is still there.
+    private static string UsableLastRecoverySave()
+    {
+        if (_lastRecoverySave == null || _lastRecoverySaveCampaign != Gui.GameCampaign?.CampaignGuid)
+        {
+            return null;
+        }
+
+        var path = Path.Combine(TacticalAdventuresApplication.SaveGameDirectory, _lastRecoverySave) + ".sav";
+
+        return File.Exists(path) ? _lastRecoverySave : null;
     }
 
     // an unused slot first, then the oldest
@@ -698,7 +714,7 @@ internal static class MultiplayerDesyncContext
         // lets the message box close first
         yield return null;
 
-        var previous = _lastRecoverySave;
+        var previous = UsableLastRecoverySave();
         var save = MakeRecoverySave(out var reason);
 
         if (save == null)
@@ -851,10 +867,12 @@ internal static class MultiplayerDesyncContext
                         .Select(x => $"{x.ConditionDefinition?.Name}:{x.RemainingRounds}")
                         .OrderBy(x => x)
                         .SelectMany(TextValues)),
-                    // apart from Conditions, so it can be told from a real difference in what a character has
+                    // Apart from Conditions, so it can be told from a real difference in what a character has. Rounds are
+                    // here too, tied to their source: Conditions sorts them apart, so it can't see two sources' rounds swapped.
+                    // That's only logged, because source IDs also differ under a plain numbering gap.
                     ConditionIds = Hash(ruleset.ConditionsByCategory
                         .SelectMany(x => x.Value)
-                        .Select(x => $"{x.ConditionDefinition?.Name}:{x.Guid}:{x.SourceGuid}")
+                        .Select(x => $"{x.ConditionDefinition?.Name}:{x.Guid}:{x.SourceGuid}:{x.RemainingRounds}")
                         .OrderBy(x => x, StringComparer.Ordinal)
                         .SelectMany(TextValues)),
                     SpellSlots = Hash(SpellSlotEntries(character)
