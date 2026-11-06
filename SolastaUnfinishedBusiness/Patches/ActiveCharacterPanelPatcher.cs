@@ -1,5 +1,6 @@
-﻿using System.Diagnostics.CodeAnalysis;
-using System.Runtime.CompilerServices;
+﻿using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
+using System.Linq;
 using HarmonyLib;
 using JetBrains.Annotations;
 using SolastaUnfinishedBusiness.CustomUI;
@@ -14,12 +15,19 @@ public static class ActiveCharacterPanelPatcher
     // What each panel subscribed to, and on which character. Unbind removes exactly these, from that character, so it
     // doesn't depend on the character's state or on what the panel points at by then. Before, Unbind tested the health
     // Bind tested: a hero downed while bound kept the handlers, and rebinding after recovery could add a second set.
-    // Unbind removes the entry, which matters: on the game's runtime this table never lets go of what's left in it. The
-    // game has only a few panels, so one destroyed without an Unbind costs little.
-    private static readonly ConditionalWeakTable<ActiveCharacterPanel, PanelSubscription> Subscriptions = new();
+    // A plain table, as its values refer to their panels through the handlers, so nothing weak would ever let go. Unbind
+    // removes an entry, and a panel destroyed without one is cleaned up at the next bind.
+    private static readonly Dictionary<ActiveCharacterPanel, PanelSubscription> Subscriptions = [];
 
     private static void Subscribe(ActiveCharacterPanel panel, RulesetCharacter character)
     {
+        // Unity's own null check: true once a panel has been destroyed, which also stops its handlers running on a character
+        // that's still in play
+        foreach (var destroyed in Subscriptions.Keys.Where(x => !x).ToList())
+        {
+            Unsubscribe(destroyed);
+        }
+
         Unsubscribe(panel);
 
         var subscription = new PanelSubscription
@@ -44,6 +52,7 @@ public static class ActiveCharacterPanelPatcher
 
     private static void Unsubscribe(ActiveCharacterPanel panel)
     {
+        // a plain lookup by object, which still works for a destroyed panel
         if (!Subscriptions.TryGetValue(panel, out var subscription))
         {
             return;
