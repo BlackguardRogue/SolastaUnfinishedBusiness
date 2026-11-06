@@ -29,8 +29,6 @@ internal static class MultiplayerContext
     private const ulong DesyncCheckTickInterval = 100;
     private const int DesyncCheckHistory = 32;
 
-    private const float ExtraPlacementBackOffset = 1.2f;
-
     private static readonly Dictionary<ulong, ulong> EntityGuidByTick = [];
     private static ulong _lastDesyncCheckTickSent = ulong.MaxValue;
     private static bool _desyncReported;
@@ -737,65 +735,194 @@ internal static class MultiplayerContext
         }
     }
 
-    // official scenes author 4 player placement markers, so heroes 5 and 6 would stay wherever they were standing.
-    // Place them one step behind the front row, between the heroes in front of them, facing the same way.
-    internal static void PlaceExtraHeroes(NarrativeDirectionManager manager, NarrativeSequence sequence)
+    // Official scenes are authored for 4 heroes: the first 4 player markers are their seats. Any further markers are not
+    // seats. They are where the scene's scripted TeleportCharacter states send the 4 role holders later on: of the 891
+    // such states in the game's narrative trees, 653 use markers 0-3 and 39 use markers 4-7, which can be anywhere (70 m
+    // away in Abjuration_01_MeetKythaela, 12 m behind in Abjuration_03_MeetNikannen1).
+    //
+    // The game simply stands hero N on marker N, so with 8 markers heroes 5 and 6 begin on that later stage, out of the
+    // scene; with 4 they stay wherever they were on the map. So the number of markers doesn't say who needs a place: every
+    // hero past the 4th stands in a row behind the seated heroes, whatever the scene has.
+    internal static void PlaceExtraHeroes(NarrativeSequence sequence)
     {
         var markers = sequence.PlayerPlacementMarkers;
         var actors = sequence.PlayerActors;
 
         LogCutsceneParty("before", sequence, markers, actors);
 
-        if (sequence.NarrativeTreeDefinition.IsUserContent ||
-            markers == null || markers.Length == 0 || actors == null || actors.Count <= markers.Length ||
-            markers.Any(x => x == null))
+        if (sequence.NarrativeTreeDefinition.IsUserContent || markers == null || markers.Length == 0 || actors == null)
         {
             return;
         }
 
-        var isTopDown = sequence.NarrativeTreeDefinition.IsTopDownNarrativeSequence;
-        var positioningService = ServiceRepository.GetService<IGameLocationPositioningService>();
+        var seatCount = Mathf.Min(markers.Length, ToolsContext.GamePartySize);
+        var seats = markers.Take(seatCount).Where(x => x != null).ToList();
+        var seated = actors.Take(seatCount).ToList();
+        // parties under 4 are padded with repeats (NarrativeSequenceBuilderPatcher), and a repeat already has its seat
+        var extras = actors.Skip(seatCount).Where(x => x != null && !seated.Contains(x)).Distinct().ToList();
 
-        for (var i = markers.Length; i < actors.Count; i++)
+        if (seats.Count == 0 || extras.Count == 0)
         {
-            var actor = actors[i];
+            return;
+        }
 
-            if (actor == null)
+        StandHeroesBehindSeats(seats, extras, sequence.NarrativeTreeDefinition.IsTopDownNarrativeSequence);
+
+        LogCutsceneParty("after", sequence, markers, actors);
+    }
+
+    // A scripted teleport moves only the 4 heroes holding its roles, so in a bigger party the others would be left on the
+    // previous stage. And as they hold no role, one of them may still be on a seat that a role holder has just been sent
+    // to (653 of these states send roles to markers 0-3, often right at the start), which puts two heroes on one spot.
+    // After a teleport of the whole party, stand everyone it didn't move behind the seats it did use.
+    //
+    // A state moving fewer roles is left alone: it moves part of the party (Level_01_CaerLem_20_Final sends 3 away and
+    // leaves the 4th where they are), so there's no party to follow. Parties of up to 4 have nobody to move, which keeps
+    // the game's own behaviour for them. Everything here comes from the scene and the role map, the same on all computers.
+    internal static void PlaceHeroesLeftByTeleport(NarrativeStateTeleportCharacterBase state)
+    {
+        var sequence = state.NarrativeSequence;
+        var markers = sequence.PlayerPlacementMarkers;
+        var actors = sequence.PlayerActors;
+
+        if (sequence.NarrativeTreeDefinition.IsUserContent ||
+            markers == null || markers.Length == 0 || actors == null || actors.Count <= ToolsContext.GamePartySize)
+        {
+            return;
+        }
+
+        var seats = new List<Transform>();
+        var moved = new HashSet<WorldLocationCharacter>();
+
+        // the same conditions under which NarrativeStateTeleportCharacterBase.Begin has just moved a role
+        foreach (var teleport in state.NarrativeStateDescription.CharacterTeleportDescriptions)
+        {
+            var index = teleport.PlayerMarkerIndex;
+
+            if (index < 0 || index >= markers.Length || !state.PlayerRolesMap.TryGetValue(teleport.Role, out var actor))
             {
                 continue;
             }
 
-            var extraIndex = i - markers.Length;
-            var first = markers[(extraIndex * 2) % markers.Length];
-            var second = markers[((extraIndex * 2) + 1) % markers.Length];
-            var position = ((first.position + second.position) * 0.5f) -
-                           (first.forward * ExtraPlacementBackOffset);
-            var placement = new GameObject($"UB_ExtraHeroPlacement{i}").transform;
+            moved.Add(actor);
 
-            placement.SetPositionAndRotation(position, first.rotation);
-
-            if (!isTopDown)
+            if (markers[index] != null)
             {
-                actor.PlaceFreely(placement);
+                seats.Add(markers[index]);
             }
-            else if (positioningService != null &&
-                     positioningService.CanPlaceCharacter(actor.GameLocationCharacter,
-                         positioningService.GetGridPositionFromWorldPosition(placement),
-                         CellHelpers.PlacementMode.Station, null, null))
-            {
-                manager.TeleportCharacterToStartingPosition(actor, placement);
-            }
-
-            Object.Destroy(placement.gameObject);
         }
 
-        LogCutsceneParty("after", sequence, markers, actors);
+        if (seats.Count < ToolsContext.GamePartySize)
+        {
+            return;
+        }
+
+        var left = actors.Where(x => x != null && !moved.Contains(x)).Distinct().ToList();
+
+        if (left.Count == 0)
+        {
+            return;
+        }
+
+        StandHeroesBehindSeats(seats, left, state is NarrativeStateTeleportCharacterGameplay);
+
+        LogCutsceneParty("after teleport", sequence, markers, actors);
+    }
+
+    // onGrid: a sequence played on the map, where a hero also has to take up a real cell, as the game's
+    // TeleportCharacterToStartingPosition does. Otherwise the hero is only shown there, as the game does for seated heroes.
+    private static void StandHeroesBehindSeats(List<Transform> seats, List<WorldLocationCharacter> heroes, bool onGrid)
+    {
+        var formation = CutsceneFormation.Compute(
+            seats.Select(x => ToPoint(x.position)).ToList(),
+            seats.Select(x => ToPoint(x.forward)).ToList(),
+            heroes.Count);
+        var forward = ToVector(formation.Forward);
+        var right = ToVector(formation.Right);
+        var positioningService = ServiceRepository.GetService<IGameLocationPositioningService>();
+        var placement = new GameObject("FB_CutsceneHeroPlacement").transform;
+
+        placement.rotation = Quaternion.LookRotation(forward, Vector3.up);
+
+        for (var i = 0; i < heroes.Count; i++)
+        {
+            var hero = heroes[i];
+            var spot = ToVector(formation.Spots[i]);
+
+            if (!onGrid)
+            {
+                placement.position = spot;
+                hero.PlaceFreely(placement);
+                continue;
+            }
+
+            if (!TryFindFreeCell(positioningService, hero.GameLocationCharacter, placement, spot, right, forward))
+            {
+                // nothing to do but leave them where they are: the map's own rules forbid stacking them on someone
+                Main.Info($"[CutsceneParty] no free cell near the party for {hero.GameLocationCharacter?.Name}");
+                continue;
+            }
+
+            hero.PlaceFreely(placement);
+
+            var cell = positioningService.GetGridPositionFromWorldPosition(placement);
+
+            if (hero.GameLocationCharacter.LocationPosition != cell)
+            {
+                positioningService.TeleportCharacter(hero.GameLocationCharacter, cell,
+                    positioningService.GetGridOrientationFromWorldOrientation(placement));
+            }
+        }
+
+        Object.Destroy(placement.gameObject);
+    }
+
+    // offsets (along the row, further back) tried in turn when a spot's cell can't be used; cells are 1 m wide
+    private static readonly (int Along, int Back)[] CellSearchOffsets =
+        [(0, 0), (1, 0), (-1, 0), (0, 1), (1, 1), (-1, 1), (2, 0), (-2, 0), (2, 1), (-2, 1), (0, 2), (1, 2), (-1, 2)];
+
+    private static bool TryFindFreeCell(
+        IGameLocationPositioningService positioningService,
+        GameLocationCharacter character,
+        Transform placement,
+        Vector3 spot,
+        Vector3 right,
+        Vector3 forward)
+    {
+        if (positioningService == null || character == null)
+        {
+            return false;
+        }
+
+        foreach (var (along, back) in CellSearchOffsets)
+        {
+            placement.position = spot + (right * along) - (forward * back);
+
+            if (positioningService.CanPlaceCharacter(character,
+                    positioningService.GetGridPositionFromWorldPosition(placement),
+                    CellHelpers.PlacementMode.Station, null, null))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static CutsceneFormation.Point ToPoint(Vector3 vector)
+    {
+        return new CutsceneFormation.Point(vector.x, vector.y, vector.z);
+    }
+
+    private static Vector3 ToVector(CutsceneFormation.Point point)
+    {
+        return new Vector3(point.X, point.Y, point.Z);
     }
 
     // TEMPORARY diagnostics (1.6.17.1): a 6-hero cutscene showed 5 heroes and the root cause isn't known yet. For the
     // first few sequences of each launch, log the party in the sequence with each hero's marker and position, and the
     // whole campaign party, so a missing hero can be told apart from a hidden one. Remove once the cause is known.
-    private const int MaxCutsceneLogs = 6;
+    private const int MaxCutsceneLogs = 16;
     private static int _cutsceneLogs;
 
     private static void LogCutsceneParty(

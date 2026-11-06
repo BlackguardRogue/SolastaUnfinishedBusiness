@@ -1,3 +1,6 @@
+Unreleased:
+- Cutscenes with more than 4 heroes: heroes 5 and 6 now always stand with the party, in a row just behind the first 4. Before, in scenes with a second stage they began far away, out of the scene (for example at the meeting with Kythaela), and when a scene moved the party they could be left behind or end up standing inside another hero. Not tested in game yet.
+
 1.13.0:
 - Multiplayer, the desyncs where computers number new game objects differently: fixed the causes found so far, so the numbers no longer drift apart in these cases. All players need this version and should start from the same save.
 - Saving no longer makes a spell or power run its "effect ended" step extra times when it ends. Each save added one more run (a game bug), and a quick save happens on one computer only.
