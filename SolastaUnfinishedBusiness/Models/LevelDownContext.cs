@@ -1,7 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
-using System.Runtime.CompilerServices;
 using System.Text;
 using Photon.Pun;
 using SolastaUnfinishedBusiness.Api.GameExtensions;
@@ -37,8 +36,9 @@ internal static class LevelDownContext
         AttributeDefinitions.HitPoints
     ];
 
-    private static readonly ConditionalWeakTable<RulesetCharacterHero, LevelHistory> Histories = new();
-    private static readonly ConditionalWeakTable<RulesetCharacterHero, HeroSnapshot> Snapshots = new();
+    // Neither value refers to its hero, which WeakKeyTable needs: they hold definitions, names and numbers.
+    private static readonly WeakKeyTable<RulesetCharacterHero, LevelHistory> Histories = new();
+    private static readonly WeakKeyTable<RulesetCharacterHero, HeroSnapshot> Snapshots = new();
 
     private static RestActivityDefinition RestActivityLevelDown { get; } = RestActivityDefinitionBuilder
         .Create(LevelDownName)

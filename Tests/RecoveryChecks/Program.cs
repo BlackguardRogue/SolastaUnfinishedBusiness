@@ -1,5 +1,7 @@
 using System;
 using System.IO;
+using System.Linq;
+using System.Threading;
 using SolastaUnfinishedBusiness.Models;
 
 var count = 0;
@@ -8,6 +10,52 @@ void Check(bool value, string name)
     if (!value) { throw new Exception(name); }
     count++;
 }
+// WeakKeyTable: goes by identity, replaces, removes, and lets go of keys nothing else holds
+var weak = new WeakKeyTable<string, object>();
+var weakKey = new string('k', 3);
+var sameText = new string('k', 3);
+var weakValue = new object();
+weak.Add(weakKey, weakValue);
+Check(weak.TryGetValue(weakKey, out var foundWeak) && ReferenceEquals(foundWeak, weakValue), "weak table finds its key");
+Check(!weak.TryGetValue(sameText, out _), "weak table goes by identity, not equality");
+var weakValue2 = new object();
+weak.Add(weakKey, weakValue2);
+Check(weak.Count == 1 && weak.TryGetValue(weakKey, out foundWeak) && ReferenceEquals(foundWeak, weakValue2),
+    "weak table replaces a key's value");
+Check(weak.Remove(weakKey) && weak.Count == 0 && !weak.TryGetValue(weakKey, out _), "weak table removes");
+Check(!weak.Remove(weakKey), "weak table removing twice finds nothing");
+
+static WeakReference FillWeakTable(WeakKeyTable<object, object> table, object[] kept)
+{
+    WeakReference firstValue = null;
+
+    for (var i = 0; i < 200; i++)
+    {
+        var key = new object();
+        var value = new object();
+
+        firstValue ??= new WeakReference(value);
+        table.Add(key, value);
+
+        if (i < kept.Length)
+        {
+            kept[i] = key;
+        }
+    }
+
+    return firstValue;
+}
+
+var weakTable = new WeakKeyTable<object, object>();
+var weakKept = new object[10];
+var weakProbe = new Thread(() => FillWeakTable(weakTable, weakKept));
+weakProbe.Start();
+weakProbe.Join();
+for (var i = 0; i < 4; i++) { GC.Collect(); GC.WaitForPendingFinalizers(); }
+weakTable.Purge();
+Check(weakTable.Count == 10, "weak table drops entries whose key died and keeps the live ones");
+Check(weakKept.All(x => weakTable.TryGetValue(x, out _)), "weak table keeps the live keys' values");
+
 var reports = new BoundedTickReports<string>(5, 400);
 Check(reports.Add(200, 100, "early"), "accept early report");
 Check(!reports.Add(200, 100, "replacement"), "ignore duplicate");

@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using System.Linq;
-using System.Runtime.CompilerServices;
 using Photon.Pun;
 using SolastaUnfinishedBusiness.Api.GameExtensions;
 using TA;
@@ -254,7 +253,7 @@ internal static class MultiplayerContext
     private const int ShiftKeyStateFlag = 1 << 20;
 
     private static readonly Dictionary<GameLocationCharacter, bool> LocalShiftKeyState = [];
-    private static readonly ConditionalWeakTable<CharacterActionParams, object> ReceivedShiftKeyState = new();
+    private static readonly WeakKeyTable<CharacterActionParams, object> ReceivedShiftKeyState = new();
     private static readonly object ShiftKeyPressed = new();
 
     // the local key state is kept off the character so game state stays identical on every computer
