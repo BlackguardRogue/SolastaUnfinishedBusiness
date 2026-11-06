@@ -522,7 +522,6 @@ ModUi/&InfusionsOnlyOnNonMagicalItems=奇械师的灌注只能用于非魔法物
 ModUi/&MultiplayerAllowAlliesToPassThroughInCombat=允许战斗中正在移动的盟友互相穿过
 ModUi/&MultiplayerAllowCharactersToOverlapOutOfCombat=允许角色在战斗外共享格子，让队伍一起穿过狭窄通道和门
 ModUi/&MultiplayerAllowPlayersToStartRests=允许每位玩家在休息界面或营火处开始短休或长休，而不只是主机 <i><color=#F0DAA0>[主机仍为所有人执行休息；由剧情触发的休息遵循游戏规则]</color></i>
-ModUi/&MultiplayerAutoResyncAfterMapLoad=每次切换地图后自动重新同步 <i><color=#F0DAA0>[新地图就绪后，主机保存，所有人从该存档重新读取，因此每次切换地图会多一次读取画面]</color></i>
 ModUi/&MultiplayerVotePreviewTitle=<color=#F0DAA0>投票界面预览：</color>
 ModUi/&MultiplayerVotePreviewHelp=<i><color=#F0DAA0>用依次回答的虚构玩家显示旅行和批准的投票界面，以检查其外观。仅限单人游戏且在地点中；不会发送任何内容。关闭此窗口即可查看。</color></i>
 ModUi/&MultiplayerVotePreviewPlayers=虚构玩家

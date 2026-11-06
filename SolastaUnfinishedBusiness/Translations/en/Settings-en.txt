@@ -526,7 +526,6 @@ ModUi/&EnableAdditionalLogging=Enable additional logging
 ModUi/&LogObjectIdRecords=Object ID records <i><color=#F0DAA0>[new game objects, light condition changes and power or spell results, saved to files for comparing computers]</color></i>
 ModUi/&LogStaleEffectChecks=Out-of-date power and spell effects <i><color=#F0DAA0>[notes in the log when an active effect no longer matches the current situation; rechecks active effects, so it costs a little performance]</color></i>
 ModUi/&LogPerception=Perception <i><color=#F0DAA0>[perception requests and rolls in the log]</color></i>
-ModUi/&MultiplayerAutoResyncAfterMapLoad=Automatically resync after each map change <i><color=#F0DAA0>[once the new map is ready, the host saves and everyone reloads from that save, so each map change has a second loading screen]</color></i>
 ModUi/&MultiplayerMenu=Multiplayer
 ModUi/&MultiplayerDescription=Fixes and changes for multiplayer. Every player must use the same mod build and the same settings, as the game runs the same simulation on every computer.
 ModUi/&MultiplayerAlwaysOnFixes=<color=#F0DAA0>Always applied:</color> Wild Magic random target uses the synced dice, the SHIFT choice of warlock or regular slots is sent to every computer with the cast, reaction or conversion, reaction timestamps are not stored in multiplayer, each hero gets one role per conversation, a hero never says two lines in a row for different roles, and heroes 5 and 6 get their own cutscene placement.

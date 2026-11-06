@@ -522,7 +522,6 @@ ModUi/&InfusionsOnlyOnNonMagicalItems=Инфузии изобретателя м
 ModUi/&MultiplayerAllowAlliesToPassThroughInCombat=Разрешить союзникам проходить друг сквозь друга в бою, пока оба двигаются
 ModUi/&MultiplayerAllowCharactersToOverlapOutOfCombat=Разрешить персонажам вне боя занимать одни клетки, чтобы отряд проходил лазы и двери вместе
 ModUi/&MultiplayerAllowPlayersToStartRests=Разрешить любому игроку начинать короткий или долгий отдых с экрана отдыха или у костра, а не только хосту <i><color=#F0DAA0>[хост по-прежнему применяет отдых для всех; отдых, начатый сюжетом, следует правилам игры]</color></i>
-ModUi/&MultiplayerAutoResyncAfterMapLoad=Автоматически синхронизировать после каждой смены карты <i><color=#F0DAA0>[когда новая карта готова, хост сохраняет игру и все загружаются из этого сохранения, поэтому при каждой смене карты будет второй экран загрузки]</color></i>
 ModUi/&MultiplayerVotePreviewTitle=<color=#F0DAA0>Предпросмотр голосования:</color>
 ModUi/&MultiplayerVotePreviewHelp=<i><color=#F0DAA0>Показывает окна голосования за путешествие и одобрение с вымышленными игроками, которые отвечают по очереди, чтобы проверить их вид. Только в одиночной игре, на локации; ничего не отправляется. Закройте это окно, чтобы увидеть его.</color></i>
 ModUi/&MultiplayerVotePreviewPlayers=Вымышленные игроки

@@ -522,7 +522,6 @@ ModUi/&InfusionsOnlyOnNonMagicalItems=アーティフィサーのインフュー
 ModUi/&MultiplayerAllowAlliesToPassThroughInCombat=戦闘中、双方が移動中なら味方同士がすり抜けられるようにする
 ModUi/&MultiplayerAllowCharactersToOverlapOutOfCombat=戦闘外ではキャラクターが同じマスに入れるようにし、パーティーが狭い通路や扉を一緒に通れるようにする
 ModUi/&MultiplayerAllowPlayersToStartRests=ホストだけでなく全プレイヤーが休憩画面やキャンプファイアで小休憩・大休憩を始められるようにする <i><color=#F0DAA0>[休憩は引き続きホストが全員に適用。ストーリーで始まる休憩はゲームのルールに従う]</color></i>
-ModUi/&MultiplayerAutoResyncAfterMapLoad=マップ変更のたびに自動で再同期する <i><color=#F0DAA0>[新しいマップの準備ができるとホストがセーブし、全員がそのセーブから再読み込みするため、マップ変更ごとに読み込み画面が2回表示されます]</color></i>
 ModUi/&MultiplayerVotePreviewTitle=<color=#F0DAA0>投票画面のプレビュー:</color>
 ModUi/&MultiplayerVotePreviewHelp=<i><color=#F0DAA0>移動と承認の投票画面を、順番に回答する架空のプレイヤーで表示し、見た目を確認します。シングルプレイのロケーション内のみ。何も送信されません。表示するにはこのウィンドウを閉じてください。</color></i>
 ModUi/&MultiplayerVotePreviewPlayers=架空のプレイヤー

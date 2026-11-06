@@ -35,13 +35,6 @@ internal static class MultiplayerDesyncContext
     // resets this through the tick reset, and one that fails in the game's file sync comes back to a usable button.
     private const float ResyncWaitSeconds = 30f;
 
-    // An automatic resync after a map change that hasn't found a settled moment by then is given up, so it can't reload the
-    // game long after the party has started playing there.
-    private const float AutoResyncGiveUpSeconds = 180f;
-
-    // how often, in ticks, an automatic resync that is due looks for a settled moment
-    private const ulong AutoResyncCheckTicks = 10;
-
     // recovery saves take turns in a few slots of their own, so they never replace a player's save
     private const string RecoverySavePrefix = "FB Recovery ";
     private const int RecoverySaveSlots = 3;
@@ -76,11 +69,6 @@ internal static class MultiplayerDesyncContext
 
     // the entity ID check found a gap, which only a load clears, so a Resync button for it is still useful
     private static bool _idDesyncReported;
-
-    // A map change has happened and its automatic resync hasn't run. Not cleared by Reset: a map load resets the ticks, and
-    // that must not forget it. The load the resync itself causes is from a save, so it can't start another.
-    private static bool _autoResyncDue;
-    private static float _autoResyncGiveUpAt;
 
     internal static void Reset()
     {
@@ -662,77 +650,11 @@ internal static class MultiplayerDesyncContext
             return;
         }
 
-        BeginResync(networking, serialization);
-    }
-
-    private static void BeginResync(NetworkingManager networking, GameSerializationManager serialization)
-    {
         _resyncWaitUntil = Time.realtimeSinceStartup + ResyncWaitSeconds;
         PhotonNetwork.RaiseEvent(EventCode, new object[] { ResyncKind },
             new RaiseEventOptions { Receivers = ReceiverGroup.Others }, SendOptions.SendReliable);
         networking.StartCoroutine(Resync(serialization));
     }
-
-    // Every computer sees a map load starting. Only a map change makes a resync due. A load from a save already gives everyone
-    // the same game, and it's what a resync ends in.
-    internal static void MapLoadStarting(bool fromSavedGame)
-    {
-        _autoResyncDue = !fromSavedGame;
-        _autoResyncGiveUpAt = 0f;
-    }
-
-    // Host only, each tick: the automatic resync after a map change. It can't run during the loading screen itself: ticks only
-    // advance once the location is ready (NetworkingManager.ValidGameplayContext), and the game's multiplayer load is a command
-    // that needs a tick. So it runs at the first settled moment after that, and players see the map briefly first.
-    internal static void AutoResyncIfDue(NetworkingManager networking)
-    {
-        if (!_autoResyncDue || !networking.ValidGameplayContext() || networking.frozenGameplay ||
-            networking.tick.LocalTick % AutoResyncCheckTicks != 0)
-        {
-            return;
-        }
-
-        if (!Main.Settings.MultiplayerAutoResyncAfterMapLoad || !Global.IsMultiplayer || !PhotonNetwork.InRoom ||
-            PhotonNetwork.OfflineMode || !PhotonNetwork.IsMasterClient ||
-            ServiceRepository.GetService<IGameService>()?.Game?.GameCampaign is { IronManMode: true } ||
-            ServiceRepository.GetService<IGameSerializationService>() is not GameSerializationManager serialization)
-        {
-            _autoResyncDue = false;
-
-            return;
-        }
-
-        if (_autoResyncGiveUpAt == 0f)
-        {
-            _autoResyncGiveUpAt = Time.realtimeSinceStartup + AutoResyncGiveUpSeconds;
-        }
-
-        // A travel encounter starts its battle on arrival. Reloading then isn't worth interrupting it.
-        if (Time.realtimeSinceStartup >= _autoResyncGiveUpAt ||
-            ServiceRepository.GetService<IGameLocationBattleService>() is { IsBattleInProgress: true })
-        {
-            _autoResyncDue = false;
-            Main.Info("Multiplayer automatic resync given up: no settled moment after the map change");
-
-            return;
-        }
-
-        // The game drops a command further than 12 ticks away while a computer's own tick is 12 or less, which is the case on a
-        // computer that finished loading late. So every computer has to be known and past that, or it would miss the load.
-        var everyoneKnownAndPastStart = networking.tick.NetworkTickPerActor.Count >= PhotonNetwork.PlayerList.Length &&
-                                        networking.tick.MinTick > 12;
-
-        if (!everyoneKnownAndPastStart || Time.realtimeSinceStartup < _resyncWaitUntil ||
-            !CanSaveAndLoad(serialization) || !Fingerprint.Capture(networking.tick.LocalTick).Quiet)
-        {
-            return;
-        }
-
-        _autoResyncDue = false;
-        Main.Info("Multiplayer automatic resync after a map change");
-        BeginResync(networking, serialization);
-    }
-
 
     // the host's new recovery save is the state everyone continues from: loading it as host brings every client in.
     // If it can't be written, nothing is loaded: an older save isn't loaded in its place

@@ -166,12 +166,6 @@ internal static class MultiplayerDisplay
             {
                 Main.Settings.MultiplayerOfferHostResync = toggle;
             }
-
-            toggle = Main.Settings.MultiplayerAutoResyncAfterMapLoad;
-            if (UI.Toggle(Gui.Localize("ModUi/&MultiplayerAutoResyncAfterMapLoad"), ref toggle, UI.AutoWidth()))
-            {
-                Main.Settings.MultiplayerAutoResyncAfterMapLoad = toggle;
-            }
         }
 
         UI.Label();

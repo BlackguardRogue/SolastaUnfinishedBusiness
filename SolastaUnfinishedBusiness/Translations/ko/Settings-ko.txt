@@ -522,7 +522,6 @@ ModUi/&InfusionsOnlyOnNonMagicalItems=아티피서의 주입은 비마법 아이
 ModUi/&MultiplayerAllowAlliesToPassThroughInCombat=전투 중 둘 다 이동 중이면 아군끼리 서로 통과할 수 있게 함
 ModUi/&MultiplayerAllowCharactersToOverlapOutOfCombat=전투 밖에서 캐릭터가 같은 칸을 공유할 수 있게 하여 파티가 좁은 통로와 문을 함께 지나가게 함
 ModUi/&MultiplayerAllowPlayersToStartRests=호스트뿐 아니라 모든 플레이어가 휴식 화면이나 모닥불에서 짧은 휴식이나 긴 휴식을 시작할 수 있게 함 <i><color=#F0DAA0>[휴식은 여전히 호스트가 모두에게 적용. 스토리로 시작되는 휴식은 게임 규칙을 따름]</color></i>
-ModUi/&MultiplayerAutoResyncAfterMapLoad=맵이 바뀔 때마다 자동으로 재동기화 <i><color=#F0DAA0>[새 맵이 준비되면 호스트가 저장하고 모두 그 저장에서 다시 불러오므로, 맵을 바꿀 때마다 로딩 화면이 한 번 더 나옵니다]</color></i>
 ModUi/&MultiplayerVotePreviewTitle=<color=#F0DAA0>투표 화면 미리보기:</color>
 ModUi/&MultiplayerVotePreviewHelp=<i><color=#F0DAA0>이동 및 승인 투표 화면을 차례로 응답하는 가상의 플레이어와 함께 표시하여 모양을 확인합니다. 싱글 플레이의 장소 안에서만 가능하며, 아무것도 전송되지 않습니다. 보려면 이 창을 닫으세요.</color></i>
 ModUi/&MultiplayerVotePreviewPlayers=가상의 플레이어

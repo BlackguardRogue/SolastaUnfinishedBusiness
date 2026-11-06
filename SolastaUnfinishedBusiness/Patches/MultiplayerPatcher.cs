@@ -218,7 +218,6 @@ public static class MultiplayerPatcher
             MultiplayerContext.SendDesyncCheckIfNeeded(__instance);
             MultiplayerPerfContext.Lap(MultiplayerPerfContext.Hook.DesyncCheck, ref start);
             MultiplayerDesyncContext.SendFingerprintIfNeeded(__instance);
-            MultiplayerDesyncContext.AutoResyncIfDue(__instance);
             MultiplayerPerfContext.Lap(MultiplayerPerfContext.Hook.Fingerprint, ref start);
             MultiplayerSessionContext.PublishPingIfNeeded();
             MultiplayerFpsContext.MeasureAndPublishIfNeeded();

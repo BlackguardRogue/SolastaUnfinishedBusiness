@@ -522,7 +522,6 @@ ModUi/&InfusionsOnlyOnNonMagicalItems=Infusionen des Artificers können nur auf 
 ModUi/&MultiplayerAllowAlliesToPassThroughInCombat=Verbündeten im Kampf erlauben, sich durcheinander hindurch zu bewegen, solange sich beide bewegen
 ModUi/&MultiplayerAllowCharactersToOverlapOutOfCombat=Charakteren außerhalb des Kampfes erlauben, Felder zu teilen, damit die Gruppe gemeinsam durch Kriechgänge und Türen geht
 ModUi/&MultiplayerAllowPlayersToStartRests=Jeden Spieler eine kurze oder lange Rast im Rastbildschirm oder an einem Lagerfeuer beginnen lassen, nicht nur den Host <i><color=#F0DAA0>[der Host wendet die Rast weiterhin für alle an; von der Geschichte begonnene Rasten folgen den Spielregeln]</color></i>
-ModUi/&MultiplayerAutoResyncAfterMapLoad=Nach jedem Kartenwechsel automatisch neu synchronisieren <i><color=#F0DAA0>[sobald die neue Karte bereit ist, speichert der Host und alle laden daraus neu, sodass jeder Kartenwechsel einen zweiten Ladebildschirm hat]</color></i>
 ModUi/&MultiplayerVotePreviewTitle=<color=#F0DAA0>Vorschau der Abstimmung:</color>
 ModUi/&MultiplayerVotePreviewHelp=<i><color=#F0DAA0>Zeigt die Abstimmungsfenster für Reisen und Zustimmungen mit erfundenen Spielern, die nacheinander antworten, um ihr Aussehen zu prüfen. Nur im Einzelspieler, an einem Ort; es wird nichts gesendet. Schließe dieses Fenster, um sie zu sehen.</color></i>
 ModUi/&MultiplayerVotePreviewPlayers=Erfundene Spieler

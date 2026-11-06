@@ -522,7 +522,6 @@ ModUi/&InfusionsOnlyOnNonMagicalItems=Las infusiones del artífice solo pueden p
 ModUi/&MultiplayerAllowAlliesToPassThroughInCombat=Permitir que los aliados se atraviesen en combate mientras ambos se mueven
 ModUi/&MultiplayerAllowCharactersToOverlapOutOfCombat=Permitir que los personajes compartan casillas fuera de combate, para que el grupo pase junto por pasadizos estrechos y puertas
 ModUi/&MultiplayerAllowPlayersToStartRests=Permitir que cualquier jugador empiece un descanso corto o largo desde la pantalla de descanso o en una hoguera, no solo el anfitrión <i><color=#F0DAA0>[el anfitrión sigue aplicando el descanso para todos; los descansos iniciados por la historia siguen las reglas del juego]</color></i>
-ModUi/&MultiplayerAutoResyncAfterMapLoad=Resincronizar automáticamente tras cada cambio de mapa <i><color=#F0DAA0>[cuando el nuevo mapa está listo, el anfitrión guarda y todos recargan desde esa partida, por lo que cada cambio de mapa tiene una segunda pantalla de carga]</color></i>
 ModUi/&MultiplayerVotePreviewTitle=<color=#F0DAA0>Vista previa de la votación:</color>
 ModUi/&MultiplayerVotePreviewHelp=<i><color=#F0DAA0>Muestra las ventanas de votación de viaje y de aprobación con jugadores inventados que responden uno tras otro, para comprobar su aspecto. Solo en un jugador, en una ubicación; no se envía nada. Cierra esta ventana para verla.</color></i>
 ModUi/&MultiplayerVotePreviewPlayers=Jugadores inventados

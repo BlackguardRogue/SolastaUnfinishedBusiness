@@ -522,7 +522,6 @@ ModUi/&InfusionsOnlyOnNonMagicalItems=Le infusioni dell'artefice possono essere 
 ModUi/&MultiplayerAllowAlliesToPassThroughInCombat=Consenti agli alleati di attraversarsi in combattimento mentre entrambi si muovono
 ModUi/&MultiplayerAllowCharactersToOverlapOutOfCombat=Consenti ai personaggi di condividere le caselle fuori dal combattimento, così il gruppo passa insieme da cunicoli e porte
 ModUi/&MultiplayerAllowPlayersToStartRests=Consenti a ogni giocatore di iniziare un riposo breve o lungo dalla schermata di riposo o a un falò, non solo all'host <i><color=#F0DAA0>[l'host applica comunque il riposo per tutti; i riposi avviati dalla storia seguono le regole del gioco]</color></i>
-ModUi/&MultiplayerAutoResyncAfterMapLoad=Risincronizza automaticamente dopo ogni cambio di mappa <i><color=#F0DAA0>[quando la nuova mappa è pronta, l'host salva e tutti ricaricano da quel salvataggio, quindi ogni cambio di mappa ha una seconda schermata di caricamento]</color></i>
 ModUi/&MultiplayerVotePreviewTitle=<color=#F0DAA0>Anteprima della votazione:</color>
 ModUi/&MultiplayerVotePreviewHelp=<i><color=#F0DAA0>Mostra le finestre di votazione per viaggio e approvazione con giocatori inventati che rispondono uno dopo l'altro, per controllarne l'aspetto. Solo in giocatore singolo, in un luogo; non viene inviato nulla. Chiudi questa finestra per vederla.</color></i>
 ModUi/&MultiplayerVotePreviewPlayers=Giocatori inventati
