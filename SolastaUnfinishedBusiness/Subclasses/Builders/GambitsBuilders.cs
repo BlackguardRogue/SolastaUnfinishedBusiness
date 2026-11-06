@@ -1862,7 +1862,8 @@ internal static class GambitsBuilders
 
             foreach (var position in boxInt.EnumerateAllPositionsWithin())
             {
-                if (int3.Distance(cursorLocationSelectPosition.centerPosition, position) >
+                // from the ally, who is the one moving: the cursor's centre is the character using the gambit
+                if (int3.Distance(targetCharacter.LocationPosition, position) >
                     (double)halfMaxTacticalMoves ||
                     !positioningService.CanPlaceCharacter(
                         targetCharacter, position, CellHelpers.PlacementMode.Station) ||
