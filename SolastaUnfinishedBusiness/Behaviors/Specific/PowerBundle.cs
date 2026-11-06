@@ -2,7 +2,6 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
-using System.Runtime.CompilerServices;
 using JetBrains.Annotations;
 using SolastaUnfinishedBusiness.Api.GameExtensions;
 using SolastaUnfinishedBusiness.Builders;
@@ -31,16 +30,24 @@ internal static class PowerBundle
     // effect's life, because code changes a live effect's description and expects the change to last (gambits' RangeType,
     // the teleport cursor's targeting). RefreshAll still drops a caster's results, as before: it moves the caster's
     // generation on, and a result from an older generation is worked out again.
-    // Weak keys: a result goes when its effect does, however that effect ends and whether or not its caster refreshes
-    // again. Nothing in the entries points back at the effect.
-    private static readonly ConditionalWeakTable<RulesetEffect, Dictionary<string, LiveEffectEntry>> LiveEffects = new();
+    // Removed explicitly, not left to a ConditionalWeakTable: on the game's Boehm runtime such a table never lets go of its
+    // keys or values (Codex tested the installed mono-2.0-bdwgc.dll: 256 of 256 survived, and 0 of 256 after Remove). So
+    // every effect would have stayed in memory for the rest of the launch, with what it refers to. Instead, effects that
+    // have ended are swept out as the table grows, and each map load clears it, which also covers effects that never
+    // reported ending. An effect that's still going then gets its result worked out again, as after any RefreshAll.
+    private static readonly Dictionary<RulesetEffect, Dictionary<string, LiveEffectEntry>> LiveEffects = [];
 
-    // one small number per caster seen in this launch
+    // the fewest effects worth sweeping for, and the size that starts the next sweep
+    private const int LiveEffectSweepMinimum = 64;
+    private static int _liveEffectSweepAt = LiveEffectSweepMinimum;
+
+    // for casters that have kept results, until the next map load
     private static readonly Dictionary<ulong, int> CasterGenerations = [];
 
-    // The stale check's cost is bounded: an effect is looked at once per this many frames, and only so many in a frame.
-    private const int LiveEffectCheckIntervalFrames = 30;
-    private const int LiveEffectChecksPerFrame = 4;
+    // The stale check's cost is bounded: an effect is looked at once per this many frames, and only so many in a frame. It's
+    // on by default and allocates, and garbage per frame is what caused multiplayer's hitches (issue 1), so it's sparing.
+    private const int LiveEffectCheckIntervalFrames = 300;
+    private const int LiveEffectChecksPerFrame = 1;
 
     private static int _liveEffectChecksFrame = -1;
     private static int _liveEffectChecksThisFrame;
@@ -346,6 +353,31 @@ internal static class PowerBundle
         return key;
     }
 
+    // A map load: see LiveEffects. The generations go too, as nothing is left that was stamped with them.
+    internal static void ClearLiveEffects()
+    {
+        LiveEffects.Clear();
+        CasterGenerations.Clear();
+        _liveEffectSweepAt = LiveEffectSweepMinimum;
+    }
+
+    // A read after an effect ended and was swept works its result out again, which only matters to code reading an ended
+    // effect's description after enough other effects have come and gone.
+    private static void SweepLiveEffectsIfDue()
+    {
+        if (LiveEffects.Count < _liveEffectSweepAt)
+        {
+            return;
+        }
+
+        foreach (var ended in LiveEffects.Keys.Where(x => x.Terminated).ToList())
+        {
+            LiveEffects.Remove(ended);
+        }
+
+        _liveEffectSweepAt = Math.Max(LiveEffectSweepMinimum, LiveEffects.Count * 2);
+    }
+
     internal static void ClearSpellEffectCache(RulesetCharacter caster)
     {
         // A caster with no entry has no kept results to make old. Monsters that never have any then add nothing here, which
@@ -377,7 +409,14 @@ internal static class PowerBundle
 
         var metamagic = effect is RulesetEffectSpell spell ? spell.MetamagicOption : null;
         var metamagicName = metamagic ? metamagic.Name : string.Empty;
-        var entries = LiveEffects.GetOrCreateValue(effect);
+
+        if (!LiveEffects.TryGetValue(effect, out var entries))
+        {
+            SweepLiveEffectsIfDue();
+            entries = new Dictionary<string, LiveEffectEntry>();
+            LiveEffects.Add(effect, entries);
+        }
+
 
         CasterGenerations.TryGetValue(caster.Guid, out var generation);
 

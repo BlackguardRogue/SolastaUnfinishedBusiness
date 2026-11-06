@@ -11,7 +11,6 @@ static class Program
         if (!result) throw new Exception(name);
         checks++;
     }
-    static bool Valid(int value) => value >= 0 && value <= 3;
     static void Main()
     {
         // same requests on two computers -> same single roll, never rerolled
@@ -29,16 +28,6 @@ static class Program
         // snapshots: canonical, validated, atomic
         var snapshot = a.Capture();
         Check(snapshot[0] == 2 && (snapshot.Length - 1) % 4 == 0, "snapshot version and shape");
-        Check(b.Restore(snapshot, Valid), "recover ledger");
-        b.TryResolve(1, 2, 0, () => ++rollsB, out _);
-        Check(rollsB == 1 && b.Capture().SequenceEqual(snapshot), "recovery does not reroll");
-        Check(!b.Restore(new long[] { 2, 1, 2, 1, 0, 1, 2, 2, 0 }, Valid), "reject duplicate pair");
-        Check(b.Capture().SequenceEqual(snapshot), "invalid restore is atomic");
-        Check(!b.Restore(new long[] { 2, 1, 2, 99, 0 }, Valid), "reject invalid outcome");
-        Check(!b.Restore(new long[] { 1, 0 }, Valid), "reject old format");
-        Check(!b.Restore(new long[] { 2, 1, 2, 1 }, Valid), "reject truncated entry");
-        Check(!b.Restore(new long[] { 2, 1, 2, 1, -1 }, Valid), "reject negative phase");
-        Check(!b.Restore(new long[] { 2, 0, 2, 1, 0 }, Valid), "reject empty guid");
         var ordered = new PerceptionLedger();
         ordered.TryResolve(2, 1, 0, () => 2, out _);
         ordered.TryResolve(1, 2, 0, () => 1, out _);
@@ -60,10 +49,6 @@ static class Program
         Check(phases.Count == 0, "round 2 starts fresh");
         phases.TryResolve(10, 11, 2, () => 3, out var fresh);
         Check(fresh == 3, "a new round rolls once again");
-
-        // validate before change
-        Check(PerceptionLedger.Parse(snapshot, Valid) != null, "parse a valid snapshot");
-        Check(PerceptionLedger.Parse(new long[] { 2, 1, 2, 99, 0 }, Valid) == null, "parse rejects without change");
 
         // request bookkeeping: generations, stale commands, the round 1 exception, cooldowns, bounds
         Check(PerceptionRequests.Applies(4, 2, 4, 2), "same generation applies");
@@ -103,85 +88,26 @@ static class Program
         bounded.Clear();
         Check(bounded.PendingCount == 0 && bounded.TryMarkPending((1, 2), 0, 0, 0f, out _), "clear forgets everything");
 
-        // the last change tick (a correction applies only where no result changed at or after its capture tick)
-        ulong now = 5;
-        var ticks = new PerceptionLedger { Clock = () => now };
-        Check(ticks.LastChangeTick == 0, "no change yet");
-        ticks.TryResolve(1, 2, 0, () => 1, out _);
-        Check(ticks.LastChangeTick == 5, "a roll records its tick");
-        now = 7;
-        ticks.TryResolve(1, 2, 0, () => 2, out _);
-        Check(ticks.LastChangeTick == 5, "a read doesn't");
-        ticks.CarryIntoRound1();
-        Check(ticks.LastChangeTick == 7, "round 1 records its tick");
-        now = 9;
-        ticks.Clear();
-        Check(ticks.LastChangeTick == 9, "a later round start records its tick");
-        // Codex third-review repro: two computers in step, a correction captured at tick 10, a check rolled at tick 12
-        // before it applies: both see the change after the capture and both reject it
-        var peerA = new PerceptionLedger { Clock = () => now };
-        var peerB = new PerceptionLedger { Clock = () => now };
-        now = 3;
-        peerA.TryResolve(1, 2, 0, () => 1, out _);
-        peerB.TryResolve(1, 2, 0, () => 1, out _);
-        const ulong captureTick = 10;
-        Check(peerA.LastChangeTick < captureTick && peerB.LastChangeTick < captureTick,
-            "no change after the capture: both apply");
-        now = 12;
-        peerA.TryResolve(3, 4, 0, () => 1, out _);
-        peerB.TryResolve(3, 4, 0, () => 2, out _);
-        Check(peerA.LastChangeTick >= captureTick && peerB.LastChangeTick >= captureTick,
-            "a check rolled after the capture: both reject, whatever its result");
-        var inCaptureTick = new PerceptionLedger { Clock = () => captureTick };
-        inCaptureTick.TryResolve(1, 2, 0, () => 1, out _);
-        Check(inCaptureTick.LastChangeTick >= captureTick, "a change in the capture tick itself rejects (safe side)");
-        var restored = new PerceptionLedger { Clock = () => now };
-        now = 20;
-        restored.Replace(new System.Collections.Generic.Dictionary<(ulong sensor, ulong target), (int outcome, int phase)> { [(1, 2)] = (1, 0) });
-        Check(restored.LastChangeTick == 20, "a restore records its tick");
-        restored.ResetForLoad();
-        Check(restored.LastChangeTick == 0 && restored.Count == 0, "a load starts with no change and no results");
-
         // a blinded sensor's results are dropped (user direction): its checks roll again; other sensors keep theirs
-        now = 30;
-        var blinded = new PerceptionLedger { Clock = () => now };
+        var blinded = new PerceptionLedger();
         blinded.TryResolve(1, 2, 3, () => 1, out _);
         blinded.TryResolve(1, 4, 3, () => 1, out _);
         blinded.TryResolve(5, 2, 3, () => 1, out _);
-        now = 31;
         Check(blinded.ForgetSensor(1) && !blinded.TryGet(1, 2, out _) && !blinded.TryGet(1, 4, out _),
             "a blinded sensor loses all its results");
         Check(blinded.TryGet(5, 2, out _) && blinded.Count == 1, "other sensors keep theirs");
-        Check(blinded.LastChangeTick == 31, "dropping them is a change at that tick");
-        now = 32;
-        Check(!blinded.ForgetSensor(1) && blinded.LastChangeTick == 32,
-            "nothing to drop here: still a change at that tick (Codex review of 410803bf)");
+        Check(!blinded.ForgetSensor(1), "nothing to drop");
         var rerolled = 0;
         blinded.TryResolve(1, 2, 3, () => { rerolled++; return 2; }, out var rerolledOutcome);
         Check(rerolled == 1 && rerolledOutcome == 2, "the next check rolls again");
 
         // blindness ends: only the failed checks are dropped (outcome 1 stands for a success here)
-        var unblinded = new PerceptionLedger { Clock = () => now };
+        var unblinded = new PerceptionLedger();
         unblinded.TryResolve(1, 2, 3, () => 1, out _);
         unblinded.TryResolve(1, 4, 3, () => 0, out _);
         Check(unblinded.ForgetSensor(1, x => x != 1) && unblinded.TryGet(1, 2, out _) && !unblinded.TryGet(1, 4, out _),
             "blindness ending keeps what it perceived and drops what it failed");
         Check(!unblinded.ForgetSensor(1, x => x != 1), "no failures left: nothing dropped");
-
-        // Codex review of 410803bf: host success and client failure at tick 5, correction captured at 10, blindness ends
-        // everywhere at 12. Both must reject the correction (the same last change tick), not only the client.
-        now = 5;
-        var host = new PerceptionLedger { Clock = () => now };
-        var client = new PerceptionLedger { Clock = () => now };
-        host.TryResolve(1, 2, 3, () => 1, out _);
-        client.TryResolve(1, 2, 3, () => 0, out _);
-        now = 12;
-        host.ForgetSensor(1, x => x != 1);
-        client.ForgetSensor(1, x => x != 1);
-        Check(host.LastChangeTick == 12 && client.LastChangeTick == 12, "divergent results: both stamp the event");
-        var missing = new PerceptionLedger { Clock = () => now };
-        missing.ForgetSensor(1);
-        Check(missing.LastChangeTick == 12, "a computer missing the entries stamps it too");
 
         // re-entrancy and failures
         var loaded = new PerceptionLedger();

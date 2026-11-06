@@ -30,6 +30,9 @@ public static class GameLocationManagerPatcher
             string userLocationName,
             string userCampaignName)
         {
+            // kept effect results don't outlive a map (see PowerBundle.LiveEffects)
+            PowerBundle.ClearLiveEffects();
+
             if (!SettingsContext.GuiModManagerInstance.EnableSaveByLocation)
             {
                 return;

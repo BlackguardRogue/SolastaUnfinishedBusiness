@@ -25,7 +25,7 @@ internal static class MultiplayerDesyncContext
     private const byte ResyncKind = 3;
     private const byte ResyncCancelledKind = 6;
     private const ulong FingerprintTickInterval = 100;
-    private const int ValuesPerCharacter = 11;
+    private const int ValuesPerCharacter = 13;
 
     // Marks a game log line whose button starts a resync. The game's own actions are 0 to 2, and it hides the button of its
     // own load action in multiplayer, so this needs one of its own. The line isn't saved with the game.
@@ -41,19 +41,25 @@ internal static class MultiplayerDesyncContext
 
     private static readonly Dictionary<ulong, Fingerprint> LocalByTick = [];
 
-    // the host's reports on a client: kept by tick within a window around the local tick, however they arrive
-    private static readonly BoundedTickReports<Fingerprint> HostReports = new(8, FingerprintTickInterval * 8);
+    // The host's reports on a client: kept by tick within a window around the local tick, however they arrive. Lockstep keeps
+    // computers far closer than one check apart, so the window is one check: a report from before a load, when its sender
+    // reset later, then rarely fits (only in a load's first check, and a difference needs two checks to count).
+    private static readonly BoundedTickReports<Fingerprint> HostReports = new(8, FingerprintTickInterval);
     private static readonly Dictionary<int, HashSet<string>> PreviousDifferencesByActor = [];
 
     // On the host: clients' checks that arrived before the host reached their tick. Ticks only stay close, so either side can
     // be first, and dropping these would leave the host without a report while the client already sees the difference.
     private static readonly Dictionary<int, BoundedTickReports<Fingerprint>> ClientReports = [];
 
-    // the desync last reported for each player, so the same one isn't reported again
+    // The desync last reported for each player, so the same one isn't reported again. A map change doesn't clear this, as the
+    // game still differs after one. Only a passing check does, or a new game (see ForgetIfNewGame).
     private static readonly Dictionary<int, string> ReportedByActor = [];
 
     // players whose condition IDs were already logged as differing, until a check finds them equal
     private static readonly HashSet<int> ConditionIdsReported = [];
+
+    // players whose rounds per source were already logged as differing, until a check finds them equal
+    private static readonly HashSet<int> ConditionRoundsReported = [];
 
     private static readonly FieldInfo[] RandomStateFields =
         typeof(UnityEngine.Random.State).GetFields(BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)
@@ -71,19 +77,44 @@ internal static class MultiplayerDesyncContext
     // the entity ID check found a gap, which only a load clears, so a Resync button for it is still useful
     private static bool _idDesyncReported;
 
+    // the game the two above are about; a load from a save makes a new one
+    private static Game _reportedGame;
+
+    // A controller has no log button to come back to, so the offer comes again at the first check when the game can save.
+    private static bool _reofferWhenPossible;
+
     internal static void Reset()
     {
         LocalByTick.Clear();
         HostReports.Prune(ulong.MaxValue);
         PreviousDifferencesByActor.Clear();
-        ReportedByActor.Clear();
         ConditionIdsReported.Clear();
+        ConditionRoundsReported.Clear();
         _lastFingerprintTick = ulong.MaxValue;
         _resyncOffered = false;
         _resyncWaitUntil = 0f;
-        _idDesyncReported = false;
+        _reofferWhenPossible = Gui.GamepadActive && ReportedByActor.Count > 0;
         ClientReports.Clear();
     }
+
+    // A load from a save or a new session makes a new game, and what was reported about the old one is over.
+    private static void ForgetIfNewGame()
+    {
+        var game = Gui.Game;
+
+        if (ReferenceEquals(game, _reportedGame))
+        {
+            return;
+        }
+
+        _reportedGame = game;
+        ReportedByActor.Clear();
+        _idDesyncReported = false;
+        _reofferWhenPossible = false;
+    }
+
+    private static bool IsIronMan =>
+        ServiceRepository.GetService<IGameService>()?.Game?.GameCampaign is { IronManMode: true };
 
     #region Sending
 
@@ -153,7 +184,7 @@ internal static class MultiplayerDesyncContext
         }
 
         foreach (var actor in ReportedByActor.Keys.Concat(ClientReports.Keys).Concat(PreviousDifferencesByActor.Keys)
-                     .Concat(ConditionIdsReported).Distinct().ToList())
+                     .Concat(ConditionIdsReported).Concat(ConditionRoundsReported).Distinct().ToList())
         {
             if (PhotonNetwork.CurrentRoom.GetPlayer(actor) != null)
             {
@@ -164,6 +195,7 @@ internal static class MultiplayerDesyncContext
             ClientReports.Remove(actor);
             PreviousDifferencesByActor.Remove(actor);
             ConditionIdsReported.Remove(actor);
+            ConditionRoundsReported.Remove(actor);
         }
     }
 
@@ -249,7 +281,7 @@ internal static class MultiplayerDesyncContext
         {
             if (!ClientReports.TryGetValue(sender.ActorNumber, out var reports))
             {
-                reports = new BoundedTickReports<Fingerprint>(8, FingerprintTickInterval * 8);
+                reports = new BoundedTickReports<Fingerprint>(8, FingerprintTickInterval);
                 ClientReports[sender.ActorNumber] = reports;
             }
 
@@ -270,11 +302,14 @@ internal static class MultiplayerDesyncContext
             return;
         }
 
+        ForgetIfNewGame();
+
         var allDifferences = Differences(host, other);
 
-        // Condition IDs are only logged: they don't change what a player sees, and a reload offer for them would come again
-        // with each new condition once the numbering has drifted.
-        var differences = allDifferences.Where(x => x.Type != DifferenceType.ConditionIds).ToList();
+        // Condition IDs and rounds per source are only logged. IDs don't change what a player sees, and a reload offer for them
+        // would come again with each new condition once the numbering has drifted. Rounds per source rest on the order of IDs,
+        // which two computers can have swapped (see the fingerprint), so they aren't sure enough to stop play for.
+        var differences = allDifferences.Where(x => x.Type == DifferenceType.State).ToList();
 
         PreviousDifferencesByActor.TryGetValue(otherActor, out var previous);
         PreviousDifferencesByActor[otherActor] = new HashSet<string>(differences.Select(x => x.Key));
@@ -283,8 +318,10 @@ internal static class MultiplayerDesyncContext
             ? PhotonNetwork.CurrentRoom?.GetPlayer(otherActor)?.NickName ?? "?"
             : Gui.Localize("ModUi/&MultiplayerHostRole").Trim();
 
-        ReportConditionIds(allDifferences.Where(x => x.Type == DifferenceType.ConditionIds).ToList(),
-            otherActor, playerName, host.Tick);
+        ReportLogOnly(allDifferences.Where(x => x.Type == DifferenceType.ConditionIds).ToList(), ConditionIdsReported,
+            "condition IDs or sources", "condition-ids", otherActor, playerName, host.Tick);
+        ReportLogOnly(allDifferences.Where(x => x.Type == DifferenceType.ConditionRounds).ToList(), ConditionRoundsReported,
+            "condition rounds per source", "condition-rounds", otherActor, playerName, host.Tick);
 
         // a difference must show up in two checks in a row, so a value changing between frames isn't reported
         var confirmed = differences.Where(x => previous != null && previous.Contains(x.Key)).ToList();
@@ -301,15 +338,23 @@ internal static class MultiplayerDesyncContext
 
         var signature = string.Join("|", confirmed.Select(x => x.Key).OrderBy(x => x));
 
+        var details = string.Join("\n", confirmed.Select(x => x.Description).Take(6));
+
         // reported once
         if (ReportedByActor.TryGetValue(otherActor, out var reported) && reported == signature)
         {
+            if (_reofferWhenPossible && PhotonNetwork.IsMasterClient && !_resyncOffered &&
+                ServiceRepository.GetService<IGameSerializationService>() is GameSerializationManager serialization &&
+                CanSaveAndLoad(serialization))
+            {
+                _reofferWhenPossible = false;
+                OfferResync(playerName, details);
+            }
+
             return;
         }
 
         ReportedByActor[otherActor] = signature;
-
-        var details = string.Join("\n", confirmed.Select(x => x.Description).Take(6));
 
         Main.Error($"Multiplayer state desync with {playerName} at tick {host.Tick}:\n{details}");
         // TEMPORARY: each computer saves its recent object-ID records for comparison
@@ -389,12 +434,21 @@ internal static class MultiplayerDesyncContext
             {
                 Add("Conditions", DifferenceType.State, "-", "-");
             }
-            // The same conditions under different object IDs or sources, which is what a numbering gap looks like. This
-            // text only goes to the log (see Compare), so it has no translations.
-            else if (hostCharacter.ConditionIds != otherCharacter.ConditionIds)
+            else
             {
-                differences.Add(new Difference($"{hostCharacter.Guid}:ConditionIds", DifferenceType.ConditionIds,
-                    name));
+                // The same conditions under different object IDs or sources, which is what a numbering gap looks like. This
+                // text only goes to the log (see Compare), so it has no translations.
+                if (hostCharacter.ConditionIds != otherCharacter.ConditionIds)
+                {
+                    differences.Add(new Difference($"{hostCharacter.Guid}:ConditionIds", DifferenceType.ConditionIds,
+                        name));
+                }
+
+                if (hostCharacter.ConditionRounds != otherCharacter.ConditionRounds)
+                {
+                    differences.Add(new Difference($"{hostCharacter.Guid}:ConditionRounds",
+                        DifferenceType.ConditionRounds, name));
+                }
             }
         }
 
@@ -407,24 +461,25 @@ internal static class MultiplayerDesyncContext
         return differences;
     }
 
-    private static void ReportConditionIds(List<Difference> differences, int actor, string playerName, ulong tick)
+    private static void ReportLogOnly(List<Difference> differences, HashSet<int> reported, string what, string recordName,
+        int actor, string playerName, ulong tick)
     {
         if (differences.Count == 0)
         {
-            ConditionIdsReported.Remove(actor);
+            reported.Remove(actor);
 
             return;
         }
 
-        if (!ConditionIdsReported.Add(actor))
+        if (!reported.Add(actor))
         {
             return;
         }
 
-        Main.Error($"Multiplayer condition IDs or sources differ with {playerName} at tick {tick}: " +
+        Main.Error($"Multiplayer {what} differ with {playerName} at tick {tick}: " +
                    string.Join(", ", differences.Select(x => x.Description)));
         // TEMPORARY: each computer saves its recent object-ID records for comparison
-        ObjectIdDiagnosticsContext.DesyncDetected("condition-ids", tick);
+        ObjectIdDiagnosticsContext.DesyncDetected(recordName, tick);
     }
 
     private static string CharacterName(ulong guid)
@@ -560,7 +615,8 @@ internal static class MultiplayerDesyncContext
     // when the game can't save, loses nothing: the button stays until it's used.
     private static void OfferResync(string playerName, string details)
     {
-        if (!Main.Settings.MultiplayerOfferHostResync)
+        // an Iron Man game can't make the save a resync needs, so it's not offered at all
+        if (!Main.Settings.MultiplayerOfferHostResync || IsIronMan)
         {
             Gui.GuiService.ShowAlert(Gui.Format("Message/&MultiplayerDesyncDetails", playerName, details),
                 Gui.ColorFailure, 10f);
@@ -634,11 +690,12 @@ internal static class MultiplayerDesyncContext
     // log line with its button and no message that stops play. Only the host gets it, because only the host can resync.
     internal static void OfferResyncForIdGap()
     {
-        if (!PhotonNetwork.IsMasterClient || !Main.Settings.MultiplayerOfferHostResync)
+        if (!PhotonNetwork.IsMasterClient || !Main.Settings.MultiplayerOfferHostResync || IsIronMan)
         {
             return;
         }
 
+        ForgetIfNewGame();
         _idDesyncReported = true;
         AddResyncLogLine(Gui.Localize("Message/&MultiplayerDesyncIdResyncLine"), true);
     }
@@ -674,9 +731,10 @@ internal static class MultiplayerDesyncContext
             return;
         }
 
+        ForgetIfNewGame();
         ForgetDepartedPlayers();
 
-        // lines also stay after the game matches again, and a message can stay open until then
+        // lines also stay after a check finds the game matching, or the player who differed leaves
         if (ReportedByActor.Count == 0 && !_idDesyncReported)
         {
             Gui.GuiService.ShowAlert("Message/&MultiplayerDesyncResyncNotNeeded", Gui.ColorAlmostWhite, 6f);
@@ -691,12 +749,9 @@ internal static class MultiplayerDesyncContext
             Main.Info("Multiplayer resync not started: the game can't save or load right now");
             Gui.GuiService.ShowAlert("Message/&MultiplayerDesyncResyncNotNow", Gui.ColorFailure, 10f);
 
-            // A controller has no log button to come back to, so the next check offers it again. It only comes back after
-            // someone chose Resync at a bad moment: choosing Later stays quiet.
-            if (Gui.GamepadActive)
-            {
-                ReportedByActor.Clear();
-            }
+            // It comes back for a controller only after someone chose Resync at a bad moment, or a map change: choosing Later
+            // otherwise stays quiet. Nothing is reported again, and it waits until the game can save.
+            _reofferWhenPossible = Gui.GamepadActive;
 
             return;
         }
@@ -796,7 +851,8 @@ internal static class MultiplayerDesyncContext
     private enum DifferenceType
     {
         State,
-        ConditionIds
+        ConditionIds,
+        ConditionRounds
     }
 
     private sealed class Difference(string key, DifferenceType type, string description)
@@ -809,6 +865,7 @@ internal static class MultiplayerDesyncContext
     private sealed class CharacterPrint
     {
         internal long ConditionIds;
+        internal long ConditionRounds;
         internal long Conditions;
         internal ulong Guid;
         internal int HitPoints;
@@ -867,13 +924,21 @@ internal static class MultiplayerDesyncContext
                         .Select(x => $"{x.ConditionDefinition?.Name}:{x.RemainingRounds}")
                         .OrderBy(x => x)
                         .SelectMany(TextValues)),
-                    // Apart from Conditions, so it can be told from a real difference in what a character has. Rounds are
-                    // here too, tied to their source: Conditions sorts them apart, so it can't see two sources' rounds swapped.
-                    // That's only logged, because source IDs also differ under a plain numbering gap.
+                    // apart from Conditions, so it can be told from a real difference in what a character has
                     ConditionIds = Hash(ruleset.ConditionsByCategory
                         .SelectMany(x => x.Value)
-                        .Select(x => $"{x.ConditionDefinition?.Name}:{x.Guid}:{x.SourceGuid}:{x.RemainingRounds}")
+                        .Select(x => $"{x.ConditionDefinition?.Name}:{x.Guid}:{x.SourceGuid}")
                         .OrderBy(x => x, StringComparer.Ordinal)
+                        .SelectMany(TextValues)),
+                    // Rounds tied to their source, which Conditions sorts apart, so it can't see two sources' rounds swapped.
+                    // Sources go by their order and not their IDs, so a plain numbering gap, which keeps that order, doesn't
+                    // change this and can't hide a real difference. IDs swapped between computers would change it.
+                    ConditionRounds = Hash(ruleset.ConditionsByCategory
+                        .SelectMany(x => x.Value)
+                        .OrderBy(x => x.SourceGuid)
+                        .ThenBy(x => x.ConditionDefinition?.Name, StringComparer.Ordinal)
+                        .ThenBy(x => x.RemainingRounds)
+                        .Select(x => $"{x.ConditionDefinition?.Name}:{x.RemainingRounds}")
                         .SelectMany(TextValues)),
                     SpellSlots = Hash(SpellSlotEntries(character)
                         .SelectMany(x => new[] { x.repertoire, x.level, x.used }))
@@ -903,6 +968,8 @@ internal static class MultiplayerDesyncContext
                 values[o + 8] = (int)c.SpellSlots;
                 values[o + 9] = (int)(c.ConditionIds >> 32);
                 values[o + 10] = (int)c.ConditionIds;
+                values[o + 11] = (int)(c.ConditionRounds >> 32);
+                values[o + 12] = (int)c.ConditionRounds;
             }
 
             return
@@ -937,7 +1004,8 @@ internal static class MultiplayerDesyncContext
                     Position = new int3(values[o + 2], values[o + 3], values[o + 4]),
                     Conditions = ((long)values[o + 5] << 32) | (uint)values[o + 6],
                     SpellSlots = ((long)values[o + 7] << 32) | (uint)values[o + 8],
-                    ConditionIds = ((long)values[o + 9] << 32) | (uint)values[o + 10]
+                    ConditionIds = ((long)values[o + 9] << 32) | (uint)values[o + 10],
+                    ConditionRounds = ((long)values[o + 11] << 32) | (uint)values[o + 12]
                 });
             }
 

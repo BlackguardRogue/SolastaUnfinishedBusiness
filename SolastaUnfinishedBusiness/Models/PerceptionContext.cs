@@ -31,7 +31,7 @@ internal static class PerceptionContext
     // the cursor's hover runs with this deterministic lock (CursorManager.ProcessPointerPosition)
     private const DeterministicRandom.DeterministicLockFlag CursorLock = (DeterministicRandom.DeterministicLockFlag)1;
 
-    private static readonly PerceptionLedger Ledger = new() { Clock = () => CurrentTick };
+    private static readonly PerceptionLedger Ledger = new();
     private static readonly PerceptionRequests Requests = new();
 
     // host only: the AI's local planning rolls (sync off, or a decision's last pass), never read by real actions
@@ -618,7 +618,7 @@ internal static class PerceptionContext
     // a load or a location change: every computer starts empty together
     internal static void Reset(string reason)
     {
-        Ledger.ResetForLoad();
+        Ledger.Clear();
         LegacyAiCache.Clear();
         Requests.Clear();
         PlayerQueue.Clear();
