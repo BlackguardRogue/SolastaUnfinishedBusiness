@@ -108,25 +108,6 @@ public static class CursorLocationSelectTargetPatcher
         }
     }
 
-    // the values a teleport's aiming changes, from before it did; refers to nothing, as WeakKeyTable needs
-    private static readonly WeakKeyTable<RulesetEffect, AimingState> AimingStates = new();
-
-    private sealed class AimingState(EffectDescription description)
-    {
-        private readonly bool _excludeCaster = description.targetExcludeCaster;
-        private readonly bool _inviteOptionalAlly = description.inviteOptionalAlly;
-        private readonly Side _side = description.TargetSide;
-        private readonly TargetType _type = description.TargetType;
-
-        internal void Restore(EffectDescription target)
-        {
-            target.TargetType = _type;
-            target.TargetSide = _side;
-            target.targetExcludeCaster = _excludeCaster;
-            target.inviteOptionalAlly = _inviteOptionalAlly;
-        }
-    }
-
     //PATCH: supports `IModifyTeleportEffectBehavior`
     [HarmonyPatch(typeof(CursorLocationSelectTarget), nameof(CursorLocationSelectTarget.Activate))]
     [SuppressMessage("Minor Code Smell", "S101:Types should be named in PascalCase", Justification = "Patch")]
@@ -147,14 +128,12 @@ public static class CursorLocationSelectTargetPatcher
                 return;
             }
 
-            // On this effect's own copy, as this runs only on the computer aiming (see OwnEffectDescription). What it changes is
-            // noted so leaving puts back what the spell or power really has, which is what other computers have.
-            var rulesetEffect = actionParams.RulesetEffect;
-            var description = PowerBundle.OwnEffectDescription(rulesetEffect);
+            // On a copy for as long as this cursor is up, as this runs only on the computer aiming (see BeginAiming).
+            var description = PowerBundle.BeginAiming(actionParams.RulesetEffect);
 
-            if (!AimingStates.TryGetValue(rulesetEffect, out _))
+            if (description == null)
             {
-                AimingStates.Add(rulesetEffect, new AimingState(description));
+                return;
             }
 
             description.TargetType = TargetType.IndividualsUnique;
@@ -194,15 +173,7 @@ public static class CursorLocationSelectTargetPatcher
                 return;
             }
 
-            var rulesetEffect = __instance.ActionParams.RulesetEffect;
-
-            if (!AimingStates.TryGetValue(rulesetEffect, out var aiming))
-            {
-                return;
-            }
-
-            AimingStates.Remove(rulesetEffect);
-            aiming.Restore(rulesetEffect.EffectDescription);
+            PowerBundle.EndAiming(__instance.ActionParams.RulesetEffect);
         }
     }
 
@@ -514,9 +485,6 @@ public static class CursorLocationSelectTargetPatcher
 
                             actionParams.ActionModifiers.SetRange(__instance.ActionModifiersList);
                             actionParams.TargetCharacters.SetRange(__instance.SelectionService.SelectedTargets);
-                            // on the effect's own copy: this is only the aiming computer, and aiming can be cancelled
-                            PowerBundle.OwnEffectDescription(actionParams.RulesetEffect).rangeParameter =
-                                modifier.PositionRange;
 
                             __instance.CursorService
                                 .ActivateCursor<CursorLocationSelectPosition>(__instance.ActionParams);

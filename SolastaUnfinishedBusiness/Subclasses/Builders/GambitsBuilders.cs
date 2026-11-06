@@ -1884,8 +1884,6 @@ internal static class GambitsBuilders
 
         public IEnumerator OnPowerOrSpellFinishedByMe(CharacterActionMagicEffect action, BaseDefinition baseDefinition)
         {
-            action.ActionParams.activeEffect.EffectDescription.rangeParameter = 6;
-
             var actingCharacter = action.ActingCharacter;
             var targetCharacter = action.ActionParams.TargetCharacters[0];
             var targetRulesetCharacter = targetCharacter.RulesetCharacter;

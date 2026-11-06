@@ -357,30 +357,42 @@ internal static class PowerBundle
         CasterGenerations.Clear();
     }
 
-    // For code that changes a live effect's description on one computer only, such as aiming a teleport. With no modifiers that
-    // apply, an effect's description is the definition's own object, shared by every use of it: a change there would stay for
-    // the session, on this computer alone, whatever other computers do. This gives the effect a copy of its own to change.
-    // It's kept until the effect goes, even across a RefreshAll, which would otherwise lose the change partway through aiming.
-    internal static EffectDescription OwnEffectDescription(RulesetEffect effect)
+    // For aiming a teleport, which changes the description's targeting on the aiming computer only. With no modifiers that apply,
+    // an effect's description is the definition's own object, shared by every use of it: a change there would stay for the
+    // session on this computer alone. So the effect reads a copy until EndAiming, which isn't replaced even by a RefreshAll, as
+    // that would lose the targeting partway through. Null if the effect has no entry, as with no caster: nothing to change then.
+    internal static EffectDescription BeginAiming(RulesetEffect effect)
     {
         // this read makes the entry
-        var description = effect.EffectDescription;
+        _ = effect.EffectDescription;
+
+        if (!TryGetLiveEntry(effect, out var entry))
+        {
+            return null;
+        }
+
+        entry.Aiming ??= EffectDescriptionBuilder.Create(entry.Description).Build();
+
+        return entry.Aiming;
+    }
+
+    // Aiming is over, and the effect is back to what every computer has. A refresh during aiming now counts as usual.
+    internal static void EndAiming(RulesetEffect effect)
+    {
+        if (TryGetLiveEntry(effect, out var entry))
+        {
+            entry.Aiming = null;
+        }
+    }
+
+    private static bool TryGetLiveEntry(RulesetEffect effect, out LiveEffectEntry entry)
+    {
         var metamagic = effect is RulesetEffectSpell spell ? spell.MetamagicOption : null;
-        var metamagicName = metamagic ? metamagic.Name : string.Empty;
 
-        // no caster, so no entry: not a case aiming reaches
-        if (!LiveEffects.TryGetValue(effect, out var entries) || !entries.TryGetValue(metamagicName, out var entry))
-        {
-            return description;
-        }
+        entry = null;
 
-        if (!entry.OwnedCopy)
-        {
-            entry.OwnedCopy = true;
-            entry.Description = EffectDescriptionBuilder.Create(entry.Description).Build();
-        }
-
-        return entry.Description;
+        return LiveEffects.TryGetValue(effect, out var entries) &&
+               entries.TryGetValue(metamagic ? metamagic.Name : string.Empty, out entry);
     }
 
     internal static void ClearSpellEffectCache(RulesetCharacter caster)
@@ -424,11 +436,11 @@ internal static class PowerBundle
 
         CasterGenerations.TryGetValue(caster.Guid, out var generation);
 
-        if (entries.TryGetValue(metamagicName, out var entry) && (entry.Generation == generation || entry.OwnedCopy))
+        if (entries.TryGetValue(metamagicName, out var entry) && (entry.Generation == generation || entry.Aiming != null))
         {
             CheckLiveEffect(entry, original, definition, caster, effect, metamagic);
 
-            return entry.Description;
+            return entry.Aiming ?? entry.Description;
         }
 
         // Noted before the modifiers run, and never written back: a refresh during them has to make this result old, as it
@@ -613,7 +625,7 @@ internal static class PowerBundle
         internal EffectDescription Description;
         internal int Generation;
         internal int LastCheckedFrame = -1;
-        internal bool OwnedCopy;
+        internal EffectDescription Aiming;
         internal string ReportedSummary;
     }
 
