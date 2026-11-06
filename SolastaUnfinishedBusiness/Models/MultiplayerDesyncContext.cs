@@ -31,6 +31,10 @@ internal static class MultiplayerDesyncContext
     // own load action in multiplayer, so this needs one of its own. The line isn't saved with the game.
     private const GameConsoleEntry.ConsoleClickAction ResyncClickAction = (GameConsoleEntry.ConsoleClickAction)100;
 
+    // A resync that was sent waits this long for the game's load to begin before another can be started. A load that begins
+    // resets this through the tick reset, and one that fails in the game's file sync comes back to a usable button.
+    private const float ResyncWaitSeconds = 30f;
+
     // recovery saves take turns in a few slots of their own, so they never replace a player's save
     private const string RecoverySavePrefix = "FB Recovery ";
     private const int RecoverySaveSlots = 3;
@@ -40,6 +44,10 @@ internal static class MultiplayerDesyncContext
     // the host's reports on a client: kept by tick within a window around the local tick, however they arrive
     private static readonly BoundedTickReports<Fingerprint> HostReports = new(8, FingerprintTickInterval * 8);
     private static readonly Dictionary<int, HashSet<string>> PreviousDifferencesByActor = [];
+
+    // On the host: clients' checks that arrived before the host reached their tick. Ticks only stay close, so either side can
+    // be first, and dropping these would leave the host without a report while the client already sees the difference.
+    private static readonly Dictionary<int, BoundedTickReports<Fingerprint>> ClientReports = [];
 
     // the desync last reported for each player, so the same one isn't reported again
     private static readonly Dictionary<int, string> ReportedByActor = [];
@@ -57,7 +65,7 @@ internal static class MultiplayerDesyncContext
     private static ulong _lastFingerprintTick = ulong.MaxValue;
     private static bool _resyncOffered;
     private static string _lastRecoverySave;
-    private static bool _resyncRunning;
+    private static float _resyncWaitUntil;
 
     internal static void Reset()
     {
@@ -68,7 +76,8 @@ internal static class MultiplayerDesyncContext
         ConditionIdsReported.Clear();
         _lastFingerprintTick = ulong.MaxValue;
         _resyncOffered = false;
-        _resyncRunning = false;
+        _resyncWaitUntil = 0f;
+        ClientReports.Clear();
     }
 
     #region Sending
@@ -104,6 +113,18 @@ internal static class MultiplayerDesyncContext
 
         PhotonNetwork.RaiseEvent(EventCode, fingerprint.ToEvent(),
             new RaiseEventOptions { Receivers = ReceiverGroup.Others }, SendOptions.SendReliable);
+
+        // the host compares any client whose check for this tick got here first
+        if (PhotonNetwork.IsMasterClient)
+        {
+            foreach (var reports in ClientReports.ToList())
+            {
+                if (reports.Value.Take(tick, out var early) && PhotonNetwork.CurrentRoom?.GetPlayer(reports.Key) != null)
+                {
+                    Compare(fingerprint, early, reports.Key);
+                }
+            }
+        }
 
         // a client compares itself as soon as the host's fingerprint for this tick is known
         if (!PhotonNetwork.IsMasterClient && HostReports.Take(tick, out var host))
@@ -180,9 +201,24 @@ internal static class MultiplayerDesyncContext
             return;
         }
 
-        if (PhotonNetwork.IsMasterClient && LocalByTick.TryGetValue(received.Tick, out var hostPrint))
+        if (!PhotonNetwork.IsMasterClient)
+        {
+            return;
+        }
+
+        if (LocalByTick.TryGetValue(received.Tick, out var hostPrint))
         {
             Compare(hostPrint, received, sender.ActorNumber);
+        }
+        else if (ServiceRepository.GetService<INetworkingService>() is NetworkingManager hostNetworking)
+        {
+            if (!ClientReports.TryGetValue(sender.ActorNumber, out var reports))
+            {
+                reports = new BoundedTickReports<Fingerprint>(8, FingerprintTickInterval * 8);
+                ClientReports[sender.ActorNumber] = reports;
+            }
+
+            reports.Add(received.Tick, hostNetworking.tick.LocalTick, received);
         }
     }
 
@@ -542,45 +578,57 @@ internal static class MultiplayerDesyncContext
             return false;
         }
 
-        // Lines stay in the log after the game matches again, and after the host role moved to someone else.
-        if (!PhotonNetwork.IsMasterClient)
-        {
-            return true;
-        }
-
-        if (ReportedByActor.Count == 0)
-        {
-            Gui.GuiService.ShowAlert("Message/&MultiplayerDesyncResyncNotNeeded", Gui.ColorAlmostWhite, 6f);
-
-            return true;
-        }
-
         StartResync();
 
         return true;
     }
 
+    // Whether the game will let the host save and then load. Not CanLoad, because that's also false when no save exists yet,
+    // which the recovery save itself would change.
+    private static bool CanSaveAndLoad(GameSerializationManager serialization)
+    {
+        return serialization.CanSave && serialization.loadDisabledTokens.Count == 0;
+    }
+
+    // Every way to start a resync comes through here, the message and the log button alike.
     private static void StartResync()
     {
-        if (_resyncRunning ||
+        // lines stay in the log after the host role moved to someone else
+        if (!PhotonNetwork.IsMasterClient || Time.realtimeSinceStartup < _resyncWaitUntil ||
             ServiceRepository.GetService<INetworkingService>() is not NetworkingManager networking ||
             ServiceRepository.GetService<IGameSerializationService>() is not GameSerializationManager serialization)
         {
             return;
         }
 
-        // The game refuses to save while anything scripted runs, such as a cutscene (CanSave is false while functors run). This
-        // is only a bad moment, so it's found before clients are told a reload is coming, and Resync can simply be used again.
-        if (!serialization.CanSave)
+        // lines also stay after the game matches again, and a message can stay open until then
+        if (ReportedByActor.Count == 0)
         {
             _resyncOffered = false;
-            Main.Info("Multiplayer resync not started: the game can't save right now");
-            Gui.GuiService.ShowAlert("Message/&MultiplayerDesyncResyncNotNow", Gui.ColorFailure, 10f);
+            Gui.GuiService.ShowAlert("Message/&MultiplayerDesyncResyncNotNeeded", Gui.ColorAlmostWhite, 6f);
 
             return;
         }
 
-        _resyncRunning = true;
+        // The game refuses to save while anything scripted runs, such as a cutscene (CanSave is false while functors run). This
+        // is only a bad moment, so it's found before clients are told a reload is coming, and Resync can simply be used again.
+        if (!CanSaveAndLoad(serialization))
+        {
+            _resyncOffered = false;
+            Main.Info("Multiplayer resync not started: the game can't save or load right now");
+            Gui.GuiService.ShowAlert("Message/&MultiplayerDesyncResyncNotNow", Gui.ColorFailure, 10f);
+
+            // A controller has no log button to come back to, so the next check offers it again. It only comes back after
+            // someone chose Resync at a bad moment: choosing Later stays quiet.
+            if (Gui.GamepadActive)
+            {
+                ReportedByActor.Clear();
+            }
+
+            return;
+        }
+
+        _resyncWaitUntil = Time.realtimeSinceStartup + ResyncWaitSeconds;
         PhotonNetwork.RaiseEvent(EventCode, new object[] { ResyncKind },
             new RaiseEventOptions { Receivers = ReceiverGroup.Others }, SendOptions.SendReliable);
         networking.StartCoroutine(Resync(serialization));
@@ -600,7 +648,7 @@ internal static class MultiplayerDesyncContext
         {
             Main.Error($"Multiplayer resync cancelled: no save ({reason}), nothing was loaded");
             _resyncOffered = false;
-            _resyncRunning = false;
+            _resyncWaitUntil = 0f;
             PhotonNetwork.RaiseEvent(EventCode, new object[] { ResyncCancelledKind },
                 new RaiseEventOptions { Receivers = ReceiverGroup.Others }, SendOptions.SendReliable);
             Gui.GuiService.ShowMessage(MessageModal.Severity.Serious3,
@@ -613,9 +661,25 @@ internal static class MultiplayerDesyncContext
             yield break;
         }
 
+        // the save takes a moment and can't be undone, but nothing is lost if the load can't follow: it's only one more save
+        if (!PhotonNetwork.IsMasterClient || !CanSaveAndLoad(serialization))
+        {
+            Main.Error("Multiplayer resync cancelled: the game can't load right now, nothing was loaded");
+            _resyncOffered = false;
+            _resyncWaitUntil = 0f;
+            PhotonNetwork.RaiseEvent(EventCode, new object[] { ResyncCancelledKind },
+                new RaiseEventOptions { Receivers = ReceiverGroup.Others }, SendOptions.SendReliable);
+            Gui.GuiService.ShowAlert("Message/&MultiplayerDesyncResyncNotNow", Gui.ColorFailure, 10f);
+
+            yield break;
+        }
+
+        // The game's own multiplayer load, as its Load Game screen uses: a lockstep command that has the host send the save to
+        // the clients and every computer load it together (ServerLoadGame, ClientLoadGame). This used to call
+        // GameSerializationManager.LoadGame, which only loads on this computer, so clients kept running a game the host had
+        // left: the likely cause of the stalled session on 2026-11-01. State here is reset by the load's tick reset.
         Main.Info($"Multiplayer resync: loading {save}");
-        Reset();
-        serialization.LoadGame(Path.Combine(TacticalAdventuresApplication.SaveGameDirectory, save) + ".sav");
+        ServiceRepository.GetService<ICommandService>().LoadGame(serialization.BuildFilenameWithPathAndExtension(save));
     }
 
     #endregion
