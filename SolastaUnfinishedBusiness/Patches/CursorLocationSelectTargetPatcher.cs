@@ -4,6 +4,7 @@ using HarmonyLib;
 using JetBrains.Annotations;
 using SolastaUnfinishedBusiness.Api.GameExtensions;
 using SolastaUnfinishedBusiness.Api.LanguageExtensions;
+using SolastaUnfinishedBusiness.Behaviors.Specific;
 using SolastaUnfinishedBusiness.CustomUI;
 using SolastaUnfinishedBusiness.Interfaces;
 using SolastaUnfinishedBusiness.Models;
@@ -107,6 +108,25 @@ public static class CursorLocationSelectTargetPatcher
         }
     }
 
+    // the values a teleport's aiming changes, from before it did; refers to nothing, as WeakKeyTable needs
+    private static readonly WeakKeyTable<RulesetEffect, AimingState> AimingStates = new();
+
+    private sealed class AimingState(EffectDescription description)
+    {
+        private readonly bool _excludeCaster = description.targetExcludeCaster;
+        private readonly bool _inviteOptionalAlly = description.inviteOptionalAlly;
+        private readonly Side _side = description.TargetSide;
+        private readonly TargetType _type = description.TargetType;
+
+        internal void Restore(EffectDescription target)
+        {
+            target.TargetType = _type;
+            target.TargetSide = _side;
+            target.targetExcludeCaster = _excludeCaster;
+            target.inviteOptionalAlly = _inviteOptionalAlly;
+        }
+    }
+
     //PATCH: supports `IModifyTeleportEffectBehavior`
     [HarmonyPatch(typeof(CursorLocationSelectTarget), nameof(CursorLocationSelectTarget.Activate))]
     [SuppressMessage("Minor Code Smell", "S101:Types should be named in PascalCase", Justification = "Patch")]
@@ -127,12 +147,20 @@ public static class CursorLocationSelectTargetPatcher
                 return;
             }
 
+            // On this effect's own copy, as this runs only on the computer aiming (see OwnEffectDescription). What it changes is
+            // noted so leaving puts back what the spell or power really has, which is what other computers have.
             var rulesetEffect = actionParams.RulesetEffect;
+            var description = PowerBundle.OwnEffectDescription(rulesetEffect);
 
-            rulesetEffect.EffectDescription.TargetType = TargetType.IndividualsUnique;
-            rulesetEffect.EffectDescription.TargetSide = modifyTeleportEffectBehavior.AllyOnly ? Side.Ally : Side.All;
-            rulesetEffect.EffectDescription.targetExcludeCaster = modifyTeleportEffectBehavior.TeleportSelf;
-            rulesetEffect.EffectDescription.inviteOptionalAlly = modifyTeleportEffectBehavior.AllyOnly;
+            if (!AimingStates.TryGetValue(rulesetEffect, out _))
+            {
+                AimingStates.Add(rulesetEffect, new AimingState(description));
+            }
+
+            description.TargetType = TargetType.IndividualsUnique;
+            description.TargetSide = modifyTeleportEffectBehavior.AllyOnly ? Side.Ally : Side.All;
+            description.targetExcludeCaster = modifyTeleportEffectBehavior.TeleportSelf;
+            description.inviteOptionalAlly = modifyTeleportEffectBehavior.AllyOnly;
         }
 
         [UsedImplicitly]
@@ -168,10 +196,13 @@ public static class CursorLocationSelectTargetPatcher
 
             var rulesetEffect = __instance.ActionParams.RulesetEffect;
 
-            rulesetEffect.EffectDescription.TargetType = TargetType.Position;
-            rulesetEffect.EffectDescription.TargetSide = Side.Ally;
-            rulesetEffect.EffectDescription.targetExcludeCaster = false;
-            rulesetEffect.EffectDescription.inviteOptionalAlly = true;
+            if (!AimingStates.TryGetValue(rulesetEffect, out var aiming))
+            {
+                return;
+            }
+
+            AimingStates.Remove(rulesetEffect);
+            aiming.Restore(rulesetEffect.EffectDescription);
         }
     }
 
@@ -483,7 +514,9 @@ public static class CursorLocationSelectTargetPatcher
 
                             actionParams.ActionModifiers.SetRange(__instance.ActionModifiersList);
                             actionParams.TargetCharacters.SetRange(__instance.SelectionService.SelectedTargets);
-                            actionParams.RulesetEffect.EffectDescription.rangeParameter = modifier.PositionRange;
+                            // on the effect's own copy: this is only the aiming computer, and aiming can be cancelled
+                            PowerBundle.OwnEffectDescription(actionParams.RulesetEffect).rangeParameter =
+                                modifier.PositionRange;
 
                             __instance.CursorService
                                 .ActivateCursor<CursorLocationSelectPosition>(__instance.ActionParams);

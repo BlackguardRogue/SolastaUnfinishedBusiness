@@ -357,6 +357,32 @@ internal static class PowerBundle
         CasterGenerations.Clear();
     }
 
+    // For code that changes a live effect's description on one computer only, such as aiming a teleport. With no modifiers that
+    // apply, an effect's description is the definition's own object, shared by every use of it: a change there would stay for
+    // the session, on this computer alone, whatever other computers do. This gives the effect a copy of its own to change.
+    // It's kept until the effect goes, even across a RefreshAll, which would otherwise lose the change partway through aiming.
+    internal static EffectDescription OwnEffectDescription(RulesetEffect effect)
+    {
+        // this read makes the entry
+        var description = effect.EffectDescription;
+        var metamagic = effect is RulesetEffectSpell spell ? spell.MetamagicOption : null;
+        var metamagicName = metamagic ? metamagic.Name : string.Empty;
+
+        // no caster, so no entry: not a case aiming reaches
+        if (!LiveEffects.TryGetValue(effect, out var entries) || !entries.TryGetValue(metamagicName, out var entry))
+        {
+            return description;
+        }
+
+        if (!entry.OwnedCopy)
+        {
+            entry.OwnedCopy = true;
+            entry.Description = EffectDescriptionBuilder.Create(entry.Description).Build();
+        }
+
+        return entry.Description;
+    }
+
     internal static void ClearSpellEffectCache(RulesetCharacter caster)
     {
         // A caster with no entry has no kept results to make old. Monsters that never have any then add nothing here, which
@@ -398,7 +424,7 @@ internal static class PowerBundle
 
         CasterGenerations.TryGetValue(caster.Guid, out var generation);
 
-        if (entries.TryGetValue(metamagicName, out var entry) && entry.Generation == generation)
+        if (entries.TryGetValue(metamagicName, out var entry) && (entry.Generation == generation || entry.OwnedCopy))
         {
             CheckLiveEffect(entry, original, definition, caster, effect, metamagic);
 
@@ -587,6 +613,7 @@ internal static class PowerBundle
         internal EffectDescription Description;
         internal int Generation;
         internal int LastCheckedFrame = -1;
+        internal bool OwnedCopy;
         internal string ReportedSummary;
     }
 
