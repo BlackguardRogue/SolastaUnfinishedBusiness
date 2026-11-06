@@ -32,7 +32,7 @@ internal static class MultiplayerDesyncContext
     private const GameConsoleEntry.ConsoleClickAction ResyncClickAction = (GameConsoleEntry.ConsoleClickAction)100;
 
     // A resync that was sent waits this long for the game's load to begin before another can be started. A load that begins
-    // resets this through the tick reset, and one that fails in the game's file sync comes back to a usable button.
+    // resets this through the tick reset. If the game's file sync then fails, the game itself leaves the session.
     private const float ResyncWaitSeconds = 30f;
 
     // recovery saves take turns in a few slots of their own, so they never replace a player's save
@@ -88,6 +88,13 @@ internal static class MultiplayerDesyncContext
 
     internal static void SendFingerprintIfNeeded(NetworkingManager networking)
     {
+        // Before the settings below: a resync can also come from the entity ID check with these checks off, and clients still
+        // have to hear about it.
+        if (PhotonNetwork.InRoom)
+        {
+            RegisterEventHandler();
+        }
+
         if (!Main.Settings.MultiplayerEnableDesyncDetection ||
             !Main.Settings.MultiplayerEnableStateFingerprint ||
             !Global.IsMultiplayer ||
@@ -99,8 +106,6 @@ internal static class MultiplayerDesyncContext
             return;
         }
 
-        RegisterEventHandler();
-
         var tick = networking.tick.LocalTick;
 
         if (tick == 0 || tick % FingerprintTickInterval != 0 || tick == _lastFingerprintTick)
@@ -109,6 +114,7 @@ internal static class MultiplayerDesyncContext
         }
 
         _lastFingerprintTick = tick;
+        ForgetDepartedPlayers();
 
         var fingerprint = Fingerprint.Capture(tick);
 
@@ -134,6 +140,29 @@ internal static class MultiplayerDesyncContext
         if (!PhotonNetwork.IsMasterClient && HostReports.Take(tick, out var host))
         {
             Compare(host, fingerprint, PhotonNetwork.MasterClient?.ActorNumber ?? 0);
+        }
+    }
+
+    // Host only: a player who left no longer differs from anyone, and a resync mustn't reload everyone else because of them.
+    private static void ForgetDepartedPlayers()
+    {
+        if (!PhotonNetwork.IsMasterClient || PhotonNetwork.CurrentRoom == null)
+        {
+            return;
+        }
+
+        foreach (var actor in ReportedByActor.Keys.Concat(ClientReports.Keys).Concat(PreviousDifferencesByActor.Keys)
+                     .Concat(ConditionIdsReported).Distinct().ToList())
+        {
+            if (PhotonNetwork.CurrentRoom.GetPlayer(actor) != null)
+            {
+                continue;
+            }
+
+            ReportedByActor.Remove(actor);
+            ClientReports.Remove(actor);
+            PreviousDifferencesByActor.Remove(actor);
+            ConditionIdsReported.Remove(actor);
         }
     }
 
@@ -186,7 +215,8 @@ internal static class MultiplayerDesyncContext
 
     private static void OnFingerprint(Fingerprint received, Player sender)
     {
-        if (received == null || sender == null)
+        if (received == null || sender == null || !Main.Settings.MultiplayerEnableDesyncDetection ||
+            !Main.Settings.MultiplayerEnableStateFingerprint)
         {
             return;
         }
@@ -524,7 +554,7 @@ internal static class MultiplayerDesyncContext
 
         AddResyncLogLine(Gui.Format("Message/&MultiplayerDesyncResyncLine", SafeForLogFormat(playerName)), true);
 
-        if (_resyncOffered)
+        if (_resyncOffered || Time.realtimeSinceStartup < _resyncWaitUntil)
         {
             Gui.GuiService.ShowAlert(Gui.Format("Message/&MultiplayerDesyncDetails", playerName, details),
                 Gui.ColorFailure, 10f);
@@ -545,7 +575,12 @@ internal static class MultiplayerDesyncContext
         Gui.GuiService.ShowMessage(MessageModal.Severity.Attention2,
             "Message/&MultiplayerDesyncResyncTitle", description,
             "Message/&MultiplayerDesyncResyncAccept", "Message/&MultiplayerDesyncResyncLater",
-            StartResync, () => _resyncOffered = false);
+            () =>
+            {
+                _resyncOffered = false;
+                StartResync();
+            },
+            () => _resyncOffered = false);
     }
 
     // The line is built as the game builds its "game saved" line with the Load button. Only the host gets the button: only its
@@ -623,10 +658,11 @@ internal static class MultiplayerDesyncContext
             return;
         }
 
+        ForgetDepartedPlayers();
+
         // lines also stay after the game matches again, and a message can stay open until then
         if (ReportedByActor.Count == 0 && !_idDesyncReported)
         {
-            _resyncOffered = false;
             Gui.GuiService.ShowAlert("Message/&MultiplayerDesyncResyncNotNeeded", Gui.ColorAlmostWhite, 6f);
 
             return;
@@ -636,7 +672,6 @@ internal static class MultiplayerDesyncContext
         // is only a bad moment, so it's found before clients are told a reload is coming, and Resync can simply be used again.
         if (!CanSaveAndLoad(serialization))
         {
-            _resyncOffered = false;
             Main.Info("Multiplayer resync not started: the game can't save or load right now");
             Gui.GuiService.ShowAlert("Message/&MultiplayerDesyncResyncNotNow", Gui.ColorFailure, 10f);
 
@@ -669,7 +704,6 @@ internal static class MultiplayerDesyncContext
         if (save == null)
         {
             Main.Error($"Multiplayer resync cancelled: no save ({reason}), nothing was loaded");
-            _resyncOffered = false;
             _resyncWaitUntil = 0f;
             PhotonNetwork.RaiseEvent(EventCode, new object[] { ResyncCancelledKind },
                 new RaiseEventOptions { Receivers = ReceiverGroup.Others }, SendOptions.SendReliable);
@@ -687,7 +721,6 @@ internal static class MultiplayerDesyncContext
         if (!PhotonNetwork.IsMasterClient || !CanSaveAndLoad(serialization))
         {
             Main.Error("Multiplayer resync cancelled: the game can't load right now, nothing was loaded");
-            _resyncOffered = false;
             _resyncWaitUntil = 0f;
             PhotonNetwork.RaiseEvent(EventCode, new object[] { ResyncCancelledKind },
                 new RaiseEventOptions { Receivers = ReceiverGroup.Others }, SendOptions.SendReliable);
