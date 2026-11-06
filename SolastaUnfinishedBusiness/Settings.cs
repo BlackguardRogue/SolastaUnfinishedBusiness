@@ -178,6 +178,12 @@ public class Settings : UnityModManager.ModSettings
     public bool EnableCriticalHitsMissesAt10 { get; set; }
 
     //
+    // Logging (its own menu tab; the switch turns all of these off, and none of them changes the game)
+    public bool EnableAdditionalLogging { get; set; } = true;
+    public bool LogObjectIdRecords { get; set; } = true;
+    public bool LogStaleEffectChecks { get; set; } = true;
+    public bool LogPerception { get; set; } = true;
+
     // Gameplay - Multiplayer
     //
 
@@ -187,7 +193,6 @@ public class Settings : UnityModManager.ModSettings
     public bool MultiplayerEnemyTurnSpeedUp { get; set; } = true;
     public bool MultiplayerEnableDesyncDetection { get; set; } = true;
     public bool MultiplayerEnableStateFingerprint { get; set; } = true;
-    public bool MultiplayerQuickCorrectDesync { get; set; } = true;
     public bool MultiplayerOfferHostResync { get; set; } = true;
     public bool MultiplayerEnableTickBufferTuning { get; set; } = true;
     public bool MultiplayerFlushCommandsImmediately { get; set; } = true;

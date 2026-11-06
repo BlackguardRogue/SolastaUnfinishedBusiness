@@ -228,6 +228,19 @@ public static class MultiplayerPatcher
         }
     }
 
+    //PATCH: runs the Resync button in the game log's desync line (MULTIPLAYER)
+    [HarmonyPatch(typeof(GuiConsoleLine), nameof(GuiConsoleLine.FragmentClicked))]
+    [SuppressMessage("Minor Code Smell", "S101:Types should be named in PascalCase", Justification = "Patch")]
+    [UsedImplicitly]
+    public static class FragmentClicked_Patch
+    {
+        [UsedImplicitly]
+        public static bool Prefix(GuiConsoleLine __instance)
+        {
+            return !MultiplayerDesyncContext.HandleLogClick(__instance.Entry);
+        }
+    }
+
     //PATCH: asks every player to approve a spell or power that passes a minute or more of in-game time (MULTIPLAYER)
     [HarmonyPatch(typeof(NetworkingManager), nameof(NetworkingManager.ExecuteAction))]
     [SuppressMessage("Minor Code Smell", "S101:Types should be named in PascalCase", Justification = "Patch")]

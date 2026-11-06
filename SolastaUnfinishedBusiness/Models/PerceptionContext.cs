@@ -27,12 +27,11 @@ internal static class PerceptionContext
     private const float AiMaxWaitSeconds = 3f; // user direction: then the host rolls what is still missing itself
     private const ulong AiBatchTicks = 2; // network ticks of 50 ms: the AI's requests go out in windows of about 100 ms
     private const float PruneSeconds = 1f;
-    private const float HoldMaxSeconds = 10f; // a correction that never applies can't hold requests for longer
 
     // the cursor's hover runs with this deterministic lock (CursorManager.ProcessPointerPosition)
     private const DeterministicRandom.DeterministicLockFlag CursorLock = (DeterministicRandom.DeterministicLockFlag)1;
 
-    private static readonly PerceptionLedger Ledger = new() { Clock = () => CurrentTick };
+    private static readonly PerceptionLedger Ledger = new();
     private static readonly PerceptionRequests Requests = new();
 
     // host only: the AI's local planning rolls (sync off, or a decision's last pass), never read by real actions
@@ -54,8 +53,6 @@ internal static class PerceptionContext
     private static ulong _aiQueuedTick;
     private static float _nextPrune;
     private static int _hoverPendingFrame = -1;
-    private static ulong _holdUntilTick;
-    private static float _holdUntilTime;
 
     // changes only at synchronized points (a load, a location change, a round start), so it is equal on every computer
     private static int _generation;
@@ -66,14 +63,7 @@ internal static class PerceptionContext
     // UI: true while the cursor's hover this frame (or the last) touched a check that is still pending
     internal static bool HoverPending => _hoverPendingFrame >= Time.frameCount - 1;
 
-    // the network tick of the last change to the shared results (equal on every computer in step)
-    internal static ulong LastChangeTick => Ledger.LastChangeTick;
-
-    // while a desync correction is on its way, new requests wait in their queues, so their checks can't roll between
-    // its capture and its tick (requests already sent still run; the correction rejects itself if one changes a result)
-    private static bool Held => CurrentTick <= _holdUntilTick && Time.realtimeSinceStartup < _holdUntilTime;
-
-    // nothing requested and nothing waiting: a desync correction can be captured or applied safely
+    // nothing requested and nothing waiting: the state check only compares computers at such a moment
     internal static bool IsIdle => Requests.PendingCount == 0 && PlayerQueue.Count == 0 && AiQueue.Count == 0;
 
     private static int CurrentPhase =>
@@ -321,7 +311,7 @@ internal static class PerceptionContext
     // request ids, so a computer only clears its own requests
     private static void Send(List<((ulong, ulong) key, PerceptionRequests.Entry entry)> queue, string origin)
     {
-        if (queue.Count == 0 || Held)
+        if (queue.Count == 0)
         {
             return;
         }
@@ -625,24 +615,10 @@ internal static class PerceptionContext
         Trace($"round start round={round} generation={_generation} kept={Ledger.Count}");
     }
 
-    // a desync correction captured now or received now applies at this tick: new requests wait until it has passed
-    internal static void HoldRequests(ulong applyTick)
-    {
-        if (applyTick > _holdUntilTick || !Held)
-        {
-            _holdUntilTick = applyTick;
-        }
-
-        _holdUntilTime = Time.realtimeSinceStartup + HoldMaxSeconds;
-        Trace($"requests held until tick {_holdUntilTick}");
-    }
-
     // a load or a location change: every computer starts empty together
     internal static void Reset(string reason)
     {
-        Ledger.ResetForLoad();
-        _holdUntilTick = 0;
-        _holdUntilTime = 0f;
+        Ledger.Clear();
         LegacyAiCache.Clear();
         Requests.Clear();
         PlayerQueue.Clear();
@@ -651,41 +627,11 @@ internal static class PerceptionContext
         Trace($"reset reason={reason}");
     }
 
-    internal static long[] Capture()
-    {
-        return Ledger.Capture();
-    }
-
-    // a correction validates everything before changing anything: this only checks the snapshot
-    internal static bool CanRestore(long[] snapshot)
-    {
-        return Ledger.CanReplace &&
-               PerceptionLedger.Parse(snapshot, value => Enum.IsDefined(typeof(RollOutcome), value)) != null;
-    }
-
-    // then replaces the results and forgets local work tied to the old ones
-    internal static void Restore(long[] snapshot)
-    {
-        var replacement = PerceptionLedger.Parse(snapshot, value => Enum.IsDefined(typeof(RollOutcome), value));
-
-        if (replacement == null || !Ledger.CanReplace)
-        {
-            return;
-        }
-
-        Ledger.Replace(replacement);
-        LegacyAiCache.Clear();
-        Requests.Clear();
-        PlayerQueue.Clear();
-        AiQueue.Clear();
-        Trace($"restored by a desync correction entries={Ledger.Count}");
-    }
-
     internal static long Digest()
     {
         var hash = unchecked((long)14695981039346656037UL);
 
-        foreach (var value in Capture())
+        foreach (var value in Ledger.Capture())
         {
             hash = unchecked((hash ^ value) * 1099511628211L);
         }
@@ -717,6 +663,12 @@ internal static class PerceptionContext
 
     private static void Trace(string text)
     {
+        // mod menu, Logging: only the record is skipped, never what's being recorded
+        if (Main.Settings is not { EnableAdditionalLogging: true, LogPerception: true })
+        {
+            return;
+        }
+
         var tick = (ServiceRepository.GetService<INetworkingService>() as NetworkingManager)?.tick?.LocalTick ?? 0;
         var line = $"[Perception] peer={PhotonNetwork.LocalPlayer?.ActorNumber ?? 0} " +
                    $"host={PhotonNetwork.IsMasterClient} tick={tick} phase={CurrentPhase} {text}";

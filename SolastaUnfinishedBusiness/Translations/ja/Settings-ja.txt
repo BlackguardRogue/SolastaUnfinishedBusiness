@@ -562,6 +562,13 @@ ModUi/&MultiplayerHostSettingsBanner=<b><color=#E0A040>これはこのマルチ�
 ModUi/&MultiplayerHostSettingsThisLaunchBanner=<b><color=#E0A040>この起動ではホストの設定（Settings/Host.xml）を使っています。ここでは読み取り専用で、あなた自身のSettings.xmlは変更されません。次回の起動では再びあなたの設定を使います。</color></b>
 ModUi/&MultiplayerInitialTickBuffer=<color=white>初期の行動遅延（ティック）</color> <i><color=#F0DAA0>[ゲームの既定値6]</color></i>
 ModUi/&MultiplayerLagTitle=<color=#F0DAA0>行動遅延：</color>
+ModUi/&Logging=ログ
+ModUi/&LoggingHelp=マルチプレイの問題を調べるための追加記録です。ゲーム内容は変わりません。
+ModUi/&LoggingHostWarning=<color=#F0DAA0>警告: マルチプレイのルームでは、ホストの選択が全プレイヤーに適用されます。自分の設定に関係なく、ログが有効または無効になる場合があります。</color>
+ModUi/&EnableAdditionalLogging=追加ログを有効にする
+ModUi/&LogObjectIdRecords=オブジェクトIDの記録 <i><color=#F0DAA0>[新しいゲームオブジェクト、光の状態の変化、パワーや呪文の結果をファイルに保存し、コンピューター間で比較できるようにします]</color></i>
+ModUi/&LogStaleEffectChecks=古くなったパワーと呪文の効果 <i><color=#F0DAA0>[有効な効果が現在の状況と一致しなくなったときにログに記録します。有効な効果を再確認するため、パフォーマンスにわずかに影響します]</color></i>
+ModUi/&LogPerception=知覚 <i><color=#F0DAA0>[知覚の要求と判定をログに記録します]</color></i>
 ModUi/&MultiplayerMenu=マルチプレイ
 ModUi/&MultiplayerMinimumTickBuffer=<color=white>最小の行動遅延（ティック）</color> <i><color=#F0DAA0>[ゲームの既定値4、全員のpingが許す場合のみ使用]</color></i>
 ModUi/&MultiplayerMovementTitle=<color=#F0DAA0>移動</color> <i><color=#F0DAA0>[マルチプレイのみ、シングルプレイはゲームのルールのまま]</color></i><color=#F0DAA0>:</color>
@@ -569,12 +576,11 @@ ModUi/&MultiplayerNoFps=FPS: 未報告
 ModUi/&MultiplayerNoHost=マルチプレイのルームにいません。
 ModUi/&MultiplayerNoPing=Ping: 未報告
 ModUi/&MultiplayerNoVersion=バージョン未報告
-ModUi/&MultiplayerOfferHostResync=同期ずれを修正できない場合、ホストにワンクリックの再同期を提案する <i><color=#F0DAA0>[ホストがクイックセーブしてロードし直し、クライアントも同じセーブに戻る]</color></i>
+ModUi/&MultiplayerOfferHostResync=非同期を検出したら、ホストにワンクリックの再同期を提案する <i><color=#F0DAA0>[ホストがセーブして再読み込みし、クライアントも同じセーブに戻ります]</color></i>
 ModUi/&MultiplayerPing=Ping: {0}ミリ秒
 ModUi/&MultiplayerPingBasedTickBuffer=各プレイヤーのpingから行動遅延を決める <i><color=#F0DAA0>[回線が遅いときは誰かが待つ前に引き上げ、速いグループは下の最小値まで下げられる]</color></i>
 ModUi/&MultiplayerPingVisibleToHostOnly=プレイヤーのpingと行動遅延はホストだけが見られる <i><color=#F0DAA0>[オフなら全プレイヤーがこのタブとプレイヤープレートで見られる]</color></i>
 ModUi/&MultiplayerPlayersVersions=<color=white>このルームのビルド：</color>
-ModUi/&MultiplayerQuickCorrectDesync=戦闘外では、ホストが各コンピューターの小さな違い（HP、位置、呪文スロット、ダイス）をロードし直さずに修正できる <i><color=#F0DAA0>[状態の違いやいないキャラクターには再同期が必要]</color></i>
 ModUi/&MultiplayerRequireApprovalForTimeConsumingActions=ゲーム内時間が経過する行動は全プレイヤーに承認を求める：小休憩と大休憩、巻物からの呪文の習得や筆写、神の聖印、儀式、1分以上かかる呪文や能力 <i><color=#F0DAA0>[ポップアップで何をどれだけの時間行うかを表示。キャラクターが戦闘中やカットシーン中は誰にも尋ねず、求めたプレイヤーにどのキャラクターかを伝える]</color></i>
 ModUi/&MultiplayerResolveOverlapsOnBattleStart=戦闘開始時、同じマスにいるキャラクターを最寄りの安全なマスへ移動する <i><color=#F0DAA0>[無償・無害で、忍び足中なら敵に気づかれない。どの敵からも見えないマスに忍び足のキャラクターが1人だけならそのマスに残り、それ以外は最初に作られたキャラクターが残る]</color></i>
 ModUi/&MultiplayerSecondsBeforeLowerTickBuffer=<color=white>遅延を下げるまでの待ちのない秒数</color> <i><color=#F0DAA0>[ゲームの既定値10]</color></i>

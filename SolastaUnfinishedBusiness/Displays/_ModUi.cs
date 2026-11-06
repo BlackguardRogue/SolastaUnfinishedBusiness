@@ -576,6 +576,19 @@ internal sealed class EncountersViewer : IMenuSelectablePage
 }
 
 [UsedImplicitly]
+internal sealed class LoggingViewer : IMenuSelectablePage
+{
+    public string Name => Gui.Localize("ModUi/&Logging");
+
+    public int Priority => 400;
+
+    public void OnGUI(UnityModManager.ModEntry modEntry)
+    {
+        LoggingDisplay.DisplayLogging();
+    }
+}
+
+[UsedImplicitly]
 internal sealed class CreditsAndDiagnosticsViewer : IMenuSelectablePage
 {
     private int _creditsSelectedPane;

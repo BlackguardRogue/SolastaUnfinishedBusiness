@@ -562,6 +562,13 @@ ModUi/&MultiplayerHostSettingsBanner=<b><color=#E0A040>Estos son los ajustes del
 ModUi/&MultiplayerHostSettingsThisLaunchBanner=<b><color=#E0A040>Este inicio usa los ajustes del ANFITRIÓN (Settings/Host.xml). Aquí son de solo lectura y tu propio Settings.xml no cambia; el próximo inicio vuelve a usar tus ajustes.</color></b>
 ModUi/&MultiplayerInitialTickBuffer=<color=white>Retraso de acción inicial en ticks</color> <i><color=#F0DAA0>[6 por defecto en el juego]</color></i>
 ModUi/&MultiplayerLagTitle=<color=#F0DAA0>Retraso de acción:</color>
+ModUi/&Logging=Registro
+ModUi/&LoggingHelp=Registros adicionales para encontrar problemas del modo multijugador. No cambian el juego.
+ModUi/&LoggingHostWarning=<color=#F0DAA0>Advertencia: en una sala multijugador, las opciones del anfitrión se aplican a todos los jugadores, por lo que tu registro puede estar activado o desactivado sin importar tus propias opciones.</color>
+ModUi/&EnableAdditionalLogging=Activar registro adicional
+ModUi/&LogObjectIdRecords=Registros de ID de objetos <i><color=#F0DAA0>[nuevos objetos del juego, cambios de estados de luz y resultados de poderes o conjuros, guardados en archivos para comparar equipos]</color></i>
+ModUi/&LogStaleEffectChecks=Efectos de poderes y conjuros desactualizados <i><color=#F0DAA0>[anota en el registro cuando un efecto activo ya no coincide con la situación actual; vuelve a comprobar los efectos activos, por lo que afecta algo al rendimiento]</color></i>
+ModUi/&LogPerception=Percepción <i><color=#F0DAA0>[solicitudes y tiradas de percepción en el registro]</color></i>
 ModUi/&MultiplayerMenu=Multijugador
 ModUi/&MultiplayerMinimumTickBuffer=<color=white>Retraso de acción mínimo en ticks</color> <i><color=#F0DAA0>[4 por defecto en el juego, solo se usa cuando todos los pings lo permiten]</color></i>
 ModUi/&MultiplayerMovementTitle=<color=#F0DAA0>Movimiento</color> <i><color=#F0DAA0>[solo partidas multijugador, el modo de un jugador conserva las reglas del juego]</color></i><color=#F0DAA0>:</color>
@@ -569,12 +576,11 @@ ModUi/&MultiplayerNoFps=FPS: no informados
 ModUi/&MultiplayerNoHost=No estás en una sala multijugador.
 ModUi/&MultiplayerNoPing=Ping: no informado
 ModUi/&MultiplayerNoVersion=ninguna versión informada
-ModUi/&MultiplayerOfferHostResync=Ofrecer al anfitrión una resincronización con un clic cuando una desincronización no se pueda corregir <i><color=#F0DAA0>[el anfitrión guarda rápido y recarga; los clientes vuelven a la misma partida guardada]</color></i>
+ModUi/&MultiplayerOfferHostResync=Ofrecer al anfitrión resincronizar con un clic cuando se detecte una desincronización <i><color=#F0DAA0>[el anfitrión guarda y recarga; los clientes pasan a la misma partida]</color></i>
 ModUi/&MultiplayerPing=Ping: {0} ms
 ModUi/&MultiplayerPingBasedTickBuffer=Ajustar el retraso de acción según el ping de cada jugador <i><color=#F0DAA0>[lo aumenta antes de que nadie espere cuando una conexión es lenta, y deja que los grupos rápidos bajen hasta el mínimo de abajo]</color></i>
 ModUi/&MultiplayerPingVisibleToHostOnly=Solo el anfitrión ve el ping de los jugadores y el retraso de acción <i><color=#F0DAA0>[si no, cada jugador los ve en esta pestaña y en las placas de jugador]</color></i>
 ModUi/&MultiplayerPlayersVersions=<color=white>Versiones en esta sala:</color>
-ModUi/&MultiplayerQuickCorrectDesync=Fuera de combate, dejar que el anfitrión corrija pequeñas diferencias (PG, posición, espacios de conjuro, dados) en cada ordenador sin recargar <i><color=#F0DAA0>[las condiciones o personajes que faltan siguen necesitando una resincronización]</color></i>
 ModUi/&MultiplayerRequireApprovalForTimeConsumingActions=Pedir a cada jugador que apruebe las acciones que hacen pasar tiempo de juego: descansos cortos y largos, aprender o escribir conjuros de pergaminos, marcar deidad, rituales, y conjuros o poderes que tardan un minuto o más <i><color=#F0DAA0>[la ventana dice qué se hace y cuánto dura; no se pregunta a nadie mientras un personaje está en combate o en una escena, y al jugador que pidió se le dice qué personaje]</color></i>
 ModUi/&MultiplayerResolveOverlapsOnBattleStart=Al empezar un combate, mover a los personajes que comparten casilla a la casilla segura más cercana <i><color=#F0DAA0>[gratis, sin peligro y sin que lo vean los enemigos si se va sigiloso. Un sigiloso solo en una casilla que ningún enemigo ve la conserva; si no, la conserva el personaje creado primero]</color></i>
 ModUi/&MultiplayerSecondsBeforeLowerTickBuffer=<color=white>Segundos sin esperas antes de bajar el retraso</color> <i><color=#F0DAA0>[10 por defecto en el juego]</color></i>

@@ -1,4 +1,6 @@
-﻿using System.Diagnostics.CodeAnalysis;
+﻿using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
+using System.Linq;
 using HarmonyLib;
 using JetBrains.Annotations;
 using SolastaUnfinishedBusiness.CustomUI;
@@ -10,9 +12,87 @@ namespace SolastaUnfinishedBusiness.Patches;
 [UsedImplicitly]
 public static class ActiveCharacterPanelPatcher
 {
-    private static void OnCharacterPowerActivated(RulesetCharacter character, RulesetUsablePower power, int level)
+    // What each panel subscribed to, and on which character. Unbind removes exactly these, from that character, so it
+    // doesn't depend on the character's state or on what the panel points at by then. Before, Unbind tested the health
+    // Bind tested: a hero downed while bound kept the handlers, and rebinding after recovery could add a second set.
+    // A plain table, as its values refer to their panels through the handlers, so nothing weak would ever let go. Unbind
+    // removes an entry. A panel destroyed without one goes when its handler next runs, at the next bind or at the game's end.
+    private static readonly Dictionary<ActiveCharacterPanel, PanelSubscription> Subscriptions = [];
+
+    // Unity's own null check: a panel tests false once it has been destroyed
+    internal static void ForgetDestroyedPanels()
     {
-        character.RefreshAll();
+        foreach (var destroyed in Subscriptions.Keys.Where(x => !x).ToList())
+        {
+            Unsubscribe(destroyed);
+        }
+    }
+
+    private static void Subscribe(ActiveCharacterPanel panel, RulesetCharacter character)
+    {
+        ForgetDestroyedPanels();
+        Unsubscribe(panel);
+
+        var subscription = new PanelSubscription
+        {
+            Character = character,
+            // a live hero can outlast a destroyed panel, whose own method would then draw on what no longer exists
+            Refreshed = refreshed =>
+            {
+                if (panel)
+                {
+                    panel.ConcentrationChanged(refreshed);
+                }
+                else
+                {
+                    Unsubscribe(panel);
+                }
+            },
+            // Upstream added this to update IconsOnPortrait on power use (its commit's title), by calling RefreshAll.
+            // RefreshAll isn't only a redraw: it recalculates the character and, through the light condition, can use an
+            // object ID. This handler runs only on a computer whose panel shows the hero, so that computer's IDs moved
+            // ahead of the others' (object-ID desyncs, cause 2). The counters themselves are written on every computer
+            // by UsePower, so only this computer's display needs updating here.
+            // Marked for redraw, not redrawn now: PowerActivated fires inside UsePower, before the mod's postfix spends
+            // a transformed hero's Rage or Ki. GuiPanel.Update redraws a marked panel at its next update.
+            PowerActivated = (_, _, _) =>
+            {
+                if (panel)
+                {
+                    panel.Dirty = true;
+                }
+                else
+                {
+                    Unsubscribe(panel);
+                }
+            }
+        };
+
+        character.CharacterRefreshed += subscription.Refreshed;
+        character.PowerActivated += subscription.PowerActivated;
+        Subscriptions.Add(panel, subscription);
+        ObjectIdDiagnosticsContext.RecordPanelHandlers(character, "panel bound");
+    }
+
+    private static void Unsubscribe(ActiveCharacterPanel panel)
+    {
+        // a plain lookup by object, which still works for a destroyed panel
+        if (!Subscriptions.TryGetValue(panel, out var subscription))
+        {
+            return;
+        }
+
+        Subscriptions.Remove(panel);
+        subscription.Character.CharacterRefreshed -= subscription.Refreshed;
+        subscription.Character.PowerActivated -= subscription.PowerActivated;
+        ObjectIdDiagnosticsContext.RecordPanelHandlers(subscription.Character, "panel unbound");
+    }
+
+    private sealed class PanelSubscription
+    {
+        internal RulesetCharacter Character;
+        internal RulesetCharacter.PowerActivatedHandler PowerActivated;
+        internal RulesetCharacter.CharacterRefreshedHandler Refreshed;
     }
 
     [HarmonyPatch(typeof(ActiveCharacterPanel), nameof(ActiveCharacterPanel.Refresh))]
@@ -60,8 +140,7 @@ public static class ActiveCharacterPanelPatcher
 
             if (character is { IsDeadOrDyingOrUnconscious: false } and not RulesetCharacterEffectProxy)
             {
-                character.CharacterRefreshed += __instance.ConcentrationChanged;
-                character.PowerActivated += OnCharacterPowerActivated;
+                Subscribe(__instance, character);
             }
 
             //PATCH: support a better ratio with custom portraits
@@ -97,14 +176,7 @@ public static class ActiveCharacterPanelPatcher
         public static void Prefix(ActiveCharacterPanel __instance)
         {
             //PATCH: properly update IconsOnPortrait
-            var character = __instance.GuiCharacter?.RulesetCharacter;
-
-            // ReSharper disable once InvertIf
-            if (character is { IsDeadOrDyingOrUnconscious: false } and not RulesetCharacterEffectProxy)
-            {
-                character.CharacterRefreshed -= __instance.ConcentrationChanged;
-                character.PowerActivated -= OnCharacterPowerActivated;
-            }
+            Unsubscribe(__instance);
         }
 
         [UsedImplicitly]

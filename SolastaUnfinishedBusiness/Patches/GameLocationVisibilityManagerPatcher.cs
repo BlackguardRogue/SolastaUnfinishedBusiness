@@ -4,6 +4,7 @@ using HarmonyLib;
 using JetBrains.Annotations;
 using SolastaUnfinishedBusiness.Api.GameExtensions;
 using SolastaUnfinishedBusiness.Feats;
+using SolastaUnfinishedBusiness.Models;
 using SolastaUnfinishedBusiness.Races;
 using UnityEngine;
 
@@ -20,8 +21,23 @@ public static class GameLocationVisibilityManagerPatcher
     public static class RevealCharacter_Patch
     {
         [UsedImplicitly]
-        public static void Postfix(LocationDefinitions.LightingState __result, IIlluminable illuminable)
+        public static void Postfix(
+            LocationDefinitions.LightingState __result,
+            IIlluminable illuminable,
+            GameLocationCharacter previewCharacter)
         {
+            // A preview only asks what the light would be, for the screen of the computer it runs on: the game's method
+            // writes the lighting state only when previewCharacter is null. Hovering a location or an enemy therefore
+            // must not change a character (object-ID desyncs): that happens on one computer only. The answer the caller
+            // gets is unaffected. Real light updates still reach the check below, which is what notices a hero walking
+            // from a bright interior to a bright exterior (the state stays Bright, so the game's setter doesn't).
+            if (previewCharacter != null)
+            {
+                ObjectIdDiagnosticsContext.LightingPreviewSkipped();
+
+                return;
+            }
+
             if (__result != LocationDefinitions.LightingState.Bright ||
                 illuminable is not GameLocationCharacter { RulesetCharacter: not null } glc)
             {

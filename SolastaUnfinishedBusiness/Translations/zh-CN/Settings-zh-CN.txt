@@ -562,6 +562,13 @@ ModUi/&MultiplayerHostSettingsBanner=<b><color=#E0A040>这是本次多人游戏�
 ModUi/&MultiplayerHostSettingsThisLaunchBanner=<b><color=#E0A040>本次启动使用主机的设置（Settings/Host.xml）。这里为只读，你自己的Settings.xml不会改变；下次启动会再次使用你自己的设置。</color></b>
 ModUi/&MultiplayerInitialTickBuffer=<color=white>初始行动延迟（帧刻）</color> <i><color=#F0DAA0>[游戏默认6]</color></i>
 ModUi/&MultiplayerLagTitle=<color=#F0DAA0>行动延迟：</color>
+ModUi/&Logging=日志
+ModUi/&LoggingHelp=用于查找多人游戏问题的额外记录。它们不会改变游戏。
+ModUi/&LoggingHostWarning=<color=#F0DAA0>警告：在多人游戏房间中，主机的选择适用于所有玩家，因此无论你自己的设置如何，日志都可能被开启或关闭。</color>
+ModUi/&EnableAdditionalLogging=启用额外日志
+ModUi/&LogObjectIdRecords=对象ID记录 <i><color=#F0DAA0>[新游戏对象、光照状态变化以及能力或法术的结果，保存到文件以便比较各台电脑]</color></i>
+ModUi/&LogStaleEffectChecks=过期的能力和法术效果 <i><color=#F0DAA0>[当生效的效果不再符合当前情况时记入日志；会重新检查生效的效果，因此略微影响性能]</color></i>
+ModUi/&LogPerception=察觉 <i><color=#F0DAA0>[在日志中记录察觉请求和检定]</color></i>
 ModUi/&MultiplayerMenu=多人游戏
 ModUi/&MultiplayerMinimumTickBuffer=<color=white>最小行动延迟（帧刻）</color> <i><color=#F0DAA0>[游戏默认4，只在所有人的延迟都允许时使用]</color></i>
 ModUi/&MultiplayerMovementTitle=<color=#F0DAA0>移动</color> <i><color=#F0DAA0>[仅限多人游戏，单人游戏保持游戏规则]</color></i><color=#F0DAA0>:</color>
@@ -569,12 +576,11 @@ ModUi/&MultiplayerNoFps=FPS：未报告
 ModUi/&MultiplayerNoHost=不在多人游戏房间中。
 ModUi/&MultiplayerNoPing=延迟：未报告
 ModUi/&MultiplayerNoVersion=未报告版本
-ModUi/&MultiplayerOfferHostResync=当不同步无法修正时，为主机提供一键重新同步 <i><color=#F0DAA0>[主机快速存档并重新加载；客户端会进入同一个存档]</color></i>
+ModUi/&MultiplayerOfferHostResync=发现不同步时，为主机提供一键重新同步 <i><color=#F0DAA0>[主机保存并重新读取；客户端会回到同一存档]</color></i>
 ModUi/&MultiplayerPing=延迟：{0}毫秒
 ModUi/&MultiplayerPingBasedTickBuffer=根据每位玩家的延迟设定行动延迟 <i><color=#F0DAA0>[连接较慢时会在任何人等待前提高延迟，并让快速的队伍降到下方的最小值]</color></i>
 ModUi/&MultiplayerPingVisibleToHostOnly=只有主机能看到玩家的延迟和行动延迟 <i><color=#F0DAA0>[否则每位玩家都会在此标签页和玩家名牌上看到]</color></i>
 ModUi/&MultiplayerPlayersVersions=<color=white>此房间中的版本：</color>
-ModUi/&MultiplayerQuickCorrectDesync=战斗外允许主机在不重新加载的情况下修正每台电脑上的小差异（生命值、位置、法术位、骰子） <i><color=#F0DAA0>[状态差异或缺少角色仍需重新同步]</color></i>
 ModUi/&MultiplayerRequireApprovalForTimeConsumingActions=让每位玩家批准会经过游戏时间的行动：短休和长休、从卷轴学习或抄写法术、神祇标记、仪式，以及需要一分钟或更长时间的法术或能力 <i><color=#F0DAA0>[弹窗会说明要做什么以及需要多久；角色处于战斗或过场动画时不会询问任何人，发起的玩家会被告知是哪个角色]</color></i>
 ModUi/&MultiplayerResolveOverlapsOnBattleStart=战斗开始时，将共享格子的角色移到最近的安全格子 <i><color=#F0DAA0>[免费、无伤害，潜行时不会被敌人发现。没有敌人看到的格子里若只有一名潜行者则由其保留；否则由最先创建的角色保留]</color></i>
 ModUi/&MultiplayerSecondsBeforeLowerTickBuffer=<color=white>无需等待多少秒后降低延迟</color> <i><color=#F0DAA0>[游戏默认10]</color></i>

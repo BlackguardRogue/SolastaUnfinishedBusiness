@@ -18,7 +18,44 @@ internal static class PowerBundle
     private static readonly Dictionary<FeatureDefinitionPower, SpellDefinition> Powers2Spells = [];
     private static readonly Dictionary<FeatureDefinitionPower, Bundle> Bundles = [];
 
-    private static readonly Dictionary<ulong, Dictionary<string, EffectDescription>> SpellEffectCache = [];
+    // Modified effects are kept per live effect, not per power or spell (object-ID desyncs review).
+    // This cache used to be keyed by caster, definition and metamagic only, and only a RefreshAll emptied it. That had
+    // three faults:
+    // - later uses of a power got the first use's result, although modifiers read things that change between uses: the
+    //   points spent on this use, a toggle such as College of Audacity's Masterful Whirl, remaining movement;
+    // - a tooltip filled it (with no live effect, so modifiers skipped what depends on one), and the next real use on
+    //   that computer got the tooltip's result. Tooltips run on one computer only, so computers could disagree on rules;
+    // - how long a result lasted depended on which computer's panel called RefreshAll.
+    // Each use now makes a new RulesetEffect, so it gets a result worked out for it. The object stays the same for that
+    // effect's life, because code changes a live effect's description and expects the change to last (gambits' RangeType,
+    // the teleport cursor's targeting). RefreshAll still drops a caster's results, as before: it moves the caster's
+    // generation on, and a result from an older generation is worked out again.
+    // Held by weak keys, so this table never decides how long an effect lives. Many effects never report ending: a spell
+    // targeted and then cancelled, or one made only to read its forms or to preview a position. Whatever holds such an effect
+    // goes, and its result goes with it. Not a ConditionalWeakTable, which never lets go on the game's Boehm runtime (see
+    // WeakKeyTable). Nothing in an entry refers to the effect, which that needs.
+    // Each map load and the game's end also clear it, to reset the generations below. An effect that's still going then gets
+    // its result worked out again, as after any RefreshAll.
+    private static readonly WeakKeyTable<RulesetEffect, Dictionary<string, LiveEffectEntry>> LiveEffects = new();
+
+    // for casters that have kept results, until the next map load
+    private static readonly Dictionary<ulong, int> CasterGenerations = [];
+
+    // The stale check's cost is bounded: an effect is looked at once per this many frames, and only so many in a frame. It's
+    // on by default and allocates, and garbage per frame is what caused multiplayer's hitches (issue 1), so it's sparing.
+    private const int LiveEffectCheckIntervalFrames = 300;
+    private const int LiveEffectChecksPerFrame = 1;
+
+    private static int _liveEffectChecksFrame = -1;
+    private static int _liveEffectChecksThisFrame;
+
+    // Tooltips have no live effect. They ask often while drawing, and nothing in the rules reads this, so one frame's
+    // result is reused for that frame only: a tooltip can't go on showing an old value.
+    private static readonly Dictionary<ulong, Dictionary<string, EffectDescription>> GuiEffects = [];
+
+    private static int _guiEffectsFrame = -1;
+
+    private const string UnmodifiedEffect = "(unmodified)";
 
     private static Transform _parent;
 
@@ -313,37 +350,61 @@ internal static class PowerBundle
         return key;
     }
 
-    private static EffectDescription GetCachedEffect(
-        RulesetEntity caster,
-        BaseDefinition definition,
-        BaseDefinition metamagic)
+    // A map load: see LiveEffects. The generations go too, as nothing is left that was stamped with them.
+    internal static void ClearLiveEffects()
     {
-        if (!SpellEffectCache.TryGetValue(caster.Guid, out var effects))
+        LiveEffects.Clear();
+        CasterGenerations.Clear();
+    }
+
+    // For aiming a teleport, which changes the description's targeting on the aiming computer only. With no modifiers that apply,
+    // an effect's description is the definition's own object, shared by every use of it: a change there would stay for the
+    // session on this computer alone. So the effect reads a copy until EndAiming, which isn't replaced even by a RefreshAll, as
+    // that would lose the targeting partway through. Null if the effect has no entry, as with no caster: nothing to change then.
+    internal static EffectDescription BeginAiming(RulesetEffect effect)
+    {
+        // this read makes the entry
+        _ = effect.EffectDescription;
+
+        if (!TryGetLiveEntry(effect, out var entry))
         {
             return null;
         }
 
-        return effects.TryGetValue(Key(definition, metamagic), out var effect) ? effect : null;
+        entry.Aiming ??= EffectDescriptionBuilder.Create(entry.Description).Build();
+
+        return entry.Aiming;
     }
 
-    private static void CacheEffect(
-        RulesetEntity caster,
-        BaseDefinition definition,
-        BaseDefinition metamagic,
-        EffectDescription effect)
+    // Aiming is over, and the effect is back to what every computer has. A refresh during aiming now counts as usual.
+    internal static void EndAiming(RulesetEffect effect)
     {
-        if (!SpellEffectCache.TryGetValue(caster.Guid, out var value))
+        if (TryGetLiveEntry(effect, out var entry))
         {
-            value = new Dictionary<string, EffectDescription>();
-            SpellEffectCache.Add(caster.Guid, value);
+            entry.Aiming = null;
         }
+    }
 
-        value.AddOrReplace(Key(definition, metamagic), effect);
+    private static bool TryGetLiveEntry(RulesetEffect effect, out LiveEffectEntry entry)
+    {
+        var metamagic = effect is RulesetEffectSpell spell ? spell.MetamagicOption : null;
+
+        entry = null;
+
+        return LiveEffects.TryGetValue(effect, out var entries) &&
+               entries.TryGetValue(metamagic ? metamagic.Name : string.Empty, out entry);
     }
 
     internal static void ClearSpellEffectCache(RulesetCharacter caster)
     {
-        SpellEffectCache.Remove(caster.Guid);
+        // A caster with no entry has no kept results to make old. Monsters that never have any then add nothing here, which
+        // otherwise holds one entry for every character refreshed since the game started.
+        if (CasterGenerations.TryGetValue(caster.Guid, out var generation))
+        {
+            CasterGenerations[caster.Guid] = generation + 1;
+        }
+
+        GuiEffects.Remove(caster.Guid);
     }
 
     private static EffectDescription ModifyMagicEffect(
@@ -357,14 +418,164 @@ internal static class PowerBundle
             return original;
         }
 
-        var metamagic = effect is RulesetEffectSpell spell ? spell.MetamagicOption : null;
-        var cached = GetCachedEffect(caster, definition, metamagic);
-
-        if (cached != null)
+        // not tied to a live effect: nothing to keep it for, and a rules question gets today's answer
+        if (effect == null)
         {
-            return cached;
+            return BuildModifiedEffect(original, definition, caster, null, null);
         }
 
+        var metamagic = effect is RulesetEffectSpell spell ? spell.MetamagicOption : null;
+        var metamagicName = metamagic ? metamagic.Name : string.Empty;
+
+        if (!LiveEffects.TryGetValue(effect, out var entries))
+        {
+            entries = new Dictionary<string, LiveEffectEntry>();
+            LiveEffects.Add(effect, entries);
+        }
+
+
+        CasterGenerations.TryGetValue(caster.Guid, out var generation);
+
+        if (entries.TryGetValue(metamagicName, out var entry) && (entry.Generation == generation || entry.Aiming != null))
+        {
+            CheckLiveEffect(entry, original, definition, caster, effect, metamagic);
+
+            return entry.Aiming ?? entry.Description;
+        }
+
+        // Noted before the modifiers run, and never written back: a refresh during them has to make this result old, as it
+        // would with any other refresh, and writing the earlier number afterwards would make older results look current.
+        if (!CasterGenerations.ContainsKey(caster.Guid))
+        {
+            CasterGenerations[caster.Guid] = generation;
+        }
+
+        var result = BuildModifiedEffect(original, definition, caster, effect, metamagic);
+
+        entry = new LiveEffectEntry { Description = result, Generation = generation };
+        entries[metamagicName] = entry;
+
+        // The stale check's starting point, now, while the situation is still the one this result was worked out for. It
+        // isn't subject to the check's budget: taken later, a change in between would become the starting point and be
+        // missed. This runs once per result, so uses bound it, not frames.
+        if (ObjectIdDiagnosticsContext.StaleEffectChecksActive)
+        {
+            // This counts as the entry's check, passed or failed: the first comparison or retry waits the usual interval,
+            // rather than spending another rebuild on the next read, which could be in this same frame.
+            entry.LastCheckedFrame = Time.frameCount;
+
+            try
+            {
+                entry.Baseline = SummarizeWithoutEffect(original, definition, caster, metamagic);
+            }
+            catch (Exception e)
+            {
+                ObjectIdDiagnosticsContext.EffectCheckFailed(definition, e);
+            }
+        }
+
+        // an unmodified effect is the definition's own, the same everywhere
+        if (ObjectIdDiagnosticsContext.Active && !ReferenceEquals(result, original))
+        {
+            ObjectIdDiagnosticsContext.EffectWorkedOut(caster, definition, effect, result);
+        }
+
+        return result;
+    }
+
+    // Diagnostic only, for "when does a kept result go stale" (user, 2026-11-05): an effect's result is kept for its life,
+    // so a change made during that life, with no RefreshAll, still isn't seen. This records when the modifiers would now
+    // give something different. It runs only when switched on (mod menu, Logging), so it must never change anything: a
+    // computer with it on and one with it off have to agree.
+    // So it never gives the modifiers the live effect. Three of the 70 write outside their copy
+    // (ModifyEffectDescriptionSavingThrowRogue, a Gambits one and Dragon Breath set usablePower.saveDC), and all three do
+    // that only when handed a live power (Codex's review found this; the earlier version here replayed with the live effect
+    // and did write). With no effect they run exactly as for a tooltip. A listing of every assignment and call in all 70
+    // bodies shows no other write; called helpers were checked by their names, not read through.
+    // It compares two no-effect results, the first with the latest, so it sees changes in the caster's situation. It can't
+    // see a modifier's effect-dependent part, such as points spent on this use or the save DC those three set.
+    private static void CheckLiveEffect(
+        LiveEffectEntry entry,
+        EffectDescription original,
+        BaseDefinition definition,
+        RulesetCharacter caster,
+        RulesetEffect effect,
+        BaseDefinition metamagic)
+    {
+        if (!ObjectIdDiagnosticsContext.StaleEffectChecksActive || effect.Terminated)
+        {
+            return;
+        }
+
+        var frame = Time.frameCount;
+
+        if (frame - entry.LastCheckedFrame < LiveEffectCheckIntervalFrames)
+        {
+            return;
+        }
+
+        if (_liveEffectChecksFrame != frame)
+        {
+            _liveEffectChecksFrame = frame;
+            _liveEffectChecksThisFrame = 0;
+        }
+
+        if (_liveEffectChecksThisFrame >= LiveEffectChecksPerFrame)
+        {
+            return;
+        }
+
+        _liveEffectChecksThisFrame++;
+        entry.LastCheckedFrame = frame;
+
+        try
+        {
+            var summary = SummarizeWithoutEffect(original, definition, caster, metamagic);
+
+            // The check was off when this result was worked out, or that failed. This is only as far back as it can see,
+            // not how the effect began, so reports from it say so.
+            if (entry.Baseline == null)
+            {
+                entry.Baseline = summary;
+                entry.BaselineIsLate = true;
+
+                return;
+            }
+
+            if (summary != entry.Baseline && summary != entry.ReportedSummary)
+            {
+                entry.ReportedSummary = summary;
+                ObjectIdDiagnosticsContext.EffectStale(
+                    caster, definition, effect, entry.Baseline, summary, entry.BaselineIsLate);
+            }
+        }
+        catch (Exception e)
+        {
+            // a modifier may not expect to run this late; the diagnostic never interrupts the game
+            ObjectIdDiagnosticsContext.EffectCheckFailed(definition, e);
+        }
+    }
+
+    private static string SummarizeWithoutEffect(
+        EffectDescription original,
+        BaseDefinition definition,
+        RulesetCharacter caster,
+        BaseDefinition metamagic)
+    {
+        var result = BuildModifiedEffect(original, definition, caster, null, metamagic);
+
+        // Unmodified results are only marked, not described: the definition's own description is what some code changes on
+        // purpose (gambits' RangeType), and that isn't an out-of-date result.
+        return ReferenceEquals(result, original) ? UnmodifiedEffect : ObjectIdDiagnosticsContext.SummarizeEffect(result);
+    }
+
+    private static EffectDescription BuildModifiedEffect(
+        EffectDescription original,
+        BaseDefinition definition,
+        RulesetCharacter caster,
+        RulesetEffect effect,
+        BaseDefinition metamagic)
+    {
         //collect all valid modifiers from caster
         var result = original;
         var modifiers = new List<IModifyEffectDescription>();
@@ -391,12 +602,31 @@ internal static class PowerBundle
                 EffectDescriptionBuilder
                     .Create(result)
                     .Build(),
-                (current, f) => f.GetEffectDescription(definition, current, caster, effect));
+                (current, f) =>
+                {
+                    var next = f.GetEffectDescription(definition, current, caster, effect);
+
+                    // Some modifiers return an object of their own instead of the copy they were given (an upgrade kept in
+                    // ModifyEffectDescriptionOnLevels). A later modifier, or code changing a live description, must not
+                    // change that stored object, and modifiers now run once per use rather than once per refresh.
+                    return ReferenceEquals(next, current)
+                        ? next
+                        : EffectDescriptionBuilder.Create(next).Build();
+                });
         }
 
-        CacheEffect(caster, definition, metamagic, result);
-
         return result;
+    }
+
+    private sealed class LiveEffectEntry
+    {
+        internal string Baseline;
+        internal bool BaselineIsLate;
+        internal EffectDescription Description;
+        internal int Generation;
+        internal int LastCheckedFrame = -1;
+        internal EffectDescription Aiming;
+        internal string ReportedSummary;
     }
 
     /**Modifies spell/power description for GUI purposes.*/
@@ -404,7 +634,34 @@ internal static class PowerBundle
         EffectDescription original,
         [NotNull] BaseDefinition definition)
     {
-        return ModifyMagicEffect(original, definition, Global.CurrentCharacter, null);
+        var caster = Global.CurrentCharacter;
+
+        if (caster == null)
+        {
+            return original;
+        }
+
+        if (_guiEffectsFrame != Time.frameCount)
+        {
+            _guiEffectsFrame = Time.frameCount;
+            GuiEffects.Clear();
+        }
+
+        if (!GuiEffects.TryGetValue(caster.Guid, out var effects))
+        {
+            effects = new Dictionary<string, EffectDescription>();
+            GuiEffects.Add(caster.Guid, effects);
+        }
+
+        var key = Key(definition, null);
+
+        if (!effects.TryGetValue(key, out var result))
+        {
+            result = BuildModifiedEffect(original, definition, caster, null, null);
+            effects.Add(key, result);
+        }
+
+        return result;
     }
 
     internal static bool ValidatePrerequisites(

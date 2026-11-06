@@ -562,6 +562,13 @@ ModUi/&MultiplayerHostSettingsBanner=<b><color=#E0A040>Dies sind die Einstellung
 ModUi/&MultiplayerHostSettingsThisLaunchBanner=<b><color=#E0A040>Dieser Start verwendet die Einstellungen des HOSTS (Settings/Host.xml). Sie sind hier schreibgeschützt und Ihre eigene Settings.xml bleibt unverändert; der nächste Start verwendet wieder Ihre eigenen Einstellungen.</color></b>
 ModUi/&MultiplayerInitialTickBuffer=<color=white>Anfängliche Aktionsverzögerung in Ticks</color> <i><color=#F0DAA0>[Spielstandard 6]</color></i>
 ModUi/&MultiplayerLagTitle=<color=#F0DAA0>Aktionsverzögerung:</color>
+ModUi/&Logging=Protokollierung
+ModUi/&LoggingHelp=Zusätzliche Aufzeichnungen zum Auffinden von Mehrspielerproblemen. Sie verändern das Spiel nicht.
+ModUi/&LoggingHostWarning=<color=#F0DAA0>Warnung: In einem Mehrspielerraum gilt die Auswahl des Hosts für alle Spieler. Deine Protokollierung kann also unabhängig von deinen eigenen Schaltern ein- oder ausgeschaltet sein.</color>
+ModUi/&EnableAdditionalLogging=Zusätzliche Protokollierung aktivieren
+ModUi/&LogObjectIdRecords=Objekt-ID-Aufzeichnungen <i><color=#F0DAA0>[neue Spielobjekte, Änderungen von Lichtzuständen und Ergebnisse von Kräften oder Zaubern, in Dateien gespeichert, um Computer zu vergleichen]</color></i>
+ModUi/&LogStaleEffectChecks=Veraltete Effekte von Kräften und Zaubern <i><color=#F0DAA0>[vermerkt im Protokoll, wenn ein aktiver Effekt nicht mehr zur aktuellen Situation passt; prüft aktive Effekte erneut und kostet daher etwas Leistung]</color></i>
+ModUi/&LogPerception=Wahrnehmung <i><color=#F0DAA0>[Wahrnehmungsanfragen und -würfe im Protokoll]</color></i>
 ModUi/&MultiplayerMenu=Mehrspieler
 ModUi/&MultiplayerMinimumTickBuffer=<color=white>Minimale Aktionsverzögerung in Ticks</color> <i><color=#F0DAA0>[Spielstandard 4, nur verwendet, wenn jeder Ping es erlaubt]</color></i>
 ModUi/&MultiplayerMovementTitle=<color=#F0DAA0>Bewegung</color> <i><color=#F0DAA0>[nur Mehrspielerpartien, Einzelspieler behält die Spielregeln]</color></i><color=#F0DAA0>:</color>
@@ -569,12 +576,11 @@ ModUi/&MultiplayerNoFps=FPS: nicht gemeldet
 ModUi/&MultiplayerNoHost=Nicht in einem Mehrspielerraum.
 ModUi/&MultiplayerNoPing=Ping: nicht gemeldet
 ModUi/&MultiplayerNoVersion=keine Version gemeldet
-ModUi/&MultiplayerOfferHostResync=Dem Host eine Ein-Klick-Neusynchronisierung anbieten, wenn ein Desync nicht korrigiert werden kann <i><color=#F0DAA0>[der Host speichert schnell und lädt neu; Clients werden in denselben Spielstand geholt]</color></i>
+ModUi/&MultiplayerOfferHostResync=Dem Host bei einer Desynchronisierung eine Neusynchronisierung per Klick anbieten <i><color=#F0DAA0>[der Host speichert und lädt neu; die Clients werden in denselben Spielstand geholt]</color></i>
 ModUi/&MultiplayerPing=Ping: {0} ms
 ModUi/&MultiplayerPingBasedTickBuffer=Die Aktionsverzögerung nach dem Ping jedes Spielers bemessen <i><color=#F0DAA0>[erhöht sie, bevor jemand wartet, wenn eine Verbindung langsam ist, und lässt schnelle Gruppen bis zum Minimum unten sinken]</color></i>
 ModUi/&MultiplayerPingVisibleToHostOnly=Nur der Host sieht den Ping der Spieler und die Aktionsverzögerung <i><color=#F0DAA0>[sonst sieht jeder Spieler sie in diesem Reiter und auf Spielerplaketten]</color></i>
 ModUi/&MultiplayerPlayersVersions=<color=white>Builds in diesem Raum:</color>
-ModUi/&MultiplayerQuickCorrectDesync=Außerhalb des Kampfes darf der Host kleine Abweichungen (TP, Position, Zauberplätze, Würfel) auf jedem Computer ohne Neuladen korrigieren <i><color=#F0DAA0>[Zustände oder fehlende Charaktere erfordern weiterhin eine Neusynchronisierung]</color></i>
 ModUi/&MultiplayerRequireApprovalForTimeConsumingActions=Jeden Spieler Aktionen zustimmen lassen, bei denen Spielzeit vergeht: kurze und lange Rasten, Zauber aus Schriftrollen lernen oder schreiben, Gottheit markieren, Rituale sowie Zauber oder Kräfte, die eine Minute oder länger dauern <i><color=#F0DAA0>[das Fenster sagt, was getan wird und wie lange; niemand wird gefragt, während ein Charakter im Kampf oder in einer Zwischensequenz ist, und der fragende Spieler erfährt, welcher Charakter]</color></i>
 ModUi/&MultiplayerResolveOverlapsOnBattleStart=Bei Kampfbeginn Charaktere, die sich ein Feld teilen, auf das nächste sichere Feld bewegen <i><color=#F0DAA0>[kostenlos, ungefährlich und beim Schleichen von Feinden ungesehen. Ein einzelner Schleicher in einem Feld, das kein Feind sieht, behält es; sonst behält es der zuerst erstellte Charakter]</color></i>
 ModUi/&MultiplayerSecondsBeforeLowerTickBuffer=<color=white>Sekunden ohne Warten, bevor die Verzögerung gesenkt wird</color> <i><color=#F0DAA0>[Spielstandard 10]</color></i>

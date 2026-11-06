@@ -1862,7 +1862,8 @@ internal static class GambitsBuilders
 
             foreach (var position in boxInt.EnumerateAllPositionsWithin())
             {
-                if (int3.Distance(cursorLocationSelectPosition.centerPosition, position) >
+                // from the ally, who is the one moving: the cursor's centre is the character using the gambit
+                if (int3.Distance(targetCharacter.LocationPosition, position) >
                     (double)halfMaxTacticalMoves ||
                     !positioningService.CanPlaceCharacter(
                         targetCharacter, position, CellHelpers.PlacementMode.Station) ||
@@ -1884,8 +1885,6 @@ internal static class GambitsBuilders
 
         public IEnumerator OnPowerOrSpellFinishedByMe(CharacterActionMagicEffect action, BaseDefinition baseDefinition)
         {
-            action.ActionParams.activeEffect.EffectDescription.rangeParameter = 6;
-
             var actingCharacter = action.ActingCharacter;
             var targetCharacter = action.ActionParams.TargetCharacters[0];
             var targetRulesetCharacter = targetCharacter.RulesetCharacter;

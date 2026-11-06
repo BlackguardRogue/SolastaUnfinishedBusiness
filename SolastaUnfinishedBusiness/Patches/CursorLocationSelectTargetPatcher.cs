@@ -4,6 +4,7 @@ using HarmonyLib;
 using JetBrains.Annotations;
 using SolastaUnfinishedBusiness.Api.GameExtensions;
 using SolastaUnfinishedBusiness.Api.LanguageExtensions;
+using SolastaUnfinishedBusiness.Behaviors.Specific;
 using SolastaUnfinishedBusiness.CustomUI;
 using SolastaUnfinishedBusiness.Interfaces;
 using SolastaUnfinishedBusiness.Models;
@@ -127,12 +128,18 @@ public static class CursorLocationSelectTargetPatcher
                 return;
             }
 
-            var rulesetEffect = actionParams.RulesetEffect;
+            // On a copy for as long as this cursor is up, as this runs only on the computer aiming (see BeginAiming).
+            var description = PowerBundle.BeginAiming(actionParams.RulesetEffect);
 
-            rulesetEffect.EffectDescription.TargetType = TargetType.IndividualsUnique;
-            rulesetEffect.EffectDescription.TargetSide = modifyTeleportEffectBehavior.AllyOnly ? Side.Ally : Side.All;
-            rulesetEffect.EffectDescription.targetExcludeCaster = modifyTeleportEffectBehavior.TeleportSelf;
-            rulesetEffect.EffectDescription.inviteOptionalAlly = modifyTeleportEffectBehavior.AllyOnly;
+            if (description == null)
+            {
+                return;
+            }
+
+            description.TargetType = TargetType.IndividualsUnique;
+            description.TargetSide = modifyTeleportEffectBehavior.AllyOnly ? Side.Ally : Side.All;
+            description.targetExcludeCaster = modifyTeleportEffectBehavior.TeleportSelf;
+            description.inviteOptionalAlly = modifyTeleportEffectBehavior.AllyOnly;
         }
 
         [UsedImplicitly]
@@ -166,12 +173,7 @@ public static class CursorLocationSelectTargetPatcher
                 return;
             }
 
-            var rulesetEffect = __instance.ActionParams.RulesetEffect;
-
-            rulesetEffect.EffectDescription.TargetType = TargetType.Position;
-            rulesetEffect.EffectDescription.TargetSide = Side.Ally;
-            rulesetEffect.EffectDescription.targetExcludeCaster = false;
-            rulesetEffect.EffectDescription.inviteOptionalAlly = true;
+            PowerBundle.EndAiming(__instance.ActionParams.RulesetEffect);
         }
     }
 
@@ -483,7 +485,6 @@ public static class CursorLocationSelectTargetPatcher
 
                             actionParams.ActionModifiers.SetRange(__instance.ActionModifiersList);
                             actionParams.TargetCharacters.SetRange(__instance.SelectionService.SelectedTargets);
-                            actionParams.RulesetEffect.EffectDescription.rangeParameter = modifier.PositionRange;
 
                             __instance.CursorService
                                 .ActivateCursor<CursorLocationSelectPosition>(__instance.ActionParams);

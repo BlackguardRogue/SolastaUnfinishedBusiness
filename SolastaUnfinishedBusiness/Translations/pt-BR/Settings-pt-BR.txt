@@ -562,6 +562,13 @@ ModUi/&MultiplayerHostSettingsBanner=<b><color=#E0A040>Estas são as configuraç
 ModUi/&MultiplayerHostSettingsThisLaunchBanner=<b><color=#E0A040>Esta inicialização usa as configurações do ANFITRIÃO (Settings/Host.xml). Aqui elas são somente leitura e seu próprio Settings.xml não é alterado; a próxima inicialização volta a usar suas configurações.</color></b>
 ModUi/&MultiplayerInitialTickBuffer=<color=white>Atraso de ação inicial em ticks</color> <i><color=#F0DAA0>[padrão do jogo 6]</color></i>
 ModUi/&MultiplayerLagTitle=<color=#F0DAA0>Atraso de ação:</color>
+ModUi/&Logging=Registro
+ModUi/&LoggingHelp=Registros adicionais para encontrar problemas no multijogador. Eles não alteram o jogo.
+ModUi/&LoggingHostWarning=<color=#F0DAA0>Aviso: em uma sala multijogador, as escolhas do anfitrião valem para todos os jogadores, portanto seu registro pode estar ativado ou desativado independentemente das suas opções.</color>
+ModUi/&EnableAdditionalLogging=Ativar registro adicional
+ModUi/&LogObjectIdRecords=Registros de IDs de objetos <i><color=#F0DAA0>[novos objetos do jogo, mudanças de estados de luz e resultados de poderes ou magias, salvos em arquivos para comparar computadores]</color></i>
+ModUi/&LogStaleEffectChecks=Efeitos de poderes e magias desatualizados <i><color=#F0DAA0>[anota no registro quando um efeito ativo não corresponde mais à situação atual; verifica novamente os efeitos ativos, por isso afeta um pouco o desempenho]</color></i>
+ModUi/&LogPerception=Percepção <i><color=#F0DAA0>[pedidos e testes de percepção no registro]</color></i>
 ModUi/&MultiplayerMenu=Multijogador
 ModUi/&MultiplayerMinimumTickBuffer=<color=white>Atraso de ação mínimo em ticks</color> <i><color=#F0DAA0>[padrão do jogo 4, só usado quando todo ping permite]</color></i>
 ModUi/&MultiplayerMovementTitle=<color=#F0DAA0>Movimento</color> <i><color=#F0DAA0>[só partidas multijogador, o modo solo mantém as regras do jogo]</color></i><color=#F0DAA0>:</color>
@@ -569,12 +576,11 @@ ModUi/&MultiplayerNoFps=FPS: não informado
 ModUi/&MultiplayerNoHost=Não está em uma sala multijogador.
 ModUi/&MultiplayerNoPing=Ping: não informado
 ModUi/&MultiplayerNoVersion=nenhuma versão informada
-ModUi/&MultiplayerOfferHostResync=Oferecer ao anfitrião uma ressincronização com um clique quando uma dessincronização não puder ser corrigida <i><color=#F0DAA0>[o anfitrião salva rápido e recarrega; os clientes são trazidos para o mesmo salvamento]</color></i>
+ModUi/&MultiplayerOfferHostResync=Oferecer ao anfitrião ressincronizar com um clique quando uma dessincronização for detectada <i><color=#F0DAA0>[o anfitrião salva e recarrega; os clientes são trazidos para o mesmo salvamento]</color></i>
 ModUi/&MultiplayerPing=Ping: {0} ms
 ModUi/&MultiplayerPingBasedTickBuffer=Dimensionar o atraso de ação pelo ping de cada jogador <i><color=#F0DAA0>[aumenta antes que alguém espere quando uma conexão está lenta, e deixa grupos rápidos descerem até o mínimo abaixo]</color></i>
 ModUi/&MultiplayerPingVisibleToHostOnly=Só o anfitrião vê o ping dos jogadores e o atraso de ação <i><color=#F0DAA0>[senão cada jogador os vê nesta aba e nas placas de jogador]</color></i>
 ModUi/&MultiplayerPlayersVersions=<color=white>Versões nesta sala:</color>
-ModUi/&MultiplayerQuickCorrectDesync=Fora de combate, deixar o anfitrião corrigir pequenas diferenças (PV, posição, espaços de magia, dados) em cada computador sem recarregar <i><color=#F0DAA0>[condições ou personagens ausentes ainda precisam de uma ressincronização]</color></i>
 ModUi/&MultiplayerRequireApprovalForTimeConsumingActions=Pedir a cada jogador que aprove ações que fazem passar tempo de jogo: descansos curtos e longos, aprender ou escrever magias de pergaminhos, marcar divindade, rituais, e magias ou poderes que levam um minuto ou mais <i><color=#F0DAA0>[a janela diz o que está sendo feito e por quanto tempo; ninguém é consultado enquanto um personagem está em combate ou em uma cena, e o jogador que pediu fica sabendo qual personagem]</color></i>
 ModUi/&MultiplayerResolveOverlapsOnBattleStart=Quando um combate começa, mover os personagens que dividem uma casa para a casa segura mais próxima <i><color=#F0DAA0>[grátis, sem dano e sem ser visto pelos inimigos se estiver furtivo. Um furtivo sozinho em uma casa que nenhum inimigo vê fica com ela; senão fica o personagem criado primeiro]</color></i>
 ModUi/&MultiplayerSecondsBeforeLowerTickBuffer=<color=white>Segundos sem espera antes de baixar o atraso</color> <i><color=#F0DAA0>[padrão do jogo 10]</color></i>

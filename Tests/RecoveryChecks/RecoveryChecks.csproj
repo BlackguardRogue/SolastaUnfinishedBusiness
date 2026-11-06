@@ -7,6 +7,7 @@
   <ItemGroup>
     <Compile Include="../../SolastaUnfinishedBusiness/Models/CoordinatedTickBarrier.cs" Link="CoordinatedTickBarrier.cs" />
     <Compile Include="../../SolastaUnfinishedBusiness/Models/BoundedTickReports.cs" Link="BoundedTickReports.cs" />
+    <Compile Include="../../SolastaUnfinishedBusiness/Models/WeakKeyTable.cs" Link="WeakKeyTable.cs" />
     <Compile Include="../../SolastaUnfinishedBusiness/Models/ModInstallTransaction.cs" Link="ModInstallTransaction.cs" />
   </ItemGroup>
 </Project>

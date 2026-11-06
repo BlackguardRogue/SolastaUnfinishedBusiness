@@ -37,6 +37,7 @@ internal static class ObjectIdDiagnosticsContext
     private const float WindowSeconds = 120f;
     private const int StackFrames = 8;
     private const int MaxFilesPerLaunch = 40;
+    private const int MaxStaleEffectReports = 64;
 
     private static readonly Record[] Ring = new Record[RingSize];
     private static readonly string LaunchStamp = DateTime.Now.ToString("yyyyMMdd-HHmmss");
@@ -51,11 +52,28 @@ internal static class ObjectIdDiagnosticsContext
     private static int _registerDepth;
     private static float _lastDesyncDump = -1000f;
 
+    // Written to each file's header, so they can't push allocation records out of the ring. Counted since the launch.
+    private static string _saveHandlerPatch = "not reached";
+    private static long _lightingUnchanged;
+    private static long _lightingPreviewSkipped;
+    private static long _effectsWorkedOut;
+    private static long _effectsStale;
+    private static long _effectChecksFailed;
+
     // Register (via the patches) records whatever it allocated: in the prefix, the counter before; in the postfix, the
     // result. Nested registrations (an object registering its parts) each get their own record.
     [ThreadStatic] private static Stack<ulong> _countersBefore;
 
-    internal static bool Active
+    // The switches are on the mod menu's Logging tab. The save patch's own result isn't behind them: it's one line per
+    // launch, and an error there means a fix isn't in place.
+    internal static bool Active =>
+        Main.Settings is { EnableAdditionalLogging: true, LogObjectIdRecords: true } && InScope;
+
+    // PowerBundle's stale effect check. It works effects out a second time, so it has its own switch.
+    internal static bool StaleEffectChecksActive =>
+        Main.Settings is { EnableAdditionalLogging: true, LogStaleEffectChecks: true } && InScope;
+
+    private static bool InScope
     {
         get
         {
@@ -120,6 +138,175 @@ internal static class ObjectIdDiagnosticsContext
         else
         {
             Marker($"counter {mode}");
+        }
+    }
+
+    // Whether the patch stopping saves adding "effect ended" handlers really changed the game's code. It runs while the
+    // mod loads, before any room exists, so it goes to the mod's log now and into each record file's header.
+    internal static void SaveHandlerPatchResult(bool applied, string detail)
+    {
+        _saveHandlerPatch = applied ? "applied" : $"NOT applied ({detail})";
+
+        if (applied)
+        {
+            Main.Info("[ObjectIds] save handler patch applied");
+        }
+        else
+        {
+            Main.Error($"[ObjectIds] save handler patch NOT applied: {detail}");
+        }
+    }
+
+    // a light check that found nothing to change, which before would have used an ID: only counted, as there are many
+    internal static void LightingUnchanged()
+    {
+        _lightingUnchanged++;
+    }
+
+    // a preview of the light that no longer touches the character: only counted, as there are many
+    internal static void LightingPreviewSkipped()
+    {
+        _lightingPreviewSkipped++;
+    }
+
+    // a real change of a character's light conditions or effects. These should be the same on every computer, in order.
+    internal static void LightingChanged(RulesetCharacter character, LocationDefinitions.LightingState state,
+        IEnumerable<string> removed, IEnumerable<string> added, int effectsRemoved, int effectsAdded)
+    {
+        Add("lighting", Counter, character?.Guid ?? 0, character, false,
+            $"state={state} removed=[{string.Join(",", removed)}] added=[{string.Join(",", added)}] " +
+            $"effects -{effectsRemoved} +{effectsAdded}");
+    }
+
+    // Development builds only (a test's direct count, too costly to leave in players' builds). After a save: how many
+    // handlers each active effect has. Every number should be 1, however many saves were made.
+    [Conditional("FB_DEVELOPMENT")]
+    internal static void RecordEffectHandlers(RulesetCharacter character)
+    {
+        if (character.SpellsCastByMe.Count + character.PowersUsedByMe.Count == 0)
+        {
+            return;
+        }
+
+        var spells = character.SpellsCastByMe.Select(x => x.TerminatedSelf?.GetInvocationList().Length ?? 0);
+        var powers = character.PowersUsedByMe.Select(x => x.TerminatedSelf?.GetInvocationList().Length ?? 0);
+
+        Add("handlers", Counter, character.Guid, character, false,
+            $"after save: spells=[{string.Join(",", spells)}] powers=[{string.Join(",", powers)}]");
+    }
+
+    // Development builds only. How many handlers a character has after a panel binds or unbinds: these should go back
+    // down on unbind, including for a hero downed while bound.
+    [Conditional("FB_DEVELOPMENT")]
+    internal static void RecordPanelHandlers(RulesetCharacter character, string when)
+    {
+        Add("handlers", Counter, character.Guid, character, false,
+            $"{when}: powerActivated={character.PowerActivated?.GetInvocationList().Length ?? 0} " +
+            $"refreshed={character.CharacterRefreshed?.GetInvocationList().Length ?? 0}");
+    }
+
+    // A short text of what a power's or spell's effect comes to, in the main things modifiers change. Two computers' texts
+    // for the same use should be equal; a difference means they'd apply different rules. It's partial: equal texts don't
+    // prove equal effects.
+    internal static string SummarizeEffect(EffectDescription effect)
+    {
+        try
+        {
+            var text = new StringBuilder();
+
+            text.Append("range=").Append(effect.RangeType).Append(':').Append(effect.RangeParameter)
+                .Append(" target=").Append(effect.TargetType).Append(':').Append(effect.TargetParameter)
+                .Append(',').Append(effect.TargetParameter2).Append(':').Append(effect.TargetSide)
+                .Append(" duration=").Append(effect.DurationType).Append(':').Append(effect.DurationParameter)
+                .Append(" save=").Append(effect.HasSavingThrow).Append(':').Append(effect.SavingThrowAbility)
+                .Append(':').Append(effect.FixedSavingThrowDifficultyClass)
+                .Append(':').Append(effect.DifficultyClassComputation)
+                .Append(':').Append(effect.SavingThrowDifficultyAbility)
+                .Append(" forms=");
+
+            foreach (var form in effect.EffectForms)
+            {
+                text.Append('[').Append(form.FormType).Append(form.HasSavingThrow ? " save" : string.Empty);
+
+                // ReSharper disable once SwitchStatementMissingSomeEnumCasesNoDefault
+                switch (form.FormType)
+                {
+                    case EffectForm.EffectFormType.Damage when form.DamageForm != null:
+                        var damage = form.DamageForm;
+                        text.Append(' ').Append(damage.DamageType).Append(' ').Append(damage.DiceNumber)
+                            .Append(damage.DieType).Append('+').Append(damage.BonusDamage)
+                            .Append(damage.OverrideWithBardicInspirationDie ? " inspiration" : string.Empty);
+                        break;
+                    case EffectForm.EffectFormType.Healing when form.HealingForm != null:
+                        var healing = form.HealingForm;
+                        text.Append(' ').Append(healing.DiceNumber).Append(healing.DieType).Append('+')
+                            .Append(healing.BonusHealing);
+                        break;
+                    case EffectForm.EffectFormType.Condition when form.ConditionForm != null:
+                        text.Append(' ').Append(form.ConditionForm.ConditionDefinition?.Name);
+                        break;
+                    case EffectForm.EffectFormType.TemporaryHitPoints when form.TemporaryHitPointsForm != null:
+                        text.Append(' ').Append(form.TemporaryHitPointsForm.BonusHitPoints);
+                        break;
+                    case EffectForm.EffectFormType.Summon when form.SummonForm != null:
+                        text.Append(' ').Append(form.SummonForm.monsterDefinitionName).Append(' ')
+                            .Append(form.SummonForm.effectProxyDefinitionName).Append(' ')
+                            .Append(form.SummonForm.number);
+                        break;
+                }
+
+                text.Append(']');
+            }
+
+            return text.ToString();
+        }
+        catch (Exception e)
+        {
+            return $"(no summary: {e.Message})";
+        }
+    }
+
+    // A live effect's modified description was worked out. Goes in the ring to compare computers, but not the log.
+    // Reads the power's save DC field directly: some modifiers set it, and the rules read it for this use.
+    internal static void EffectWorkedOut(RulesetCharacter caster, BaseDefinition definition, RulesetEffect effect,
+        EffectDescription description)
+    {
+        _effectsWorkedOut++;
+
+        var saveDc = effect is RulesetEffectPower power ? $" powerSaveDC={power.usablePower?.saveDC}" : string.Empty;
+
+        Add("effect", Counter, effect?.Guid ?? 0, caster, false,
+            $"{definition?.Name}: {SummarizeEffect(description)}{saveDc}");
+    }
+
+    // The modifiers would now give something other than when the effect's result was kept: it's out of date, though an
+    // effect may be meant to keep what it started with. The game still uses the kept result. Each kind of change is
+    // reported once per effect (see PowerBundle), and the totals
+    // are capped so a repeating case can't push allocation records out of the ring or fill the log.
+    internal static void EffectStale(RulesetCharacter caster, BaseDefinition definition, RulesetEffect effect,
+        string kept, string now, bool keptIsLate)
+    {
+        _effectsStale++;
+
+        if (_effectsStale > MaxStaleEffectReports)
+        {
+            return;
+        }
+
+        var note = $"{definition?.Name} on {caster?.Name}: " +
+                   $"{(keptIsLate ? "first seen, not from its start" : "kept")} [{kept}] but now [{now}]";
+
+        Add("effect-stale", Counter, effect?.Guid ?? 0, caster, true, note);
+        Main.Info($"[EffectCache] stale at tick {Tick}, frame {Time.frameCount}: {note}");
+    }
+
+    internal static void EffectCheckFailed(BaseDefinition definition, Exception e)
+    {
+        _effectChecksFailed++;
+
+        if (_effectChecksFailed <= MaxStaleEffectReports)
+        {
+            Main.Info($"[EffectCache] couldn't check {definition?.Name}: {e.GetType().Name}: {e.Message}");
         }
     }
 
@@ -327,6 +514,10 @@ internal static class ObjectIdDiagnosticsContext
             text.AppendLine($"# player={PhotonNetwork.LocalPlayer?.NickName} actor=" +
                             $"{PhotonNetwork.LocalPlayer?.ActorNumber ?? 0} role={role} " +
                             $"location={locationName} counter={Counter} tick={Tick}");
+            text.AppendLine($"# saveHandlerPatch={_saveHandlerPatch} lightingUnchanged={_lightingUnchanged} " +
+                            $"lightingPreviewSkipped={_lightingPreviewSkipped} " +
+                            $"effectsWorkedOut={_effectsWorkedOut} effectsStale={_effectsStale} " +
+                            $"effectChecksFailed={_effectChecksFailed}");
             text.AppendLine($"# records={records.Count} dropped={Math.Max(0, dropped)} " +
                             "(dropped > 0: the window outgrew the ring; the first records are missing)");
             text.AppendLine("# seq\ttick\tframe\tkind\tcounterBefore\tcounterAfter\tguid\ttype\tname\tnote\tstack");

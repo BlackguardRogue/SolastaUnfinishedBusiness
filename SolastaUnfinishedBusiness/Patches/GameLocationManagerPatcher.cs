@@ -6,6 +6,7 @@ using System.Reflection.Emit;
 using HarmonyLib;
 using JetBrains.Annotations;
 using SolastaUnfinishedBusiness.Api.GameExtensions;
+using SolastaUnfinishedBusiness.Behaviors.Specific;
 using SolastaUnfinishedBusiness.Api.Helpers;
 using SolastaUnfinishedBusiness.Behaviors;
 using SolastaUnfinishedBusiness.Interfaces;
@@ -30,6 +31,9 @@ public static class GameLocationManagerPatcher
             string userLocationName,
             string userCampaignName)
         {
+            // kept effect results don't outlive a map (see PowerBundle.LiveEffects)
+            PowerBundle.ClearLiveEffects();
+
             if (!SettingsContext.GuiModManagerInstance.EnableSaveByLocation)
             {
                 return;
