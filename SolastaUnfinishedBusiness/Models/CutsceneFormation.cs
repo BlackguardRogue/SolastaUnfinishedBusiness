@@ -33,7 +33,7 @@ internal static class CutsceneFormation
     private const float FramedPointReach = 6f;
 
     // A camera behind the party, looking the way it faces, shows the NPC over the heroes' shoulders. A hero in the middle of
-    // that view blocks it even at a distance: in the Nikannen scene one 1.07 m ahead of GroupMediumB filled the frame in 5 lines
+    // that view blocks it even at a distance: in the Nikannen scene one 1.07 m ahead of GroupMediumB filled the frame in at least 4 lines
     // (evidence/cutscene-staging-168c8aa2). The front row, at the distance the shot is authored for, stays at its edges.
     internal const float ViewCorridorLength = 2.5f;
     internal const float ViewCorridorHalfWidth = 0.6f;
