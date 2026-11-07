@@ -214,6 +214,14 @@ Check("displaced: stays when every left place is taken", trade[0] == null);
 var bystander = CutsceneFormation.PlacesForDisplaced([A], [B], [D]);
 Check("displaced: a hero elsewhere stays", bystander[0] == null);
 
+// a hero on another level, straight above the mover's new place, isn't in its way (Codex's review of 3f3142b9)
+var above = CutsceneFormation.PlacesForDisplaced([A], [B], [new Point(1f, 3f, 0f)]);
+Check("displaced: a hero on another level stays", above[0] == null);
+
+// and a vacated place below a hero on another level still counts as free
+var underneath = CutsceneFormation.PlacesForDisplaced([A], [B], [B, new Point(0f, 3f, 0f)]);
+Check("displaced: a place under a hero on another level is free", underneath[0] is { } s3 && Flat(s3, A) < 0.001f);
+
 // equal heights keep the party's order, so the result doesn't depend on anything but the party
 var (sameSeats, sameSpots) = CutsceneFormation.AssignByHeight([70, 70, 70, 70, 70], seatsFromCentre);
 

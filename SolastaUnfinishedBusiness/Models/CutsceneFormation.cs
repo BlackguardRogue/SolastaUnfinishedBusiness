@@ -160,7 +160,11 @@ internal static class CutsceneFormation
     // displaced hero takes a place a mover left, its own mover's first, and only one that nobody now stands on (within
     // Clearance). Taking its own mover's old place unchecked put it on top of another mover when two movers traded places or
     // one moved onto where another had been (Codex's review of f00afc52). With no free place it stays where it is.
+    //
+    // Two places are the same only if they are also within VerticalClearance in height: a hero on a balcony or a stair above
+    // a mover isn't in its way (Codex's review of 3f3142b9). The old swap ignored height too.
     internal const float Clearance = 0.3f;
+    internal const float VerticalClearance = 1f;
 
     internal static Point?[] PlacesForDisplaced(
         IReadOnlyList<Point> moverBefore, IReadOnlyList<Point> moverAfter, IReadOnlyList<Point> others)
@@ -170,15 +174,15 @@ internal static class CutsceneFormation
 
         bool IsFree(Point spot, int except)
         {
-            return moverAfter.All(x => FlatDistance(x, spot) > Clearance) &&
-                   current.Where((_, i) => i != except).All(x => FlatDistance(x, spot) > Clearance);
+            return moverAfter.All(x => !SamePlace(x, spot)) &&
+                   current.Where((_, i) => i != except).All(x => !SamePlace(x, spot));
         }
 
         for (var m = 0; m < moverAfter.Count; m++)
         {
             for (var o = 0; o < current.Length; o++)
             {
-                if (result[o] != null || FlatDistance(current[o], moverAfter[m]) > Clearance)
+                if (result[o] != null || !SamePlace(current[o], moverAfter[m]))
                 {
                     continue;
                 }
@@ -200,6 +204,11 @@ internal static class CutsceneFormation
         }
 
         return result;
+    }
+
+    private static bool SamePlace(Point a, Point b)
+    {
+        return FlatDistance(a, b) <= Clearance && Math.Abs(a.Y - b.Y) < VerticalClearance;
     }
 
     private static float FlatDistance(Point a, Point b)
