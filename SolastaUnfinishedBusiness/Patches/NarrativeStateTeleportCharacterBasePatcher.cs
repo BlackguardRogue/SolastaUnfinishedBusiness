@@ -1,7 +1,10 @@
+using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
+using System.Linq;
 using HarmonyLib;
 using JetBrains.Annotations;
 using SolastaUnfinishedBusiness.Models;
+using UnityEngine;
 
 namespace SolastaUnfinishedBusiness.Patches;
 
@@ -14,11 +17,23 @@ public static class NarrativeStateTeleportCharacterBasePatcher
     [UsedImplicitly]
     public static class Begin_Patch
     {
+        // where everyone stood, for a hero who has to give up their place to someone this teleport sends there
         [UsedImplicitly]
-        public static void Postfix(NarrativeStateTeleportCharacterBase __instance)
+        public static void Prefix(
+            NarrativeStateTeleportCharacterBase __instance, out Dictionary<WorldLocationCharacter, Vector3> __state)
+        {
+            __state = __instance.NarrativeSequence.PlayerActors
+                .Where(x => x)
+                .Distinct()
+                .ToDictionary(x => x, x => x.transform.position);
+        }
+
+        [UsedImplicitly]
+        public static void Postfix(
+            NarrativeStateTeleportCharacterBase __instance, Dictionary<WorldLocationCharacter, Vector3> __state)
         {
             MultiplayerContext.Guarded("a cutscene party teleport",
-                () => MultiplayerContext.PlaceHeroesLeftByTeleport(__instance));
+                () => MultiplayerContext.PlaceHeroesLeftByTeleport(__instance, __state));
         }
     }
 }

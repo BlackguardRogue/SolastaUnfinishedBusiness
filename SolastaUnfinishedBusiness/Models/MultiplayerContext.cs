@@ -741,8 +741,8 @@ internal static class MultiplayerContext
     // away in Abjuration_01_MeetKythaela, 12 m behind in Abjuration_03_MeetNikannen1).
     //
     // The game simply stands hero N on marker N, so with 8 markers heroes 5 and 6 begin on that later stage, out of the
-    // scene; with 4 they stay wherever they were on the map. So the number of markers doesn't say who needs a place: every
-    // hero past the 4th stands in a row behind the seated heroes, whatever the scene has.
+    // scene; with 4 they stay wherever they were on the map. So the number of markers doesn't say who needs a place: with
+    // more than 4 heroes the whole party is staged around the 4 seats. Parties of up to 4 keep the game's placement.
     internal static void PlaceExtraHeroes(NarrativeSequence sequence)
     {
         var markers = sequence.PlayerPlacementMarkers;
@@ -766,20 +766,35 @@ internal static class MultiplayerContext
             return;
         }
 
-        StandHeroesBehindSeats(sequence, seats, extras, sequence.NarrativeTreeDefinition.IsTopDownNarrativeSequence);
+        var party = actors.Where(x => x != null).Distinct().ToList();
+
+        var isTopDown = sequence.NarrativeTreeDefinition.IsTopDownNarrativeSequence;
+
+        if (isTopDown || party.Count <= seats.Count)
+        {
+            StandHeroesBehindSeats(seats, extras, isTopDown);
+        }
+        else
+        {
+            CutsceneStagingContext.Begin(sequence);
+            StageParty(seats, party);
+        }
 
         LogCutsceneParty("after", sequence, markers, actors);
     }
 
-    // A scripted teleport moves only the 4 heroes holding its roles, so in a bigger party the others would be left on the
-    // previous stage. And as they hold no role, one of them may still be on a seat that a role holder has just been sent
-    // to (653 of these states send roles to markers 0-3, often right at the start), which puts two heroes on one spot.
-    // After a teleport of the whole party, stand everyone it didn't move behind the seats it did use.
+    // A scripted teleport moves only the 4 heroes holding its roles, to markers chosen by role. So in a bigger party the others
+    // would be left on the previous stage, and may stand on a seat a role holder was just sent to (653 of these states send
+    // roles to markers 0-3, often right at the start). After a teleport of the whole party, stage everyone around the seats it
+    // used. Height decides the places, so a teleport to the same seats moves nobody, whoever holds which role.
     //
-    // A state moving fewer roles is left alone: it moves part of the party (Level_01_CaerLem_20_Final sends 3 away and
-    // leaves the 4th where they are), so there's no party to follow. Parties of up to 4 have nobody to move, which keeps
-    // the game's own behaviour for them. Everything here comes from the scene and the role map, the same on all computers.
-    internal static void PlaceHeroesLeftByTeleport(NarrativeStateTeleportCharacterBase state)
+    // A state moving fewer roles moves part of the party (Level_01_CaerLem_20_Final sends 3 away and leaves the 4th), so
+    // nobody follows it. A hero already on a marker it sends someone to swaps places with them.
+    //
+    // Parties of up to 4 have nobody to move, which keeps the game's own behaviour for them. Off the grid all of this is only
+    // what's shown; on it, the state's marker positions and the role map are the same on all computers.
+    internal static void PlaceHeroesLeftByTeleport(
+        NarrativeStateTeleportCharacterBase state, Dictionary<WorldLocationCharacter, Vector3> before)
     {
         var sequence = state.NarrativeSequence;
         var markers = sequence.PlayerPlacementMarkers;
@@ -792,7 +807,7 @@ internal static class MultiplayerContext
         }
 
         var seats = new List<Transform>();
-        var moved = new HashSet<WorldLocationCharacter>();
+        var moved = new List<WorldLocationCharacter>();
 
         // the same conditions under which NarrativeStateTeleportCharacterBase.Begin has just moved a role
         foreach (var teleport in state.NarrativeStateDescription.CharacterTeleportDescriptions)
@@ -812,48 +827,109 @@ internal static class MultiplayerContext
             }
         }
 
+        var onGrid = state is NarrativeStateTeleportCharacterGameplay;
+
         if (seats.Count < ToolsContext.GamePartySize)
         {
+            if (!onGrid)
+            {
+                SwapHeroesOffSeats(actors, moved, before);
+            }
+
             return;
         }
 
-        var left = actors.Where(x => x != null && !moved.Contains(x)).Distinct().ToList();
+        var party = actors.Where(x => x != null).Distinct().ToList();
 
-        if (left.Count == 0)
+        if (onGrid || party.Count <= seats.Count)
         {
-            return;
-        }
+            var left = party.Where(x => !moved.Contains(x)).ToList();
 
-        StandHeroesBehindSeats(sequence, seats, left, state is NarrativeStateTeleportCharacterGameplay);
+            if (left.Count > 0)
+            {
+                StandHeroesBehindSeats(seats, left, onGrid);
+            }
+        }
+        else
+        {
+            StageParty(seats, party);
+        }
 
         LogCutsceneParty("after teleport", sequence, markers, actors);
     }
 
-    // onGrid: a sequence played on the map, where a hero also has to take up a real cell, as the game's
-    // TeleportCharacterToStartingPosition does. Otherwise the hero is only shown there, as the game does for seated heroes.
-    //
-    // Only the back row's order is free: who stands on a seat decides which of the scene's per-seat cameras frames them, and
-    // the script gives seats by role, so the first 4 keep their places. In the back row the shortest hero takes the first
-    // spot, at the centre, and taller ones the flanks. Height comes from the character, so it's the same on all computers,
-    // and the sort is stable, so equal heights keep the party's order.
-    private static void StandHeroesBehindSeats(
-        NarrativeSequence sequence, List<Transform> seats, List<WorldLocationCharacter> unordered, bool onGrid)
+    // a hero standing where a partial teleport has put someone takes that someone's old place
+    private static void SwapHeroesOffSeats(
+        List<WorldLocationCharacter> actors,
+        List<WorldLocationCharacter> moved,
+        Dictionary<WorldLocationCharacter, Vector3> before)
+    {
+        var placement = new GameObject("FB_CutsceneHeroPlacement").transform;
+
+        foreach (var mover in moved.Where(x => x != null && before.ContainsKey(x)))
+        {
+            foreach (var other in actors.Where(x => x != null && !moved.Contains(x)).Distinct())
+            {
+                var gap = other.transform.position - mover.transform.position;
+
+                gap.y = 0f;
+
+                if (gap.magnitude > 0.3f)
+                {
+                    continue;
+                }
+
+                placement.SetPositionAndRotation(before[mover], other.transform.rotation);
+                other.PlaceFreely(placement);
+                break;
+            }
+        }
+
+        Object.Destroy(placement.gameObject);
+    }
+
+    // Places the whole party off the grid: short heroes at the front centre, tall ones on the flanks, the rest behind the gaps
+    // (CutsceneFormation.AssignByHeight). PlayerActors isn't touched, because it decides roles, speakers and shots;
+    // CutsceneStagingContext moves a close-up to wherever its speaker ended up. Everything is measured from the seats given,
+    // so the formation turns with the party at each whole-party teleport.
+    private static void StageParty(List<Transform> seats, List<WorldLocationCharacter> party)
+    {
+        var seatPoints = seats.Select(x => CutsceneStagingContext.ToPoint(x.position)).ToList();
+        var seatForwards = seats.Select(x => CutsceneStagingContext.ToPoint(x.forward)).ToList();
+        var (seatHeroes, spotHeroes) = CutsceneFormation.AssignByHeight(
+            party.Select(HeightOf).ToList(), CutsceneFormation.SeatsFromCentre(seatPoints, seatForwards));
+        var formation = CutsceneFormation.Compute(
+            seatPoints, seatForwards, spotHeroes.Length, CutsceneStagingContext.AuthoredCameras);
+        var forward = ToVector(formation.Forward);
+        var placement = new GameObject("FB_CutsceneHeroPlacement").transform;
+
+        placement.rotation = Quaternion.LookRotation(forward, Vector3.up);
+
+        for (var i = 0; i < seats.Count; i++)
+        {
+            party[seatHeroes[i]].PlaceFreely(seats[i]);
+        }
+
+        for (var i = 0; i < spotHeroes.Length; i++)
+        {
+            placement.position = ToVector(formation.Spots[i]);
+            party[spotHeroes[i]].PlaceFreely(placement);
+        }
+
+        Object.Destroy(placement.gameObject);
+        CutsceneStagingContext.SetStage(spotHeroes.Select(x => party[x]).ToList(), forward);
+    }
+
+    // For map-played sequences, and scenes with as many seats as heroes. Here only the heroes without a seat move. onGrid: the
+    // hero also has to take up a real cell, as the game's TeleportCharacterToStartingPosition does, and the result has to be
+    // identical on all computers, so these don't look at the scene's cameras, whose transforms can move while a shot is live.
+    private static void StandHeroesBehindSeats(List<Transform> seats, List<WorldLocationCharacter> unordered, bool onGrid)
     {
         var heroes = unordered.OrderBy(HeightOf).ToList();
-        // The scene's shots, to keep clear of. Only off the grid: there a hero is only shown at the spot, so a difference
-        // between computers changes nothing but the picture. A live shot's transform may have moved with its target, and a
-        // grid move has to be identical everywhere, so map-played sequences don't look at cameras.
-        var cameras = onGrid
-            ? null
-            : sequence.CameraShotsMap?.Values
-                .Where(x => x != null)
-                .Select(x => new CutsceneFormation.Camera(ToPoint(x.transform.position), ToPoint(x.transform.forward)))
-                .ToList();
         var formation = CutsceneFormation.Compute(
-            seats.Select(x => ToPoint(x.position)).ToList(),
-            seats.Select(x => ToPoint(x.forward)).ToList(),
-            heroes.Count,
-            cameras);
+            seats.Select(x => CutsceneStagingContext.ToPoint(x.position)).ToList(),
+            seats.Select(x => CutsceneStagingContext.ToPoint(x.forward)).ToList(),
+            heroes.Count);
         var forward = ToVector(formation.Forward);
         var right = ToVector(formation.Right);
         var positioningService = ServiceRepository.GetService<IGameLocationPositioningService>();
@@ -931,11 +1007,6 @@ internal static class MultiplayerContext
         return hero.GameLocationCharacter?.RulesetCharacter is RulesetCharacterHero character
             ? character.HeightInches
             : int.MaxValue;
-    }
-
-    private static CutsceneFormation.Point ToPoint(Vector3 vector)
-    {
-        return new CutsceneFormation.Point(vector.x, vector.y, vector.z);
     }
 
     private static Vector3 ToVector(CutsceneFormation.Point point)

@@ -116,6 +116,54 @@ var turned = CutsceneFormation.Compute(turnedSeats, turnedForwards, 3);
 
 Check("a row facing another way has its back row behind it", turned.Spots.All(s => Math.Abs(s.X - 1.2f) < 0.01f));
 
+// Whole-party height order. Seats from the centre outward: 0, 1, then 2, 3. Six heroes of heights given in party order.
+int[] heights = [70, 60, 66, 75, 64, 68];
+var seatsFromCentre = CutsceneFormation.SeatsFromCentre(stageSeats, stageForwards);
+
+Check("seats from the centre: the two inner markers first",
+    seatsFromCentre.Take(2).OrderBy(x => x).SequenceEqual(new[] { 0, 1 }));
+
+var (seatHeroes, spotHeroes) = CutsceneFormation.AssignByHeight(heights, seatsFromCentre);
+var inner = seatsFromCentre.Take(2).Select(s => heights[seatHeroes[s]]).ToList();
+var outer = seatsFromCentre.Skip(2).Select(s => heights[seatHeroes[s]]).ToList();
+
+Check("the two shortest stand at the front centre", inner.OrderBy(x => x).SequenceEqual(new[] { 60, 64 }));
+Check("the two tallest stand on the flanks", outer.OrderBy(x => x).SequenceEqual(new[] { 70, 75 }));
+Check("the medium heights stand behind, shorter first", spotHeroes.Select(h => heights[h]).SequenceEqual(new[] { 66, 68 }));
+Check("everyone has one place", seatHeroes.Concat(spotHeroes).OrderBy(x => x).SequenceEqual(Enumerable.Range(0, 6)));
+
+// equal heights keep the party's order, so the result doesn't depend on anything but the party
+var (sameSeats, sameSpots) = CutsceneFormation.AssignByHeight([70, 70, 70, 70, 70], seatsFromCentre);
+
+Check("equal heights: the same answer each time, with party order settling it",
+    sameSeats[seatsFromCentre[0]] == 0 && sameSpots.SequenceEqual(new[] { 2 }));
+
+// the seats a teleport uses can be in any order: the same heights land in the same places
+Point[] reversedSeats = [stageSeats[3], stageSeats[2], stageSeats[1], stageSeats[0]];
+var reversedOrder = CutsceneFormation.SeatsFromCentre(reversedSeats, stageForwards);
+var (reversedHeroes, _) = CutsceneFormation.AssignByHeight(heights, reversedOrder);
+var tallestSeat = reversedSeats[Array.IndexOf(reversedHeroes, 3)];
+
+Check("the tallest hero is on a flank whatever the seats' order", tallestSeat.X is 8.75f or 10.25f);
+
+// Close-ups, from the Nikannen scene's authored cameras and markers. Their numbers don't match the markers.
+Point[] nikannenMarkers =
+[
+    new(9.32f, 0f, -29.35f), new(9.86f, 0f, -29.35f), new(8.82f, 0f, -29.32f), new(10.38f, 0f, -29.32f),
+    new(9.25f, 0f, -17.5f), new(9.75f, 0f, -17.5f), new(10.25f, 0f, -17.5f), new(8.75f, 0f, -17.5f)
+];
+
+Check("CharSingle1 frames marker 1", CutsceneFormation.FindFramedPoint(
+    new Point(9.55f, 0.87f, -27.58f), new Point(0.17f, 0f, -0.98f), nikannenMarkers) == 1);
+Check("CharSingle2 frames marker 2", CutsceneFormation.FindFramedPoint(
+    new Point(9.07f, 0.87f, -27.54f), new Point(-0.14f, 0f, -0.99f), nikannenMarkers) == 2);
+Check("CharSingle3 frames marker 3", CutsceneFormation.FindFramedPoint(
+    new Point(11.69f, 0.87f, -28.08f), new Point(-0.73f, 0f, -0.69f), nikannenMarkers) == 3);
+Check("CharSingle0 frames marker 5, not marker 0", CutsceneFormation.FindFramedPoint(
+    new Point(9.75f, 0.6f, -15.7f), new Point(0f, 0f, -1f), nikannenMarkers) == 5);
+Check("a shot looking at no marker frames nothing", CutsceneFormation.FindFramedPoint(
+    new Point(9.5f, 0.87f, -17.3f), new Point(0f, 0f, 1f), nikannenMarkers) == -1);
+
 Console.WriteLine(failures == 0 ? "All passed." : $"{failures} FAILED.");
 
 return failures == 0 ? 0 : 1;

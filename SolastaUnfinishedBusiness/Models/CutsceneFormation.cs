@@ -28,6 +28,10 @@ internal static class CutsceneFormation
     internal const float CameraClearance = 1f;
     internal const float CameraHeightAboveSeats = 2.2f;
 
+    // how near a camera's ray has to pass a marker, and how far along it, for the shot to count as framing that marker
+    private const float FramedPointTolerance = 0.3f;
+    private const float FramedPointReach = 6f;
+
     // how a spot in front of a camera moves: closer to the row first, then along it, in these steps
     private const float DepthStep = 0.15f;
     private const float ShiftStep = 0.25f;
@@ -151,6 +155,74 @@ internal static class CutsceneFormation
         }
 
         return new Result(forward, right, chosen.ToArray());
+    }
+
+    // Who stands where, by height: the sketch's short heroes at the front centre and tall ones on the flanks, with the rest in
+    // the back row, where a medium height shows over the shoulders of the short ones. heights has one entry per hero, in the
+    // party's order, which also settles ties. seatsFromCentre lists the seats from the row's centre outward (SeatsFromCentre).
+    // Returns the hero index for each seat, and for each back-row spot from the first. It changes no list in the game: actor
+    // order decides roles and shots, so those stay as they were.
+    internal static (int[] Seats, int[] Spots) AssignByHeight(IReadOnlyList<int> heights, IReadOnlyList<int> seatsFromCentre)
+    {
+        var sorted = Enumerable.Range(0, heights.Count).OrderBy(i => heights[i]).ToList();
+        var seatCount = seatsFromCentre.Count;
+        var innerCount = seatCount / 2;
+        var outerCount = seatCount - innerCount;
+        var spotCount = sorted.Count - seatCount;
+        var seats = new int[seatCount];
+
+        for (var i = 0; i < innerCount; i++)
+        {
+            seats[seatsFromCentre[i]] = sorted[i];
+        }
+
+        for (var i = 0; i < outerCount; i++)
+        {
+            seats[seatsFromCentre[innerCount + i]] = sorted[innerCount + spotCount + i];
+        }
+
+        return (seats, sorted.Skip(innerCount).Take(spotCount).ToArray());
+    }
+
+    // the seats' indexes from the row's centre outward; equally central seats keep their order
+    internal static int[] SeatsFromCentre(IReadOnlyList<Point> seats, IReadOnlyList<Point> seatForwards)
+    {
+        var forward = AverageFlatDirection(seatForwards);
+        var right = new Point(forward.Z, 0f, -forward.X);
+        var laterals = seats.Select(seat => (seat.X * right.X) + (seat.Z * right.Z)).ToList();
+        var centre = (laterals.Min() + laterals.Max()) * 0.5f;
+
+        return Enumerable.Range(0, seats.Count).OrderBy(i => Math.Abs(laterals[i] - centre)).ToArray();
+    }
+
+    // Which of the points a camera looks at, or -1. Scene cameras' numbers don't say which marker they're for (the Nikannen
+    // scene's CharSingle0 frames Char_5), but their authored rays go through it to within centimetres.
+    internal static int FindFramedPoint(Point position, Point forward, IReadOnlyList<Point> points)
+    {
+        var length = (float)Math.Sqrt((forward.X * forward.X) + (forward.Z * forward.Z));
+        var best = -1;
+        var bestMiss = FramedPointTolerance;
+
+        if (length < 0.001f)
+        {
+            return best;
+        }
+
+        for (var i = 0; i < points.Count; i++)
+        {
+            var dx = points[i].X - position.X;
+            var dz = points[i].Z - position.Z;
+            var along = ((dx * forward.X) + (dz * forward.Z)) / length;
+            var miss = Math.Abs((dx * forward.Z) - (dz * forward.X)) / length;
+
+            if (along > 0f && along <= FramedPointReach && miss < bestMiss)
+            {
+                best = i;
+                bestMiss = miss;
+            }
+        }
+
+        return best;
     }
 
     // positions along the row, before keeping clear of cameras. laterals is sorted.
