@@ -170,6 +170,31 @@ Check("4 heroes: 3 1 2 4", SmallParty(4) == "3 1 2 4");
 Check("3 heroes: 3 1 2", SmallParty(3) == "3 1 2");
 Check("2 heroes: 1 2", SmallParty(2) == "1 2");
 
+// in game on a2511002: 3 heroes at Nikannen's first stage (markers 0-2: 9.3, 9.9, 8.8) stood 1 2 3, and 2 heroes after the
+// teleport stood with an empty marker between them. Now the most central seats, and 3 1 2 for three.
+string Placed(Point[] all, Point[] allForwards, int count)
+{
+    var chosen = CutsceneFormation.CentralSeats(all, allForwards, count);
+    var seats = chosen.Select(i => all[i]).ToArray();
+    var forwards = chosen.Select(i => allForwards[i]).ToArray();
+    var heights = Enumerable.Range(1, count).ToArray();
+    var (placed, _) = CutsceneFormation.AssignByHeight(heights, CutsceneFormation.SeatsFromCentre(seats, forwards));
+
+    return string.Join(" ", Enumerable.Range(0, count).OrderByDescending(i => seats[i].X)
+        .Select(i => $"{heights[placed[i]]}@{seats[i].X:F2}"));
+}
+
+Point[] stage1 = [new(9.3f, 0f, -29.4f), new(9.9f, 0f, -29.3f), new(8.8f, 0f, -29.3f), new(10.4f, 0f, -29.3f)];
+Point[] stage1Forwards = [new(0f, 0f, 1f), new(0f, 0f, 1f), new(0.2f, 0f, 1f), new(-0.2f, 0f, 1f)];
+
+Console.WriteLine($"      3 heroes, first stage: {Placed(stage1, stage1Forwards, 3)}; second: {Placed(stageSeats, stageForwards, 3)}");
+Console.WriteLine($"      2 heroes, first stage: {Placed(stage1, stage1Forwards, 2)}; second: {Placed(stageSeats, stageForwards, 2)}");
+Check("3 heroes, first stage: 3 1 2 on 9.9, 9.3, 8.8", Placed(stage1, stage1Forwards, 3) == "3@9.90 1@9.30 2@8.80");
+Check("3 heroes, second stage: 3 1 2 on adjacent markers", Placed(stageSeats, stageForwards, 3) == "3@9.75 1@9.25 2@8.75");
+Check("2 heroes, both stages: the two middle markers", Placed(stage1, stage1Forwards, 2) == "1@9.90 2@9.30" &&
+    Placed(stageSeats, stageForwards, 2) == "1@9.75 2@9.25");
+Check("4 heroes unchanged: 3 1 2 4", Placed(stageSeats, stageForwards, 4) == "3@10.25 1@9.75 2@9.25 4@8.75");
+
 // equal heights keep the party's order, so the result doesn't depend on anything but the party
 var (sameSeats, sameSpots) = CutsceneFormation.AssignByHeight([70, 70, 70, 70, 70], seatsFromCentre);
 

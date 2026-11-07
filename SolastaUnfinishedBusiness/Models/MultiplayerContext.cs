@@ -782,12 +782,11 @@ internal static class MultiplayerContext
 
         if (extras.Count == 0)
         {
-            // a party of up to 4: the game stood hero N on marker N, so the heroes hold the first party.Count markers (a
-            // padded repeat moves its hero to a later marker, which leaves an earlier one free; these are refilled here)
+            // a party of up to 4 takes the most central seats, together, in height order
             if (!isTopDown && SortsSmallParties(party) && party.Count <= seats.Count)
             {
                 CutsceneStagingContext.Begin(sequence);
-                StageParty(seats.Take(party.Count).ToList(), party);
+                StageParty(CentralSeats(seats, party.Count), party);
                 LogCutsceneParty("after", sequence, markers, actors);
             }
 
@@ -919,9 +918,10 @@ internal static class MultiplayerContext
     }
 
     // A party of up to 4 sorted by height (PlaceExtraHeroes) is mixed up again by a whole-party teleport, which sends each role
-    // holder to its role's marker. When every hero was moved, off the grid, put the party back in height order on the markers
-    // they were sent to. A hero holding two roles (a party under 4 is padded with repeats) ends on the later marker, as in
-    // NarrativeStateTeleportCharacterBase.Begin. A teleport of only some heroes moves part of the party, so it's left alone.
+    // holder to its role's marker. When every hero was moved, off the grid, put the party back in height order on the most
+    // central of the markers the teleport used. Not on the markers the heroes ended on: a hero holding two roles (a party
+    // under 4 is padded with repeats) ends on the later one, which can leave an empty marker inside the row. A teleport of
+    // only some heroes moves part of the party, so it's left alone.
     private static void RestageSmallPartyAfterTeleport(
         NarrativeStateTeleportCharacterBase state, Transform[] markers, List<WorldLocationCharacter> actors)
     {
@@ -946,15 +946,31 @@ internal static class MultiplayerContext
             }
         }
 
-        var seats = sentTo.Values.Distinct().ToList();
+        var used = state.NarrativeStateDescription.CharacterTeleportDescriptions
+            .Select(x => x.PlayerMarkerIndex)
+            .Where(i => i >= 0 && i < markers.Length && markers[i] != null)
+            .Select(i => markers[i])
+            .Distinct()
+            .ToList();
 
-        if (sentTo.Count != party.Count || seats.Count != party.Count)
+        if (sentTo.Count != party.Count || used.Count < party.Count)
         {
             return;
         }
 
-        StageParty(seats, party);
+        StageParty(CentralSeats(used, party.Count), party);
         LogCutsceneParty("after teleport", state.NarrativeSequence, markers, actors);
+    }
+
+    // the count most central of the given seats (CutsceneFormation.CentralSeats)
+    private static List<Transform> CentralSeats(List<Transform> seats, int count)
+    {
+        return CutsceneFormation.CentralSeats(
+                seats.Select(x => CutsceneStagingContext.ToPoint(x.position)).ToList(),
+                seats.Select(x => CutsceneStagingContext.ToPoint(x.forward)).ToList(),
+                count)
+            .Select(i => seats[i])
+            .ToList();
     }
 
     // whether a party of up to 4 is put in height order: two or more heroes, and the player hasn't asked to keep the game's order

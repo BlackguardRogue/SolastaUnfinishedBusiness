@@ -115,6 +115,11 @@ internal static class CutsceneFormation
     // shot). AssignByHeight gives these places out from the shortest, so the front row reads 3 1 2 4 from left to right
     // (user direction, 2026-11-07: each pair shorter to taller from left to right, "   5 6 / 3124"). Pairs are taken by
     // rank rather than by equal distance, because staggered markers are never exactly equally far from the centre.
+    //
+    // Equally far seats (distances rounded to the centimetre) are ranked right side first (smaller lateral). That only
+    // matters for an odd number of seats: with 3 the centre seat pairs with the one on the right, so the row reads 3 1 2 as
+    // promised. Without it the order of the list decided, and 3 heroes at Nikannen's first stage stood 1 2 3
+    // (evidence/cutscene-staging-a2511002).
     internal static int[] SeatsFromCentre(IReadOnlyList<Point> seats, IReadOnlyList<Point> seatForwards)
     {
         var forward = AverageFlatDirection(seatForwards);
@@ -123,11 +128,30 @@ internal static class CutsceneFormation
         var centre = (laterals.Min() + laterals.Max()) * 0.5f;
 
         return Enumerable.Range(0, seats.Count)
-            .OrderBy(i => Math.Abs(laterals[i] - centre))
+            .OrderBy(i => Math.Round(Math.Abs(laterals[i] - centre), 2))
+            .ThenBy(i => laterals[i])
             .Select((seat, rank) => (seat, pair: rank / 2))
             .OrderBy(x => x.pair)
             .ThenByDescending(x => laterals[x.seat])
             .Select(x => x.seat)
+            .ToArray();
+    }
+
+    // The count most central of the given seats, for a party smaller than the scene's row: the same ranking as
+    // SeatsFromCentre, so the seats chosen sit together around the row's centre with no gap. The game itself stands hero N on
+    // marker N, and after a teleport a padded repeat (a party under 4 holds roles twice) leaves its first marker empty, so 2
+    // heroes at Nikannen's second stage stood with an empty marker between them (evidence/cutscene-staging-a2511002).
+    internal static int[] CentralSeats(IReadOnlyList<Point> seats, IReadOnlyList<Point> seatForwards, int count)
+    {
+        var forward = AverageFlatDirection(seatForwards);
+        var right = new Point(forward.Z, 0f, -forward.X);
+        var laterals = seats.Select(seat => (seat.X * right.X) + (seat.Z * right.Z)).ToList();
+        var centre = (laterals.Min() + laterals.Max()) * 0.5f;
+
+        return Enumerable.Range(0, seats.Count)
+            .OrderBy(i => Math.Round(Math.Abs(laterals[i] - centre), 2))
+            .ThenBy(i => laterals[i])
+            .Take(count)
             .ToArray();
     }
 
