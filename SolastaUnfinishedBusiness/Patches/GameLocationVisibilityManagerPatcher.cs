@@ -86,7 +86,9 @@ public static class GameLocationVisibilityManagerPatcher
         {
             // as in the game's handler: nothing before the location is ready, and only sight-impaired changes (a null
             // list means all kinds). Sight blockers (walls, doors) already reach creatures through their light sources.
-            if (!__instance.GameLocationService.LocationIsReady ||
+            // the user can turn this fix off: Rules > "Update lighting ... when Darkness ... changes" (on by default)
+            if (!Main.Settings.RefreshLightingWhenObscurementChanges ||
+                !__instance.GameLocationService.LocationIsReady ||
                 impactedSectors == null ||
                 (impactedTopologyFlags != null && !impactedTopologyFlags.Contains(TopologyForm.Type.SightImpaired)))
             {

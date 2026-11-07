@@ -321,6 +321,13 @@ internal static class RulesDisplay
             Main.Settings.BlindedConditionDontAllowAttackOfOpportunity = toggle;
         }
 
+        // takes effect at the next cloud change; nothing to rebuild
+        toggle = Main.Settings.RefreshLightingWhenObscurementChanges;
+        if (UI.Toggle(Gui.Localize("ModUi/&RefreshLightingWhenObscurementChanges"), ref toggle, UI.AutoWidth()))
+        {
+            Main.Settings.RefreshLightingWhenObscurementChanges = toggle;
+        }
+
         toggle = Main.Settings.UseOfficialLightingObscurementAndVisionRules;
         if (UI.Toggle(Gui.Localize("ModUi/&UseOfficialObscurementRules"), ref toggle, UI.AutoWidth()))
         {
