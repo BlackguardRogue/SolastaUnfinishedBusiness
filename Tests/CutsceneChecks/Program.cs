@@ -42,21 +42,26 @@ var kythaela = CutsceneFormation.Compute(kythaelaSeats, kythaelaForwards, 2);
 Check("Kythaela: both heroes stay with the front group", kythaela.Spots.All(s =>
     kythaelaSeats.All(seat => Flat(s, seat) < 3f)));
 
-// more heroes than the 6 of a usual big party: all the spots stay apart
+// more heroes than the 6 of a usual big party: no two spots on one place, the first 3 at the 3 gaps' midpoints
 var many = CutsceneFormation.Compute(caerSeats, caerForwards, 7);
 var smallestGap = many.Spots
     .SelectMany((a, i) => many.Spots.Skip(i + 1).Select(b => Flat(a, b)))
     .Min();
+// measured along the row as the formation sees it: the seats' average facing is turned a little from +x
+var caerLaterals = caerSeats.Select(s => Along(s, many.Right)).OrderBy(x => x).ToArray();
+var caerGaps = caerLaterals.Zip(caerLaterals.Skip(1), (a, b) => (a + b) * 0.5f).ToArray();
 
-Check("7 spots are all apart", smallestGap >= CutsceneFormation.SideSpacing - 0.01f);
+Check("7 spots are all distinct", smallestGap >= 0.01f);
+Check("7 spots: the gaps are used at their midpoints",
+    caerGaps.All(g => many.Spots.Take(3).Any(s => Math.Abs(Along(s, many.Right) - g) < 0.001f)));
 Check("spots go out to both ends", many.Spots.Any(s => s.Z > 9.2f) && many.Spots.Any(s => s.Z < 7.8f));
 
 // a single seat: the spots still don't stack
 var single = CutsceneFormation.Compute([new Point(0f, 0f, 0f)], [new Point(0f, 0f, 1f)], 3);
 
-Check("one seat: the 3 spots are apart",
-    Flat(single.Spots[0], single.Spots[1]) >= CutsceneFormation.SideSpacing - 0.01f &&
-    Flat(single.Spots[0], single.Spots[2]) >= CutsceneFormation.SideSpacing - 0.01f);
+Check("one seat: the 3 spots are distinct",
+    Flat(single.Spots[0], single.Spots[1]) >= 0.01f && Flat(single.Spots[0], single.Spots[2]) >= 0.01f &&
+    Flat(single.Spots[1], single.Spots[2]) >= 0.01f);
 
 // opposite-facing markers have no average facing, which must still give a usable direction
 var opposite = CutsceneFormation.Compute(
@@ -80,7 +85,7 @@ Check("Nikannen: no spot is within the clearance of it", stage.Spots.All(s =>
     Flat(s, groupMediumB.Position) >= CutsceneFormation.CameraClearance));
 Check("Nikannen: all stay behind the row, no closer than the smallest distance", stage.Spots.All(s =>
     s.Z <= -17.5f - CutsceneFormation.MinBackRowDistance + 0.01f));
-Check("Nikannen: the two heroes stay apart", Flat(stage.Spots[0], stage.Spots[1]) >= CutsceneFormation.SideSpacing - 0.01f);
+Check("Nikannen: the two heroes don't share a place", Flat(stage.Spots[0], stage.Spots[1]) >= 0.01f);
 Check("Nikannen: they stay with the group", stage.Spots.All(s => Flat(s, new Point(9.5f, 0f, -17.5f)) < 3.5f));
 
 // a camera to one side, whose view the spot isn't in: coming closer is enough, and the hero stays behind the gap
@@ -103,8 +108,13 @@ var besideShortOther = CutsceneFormation.Compute(stageSeats, stageForwards, 2, n
 Check("second rear hero: towards the shortest hero's side", besideShort.Spots[1].X != besideShortOther.Spots[1].X);
 Check("second rear hero: inside the row's span, not past its end",
     besideShort.Spots[1].X is > 8.75f and < 10.5f && besideShortOther.Spots[1].X is > 8.65f and < 10.25f);
-Check("second rear hero: at least the spacing from the first",
-    Flat(besideShort.Spots[0], besideShort.Spots[1]) >= CutsceneFormation.SideSpacing - 0.01f);
+// a narrow row (markers 0.5 m apart) with no camera in the way: both rear heroes at the exact gap midpoints, 0.5 m apart,
+// not pushed out to behind a flank hero as the old 0.8 m floor did (evidence/cutscene-staging-79619edc)
+Check("narrow row: first rear hero at the middle gap's midpoint", Math.Abs(besideShort.Spots[0].X - 9.5f) < 0.001f);
+Check("narrow row: second at the next gap's midpoint, shortest hero's side",
+    Math.Abs(besideShort.Spots[1].X - 10.0f) < 0.001f && Math.Abs(besideShortOther.Spots[1].X - 9.0f) < 0.001f);
+Check("narrow row: both at the back-row distance",
+    besideShort.Spots.All(s => Math.Abs(s.Z - (-17.5f - CutsceneFormation.BackRowDistance)) < 0.001f));
 
 // a camera so placed that every allowed distance is within its clearance, in front of it: the hero moves along the row
 CutsceneFormation.Camera tight = new(new Point(9.5f, 1f, -18.75f), new Point(0f, 0f, 1f));

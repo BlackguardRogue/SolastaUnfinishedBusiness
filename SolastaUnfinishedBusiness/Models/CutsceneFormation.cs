@@ -16,9 +16,12 @@ internal static class CutsceneFormation
     // the closest the back row may stand to the front row when a camera needs the room (user direction, 2026-11-07)
     internal const float MinBackRowDistance = 0.3f;
 
-    // how far past the end of the seated row a hero stands, and the smallest distance between two back-row heroes
+    // How far past the end of the seated row a hero stands, and the step between heroes beyond it. There is no smallest
+    // distance between back-row heroes (user direction, 2026-11-07, "remove the minimum spacing between rear heroes"): the
+    // 0.8 m floor it replaced pushed the second rear hero past the 0.5 m gaps to directly behind a tall flank hero, hidden in
+    // party shots (evidence/cutscene-staging-79619edc). Behind the gaps they now stand at the gaps' midpoints.
     internal const float SideMargin = 0.4f;
-    internal const float SideSpacing = 0.8f;
+    internal const float PastEndStep = 0.8f;
 
     // Scenes are authored for 4 heroes, so some cameras stand where the back row would: in the Nikannen scene GroupMediumB
     // is 1.5 m behind the second-stage row, and a hero 0.33 m from it filled the frame. 23 of 87 spots checked in Coparann's
@@ -134,10 +137,12 @@ internal static class CutsceneFormation
                    (looksWithParty && along < ViewCorridorLength && across < ViewCorridorHalfWidth);
         }
 
+        // Clear of the cameras, and not the very place another back-row hero already took: the camera search moves spots on
+        // a 0.25 m lattice, so two could otherwise land on one point. Being near another hero is allowed.
         bool IsClear(Point spot)
         {
             return !obstacles.Any(camera => IsInFrontOfCamera(spot, camera)) &&
-                   chosen.All(other => FlatDistance(spot, other) >= SideSpacing - 0.001f);
+                   chosen.All(other => FlatDistance(spot, other) >= 0.01f);
         }
 
         var centre = (laterals[0] + laterals[laterals.Count - 1]) * 0.5f;
@@ -265,7 +270,7 @@ internal static class CutsceneFormation
             ? -1
             : gaps.IndexOf(gaps.OrderBy(gap => Math.Abs(gap - centre)).First());
         var middle = middleIndex < 0 ? centre : gaps[middleIndex];
-        var pastEnd = Math.Max(((laterals[laterals.Count - 1] - laterals[0]) * 0.5f) + SideMargin, SideSpacing);
+        var pastEnd = Math.Max(((laterals[laterals.Count - 1] - laterals[0]) * 0.5f) + SideMargin, PastEndStep);
 
         result.Add(middle);
 
@@ -278,11 +283,13 @@ internal static class CutsceneFormation
                 return result;
             }
 
+            // the gap on the shortest hero's side, at its midpoint however narrow; past that end of the row if there is none
             var side = shortest < middle ? -1 : 1;
             var nextGap = middleIndex + side;
-            var distance = nextGap >= 0 && nextGap < gaps.Count ? Math.Abs(gaps[nextGap] - middle) : 0f;
 
-            result.Add(middle + (side * Math.Max(distance, SideSpacing)));
+            result.Add(nextGap >= 0 && nextGap < gaps.Count
+                ? gaps[nextGap]
+                : (side < 0 ? laterals[0] - SideMargin : laterals[laterals.Count - 1] + SideMargin));
 
             return result;
         }
@@ -297,13 +304,15 @@ internal static class CutsceneFormation
         {
             if (i % 2 == 1)
             {
-                low = Math.Min(lowGap >= 0 ? gaps[lowGap] : low - SideSpacing, low - SideSpacing);
+                low = lowGap >= 0 ? gaps[lowGap] : Math.Min(laterals[0] - SideMargin, low - PastEndStep);
                 lowGap--;
                 result.Add(low);
             }
             else
             {
-                high = Math.Max(highGap >= 0 && highGap < gaps.Count ? gaps[highGap] : high + SideSpacing, high + SideSpacing);
+                high = highGap >= 0 && highGap < gaps.Count
+                    ? gaps[highGap]
+                    : Math.Max(laterals[laterals.Count - 1] + SideMargin, high + PastEndStep);
                 highGap++;
                 result.Add(high);
             }
