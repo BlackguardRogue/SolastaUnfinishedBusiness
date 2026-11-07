@@ -195,6 +195,25 @@ Check("2 heroes, both stages: the two middle markers", Placed(stage1, stage1Forw
     Placed(stageSeats, stageForwards, 2) == "1@9.75 2@9.25");
 Check("4 heroes unchanged: 3 1 2 4", Placed(stageSeats, stageForwards, 4) == "3@10.25 1@9.75 2@9.25 4@8.75");
 
+// partial teleports (Codex's review of f00afc52): a displaced hero never lands on another mover
+Point A = new(0f, 0f, 0f), B = new(1f, 0f, 0f), C = new(2f, 0f, 0f), D = new(3f, 0f, 0f);
+
+// simple: mover from A to B, where hero 0 stands -> hero 0 takes A
+var simple = CutsceneFormation.PlacesForDisplaced([A], [B], [B]);
+Check("displaced: takes the mover's old place", simple[0] is { } s1 && Flat(s1, A) < 0.001f);
+
+// chain: mover 0 from A to B (hero there), mover 1 from C to A -> hero must not take A (mover 1 is there); takes C
+var chain = CutsceneFormation.PlacesForDisplaced([A, C], [B, A], [B]);
+Check("displaced: not onto another mover's new place", chain[0] is { } s2 && Flat(s2, C) < 0.001f);
+
+// no free place: movers trade A and B, a hero stands on B -> stays
+var trade = CutsceneFormation.PlacesForDisplaced([A, B], [B, A], [B]);
+Check("displaced: stays when every left place is taken", trade[0] == null);
+
+// a hero not on any mover's place doesn't move
+var bystander = CutsceneFormation.PlacesForDisplaced([A], [B], [D]);
+Check("displaced: a hero elsewhere stays", bystander[0] == null);
+
 // equal heights keep the party's order, so the result doesn't depend on anything but the party
 var (sameSeats, sameSpots) = CutsceneFormation.AssignByHeight([70, 70, 70, 70, 70], seatsFromCentre);
 

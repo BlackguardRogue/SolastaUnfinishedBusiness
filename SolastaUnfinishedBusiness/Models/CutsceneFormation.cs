@@ -155,6 +155,58 @@ internal static class CutsceneFormation
             .ToArray();
     }
 
+    // After a teleport of some heroes off the grid: where each other hero standing on a mover's new place should go, or null
+    // to stay. moverBefore and moverAfter are the movers' places before and after; others are the other heroes' places. A
+    // displaced hero takes a place a mover left, its own mover's first, and only one that nobody now stands on (within
+    // Clearance). Taking its own mover's old place unchecked put it on top of another mover when two movers traded places or
+    // one moved onto where another had been (Codex's review of f00afc52). With no free place it stays where it is.
+    internal const float Clearance = 0.3f;
+
+    internal static Point?[] PlacesForDisplaced(
+        IReadOnlyList<Point> moverBefore, IReadOnlyList<Point> moverAfter, IReadOnlyList<Point> others)
+    {
+        var current = others.ToArray();
+        var result = new Point?[others.Count];
+
+        bool IsFree(Point spot, int except)
+        {
+            return moverAfter.All(x => FlatDistance(x, spot) > Clearance) &&
+                   current.Where((_, i) => i != except).All(x => FlatDistance(x, spot) > Clearance);
+        }
+
+        for (var m = 0; m < moverAfter.Count; m++)
+        {
+            for (var o = 0; o < current.Length; o++)
+            {
+                if (result[o] != null || FlatDistance(current[o], moverAfter[m]) > Clearance)
+                {
+                    continue;
+                }
+
+                var candidates = new[] { m }.Concat(Enumerable.Range(0, moverBefore.Count).Where(i => i != m));
+
+                foreach (var c in candidates)
+                {
+                    if (IsFree(moverBefore[c], o))
+                    {
+                        result[o] = moverBefore[c];
+                        current[o] = moverBefore[c];
+                        break;
+                    }
+                }
+
+                break;
+            }
+        }
+
+        return result;
+    }
+
+    private static float FlatDistance(Point a, Point b)
+    {
+        return (float)Math.Sqrt(((a.X - b.X) * (a.X - b.X)) + ((a.Z - b.Z) * (a.Z - b.Z)));
+    }
+
     // Which of the points a camera looks at, or -1. Scene cameras' numbers don't say which marker they're for (the Nikannen
     // scene's CharSingle0 frames Char_5), but their authored rays go through it to within centimetres.
     internal static int FindFramedPoint(Point position, Point forward, IReadOnlyList<Point> points)

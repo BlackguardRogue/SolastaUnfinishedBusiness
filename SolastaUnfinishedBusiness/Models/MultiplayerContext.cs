@@ -793,7 +793,11 @@ internal static class MultiplayerContext
             return;
         }
 
-        if (isTopDown || party.Count <= seats.Count)
+        // A party of up to 4 in a scene with fewer seats has extras too; with the opt-out on it keeps the game's order, so only
+        // the heroes without a seat move (Codex's review of f00afc52: the sort ran regardless of the setting there).
+        var keepsGameOrder = party.Count <= ToolsContext.GamePartySize && !SortsSmallParties(party);
+
+        if (isTopDown || party.Count <= seats.Count || keepsGameOrder)
         {
             StandHeroesBehindSeats(seats, extras, isTopDown);
         }
@@ -830,7 +834,7 @@ internal static class MultiplayerContext
 
         if (actors.Count <= ToolsContext.GamePartySize)
         {
-            RestageSmallPartyAfterTeleport(state, markers, actors);
+            RestageSmallPartyAfterTeleport(state, markers, actors, before);
 
             return;
         }
@@ -887,31 +891,36 @@ internal static class MultiplayerContext
         LogCutsceneParty("after teleport", sequence, markers, actors);
     }
 
-    // a hero standing where a partial teleport has put someone takes that someone's old place
+    // A hero standing where a partial teleport has put someone moves to a place a mover left that nobody now stands on
+    // (CutsceneFormation.PlacesForDisplaced).
     private static void SwapHeroesOffSeats(
         List<WorldLocationCharacter> actors,
         List<WorldLocationCharacter> moved,
         Dictionary<WorldLocationCharacter, Vector3> before)
     {
+        var movers = moved.Where(x => x != null && before.ContainsKey(x)).Distinct().ToList();
+        var others = actors.Where(x => x != null && !moved.Contains(x)).Distinct().ToList();
+
+        if (movers.Count == 0 || others.Count == 0)
+        {
+            return;
+        }
+
+        var places = CutsceneFormation.PlacesForDisplaced(
+            movers.Select(x => CutsceneStagingContext.ToPoint(before[x])).ToList(),
+            movers.Select(x => CutsceneStagingContext.ToPoint(x.transform.position)).ToList(),
+            others.Select(x => CutsceneStagingContext.ToPoint(x.transform.position)).ToList());
         var placement = new GameObject("FB_CutsceneHeroPlacement").transform;
 
-        foreach (var mover in moved.Where(x => x != null && before.ContainsKey(x)))
+        for (var i = 0; i < others.Count; i++)
         {
-            foreach (var other in actors.Where(x => x != null && !moved.Contains(x)).Distinct())
+            if (places[i] is not { } place)
             {
-                var gap = other.transform.position - mover.transform.position;
-
-                gap.y = 0f;
-
-                if (gap.magnitude > 0.3f)
-                {
-                    continue;
-                }
-
-                placement.SetPositionAndRotation(before[mover], other.transform.rotation);
-                other.PlaceFreely(placement);
-                break;
+                continue;
             }
+
+            placement.SetPositionAndRotation(ToVector(place), others[i].transform.rotation);
+            others[i].PlaceFreely(placement);
         }
 
         Object.Destroy(placement.gameObject);
@@ -920,10 +929,16 @@ internal static class MultiplayerContext
     // A party of up to 4 sorted by height (PlaceExtraHeroes) is mixed up again by a whole-party teleport, which sends each role
     // holder to its role's marker. When every hero was moved, off the grid, put the party back in height order on the most
     // central of the markers the teleport used. Not on the markers the heroes ended on: a hero holding two roles (a party
-    // under 4 is padded with repeats) ends on the later one, which can leave an empty marker inside the row. A teleport of
-    // only some heroes moves part of the party, so it's left alone.
+    // under 4 is padded with repeats) ends on the later one, which can leave an empty marker inside the row.
+    //
+    // A teleport of only some heroes moves part of the party, so the party isn't restaged; but a sorted party no longer stands
+    // where the scene expects each role, so a role holder can land on another hero. That hero takes a place the movers left,
+    // as for bigger parties (Codex's review of f00afc52: small parties skipped this).
     private static void RestageSmallPartyAfterTeleport(
-        NarrativeStateTeleportCharacterBase state, Transform[] markers, List<WorldLocationCharacter> actors)
+        NarrativeStateTeleportCharacterBase state,
+        Transform[] markers,
+        List<WorldLocationCharacter> actors,
+        Dictionary<WorldLocationCharacter, Vector3> before)
     {
         var party = actors.Where(x => x != null).Distinct().ToList();
 
@@ -955,6 +970,8 @@ internal static class MultiplayerContext
 
         if (sentTo.Count != party.Count || used.Count < party.Count)
         {
+            SwapHeroesOffSeats(actors, sentTo.Keys.ToList(), before);
+
             return;
         }
 
