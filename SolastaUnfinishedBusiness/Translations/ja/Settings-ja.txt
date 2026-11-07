@@ -375,9 +375,10 @@ ModUi/&Pause=一時停止
 ModUi/&PortraitsOpenFolder=ポートレートフォルダを開く
 ModUi/&PrimedItems=プライムアイテム
 ModUi/&QuickCastLightCantripOnWornItemsFirst=クイックキャスト<color=#D89555>ライトカントリップ</color>を有効にすると、頭、首、または胴体に装備するアイテムを最初に使用できます。
-ModUi/&RaceLightSensitivityApplyOutdoorsOnly=<color=#D89555>Darkelf</color>、<color=#D89555>Dark Kobold</color>、<color=#D89555>Gray Dwarf</color> の <color=#D89555>Light Sensitivity</color> を有効にすると、屋外でのみトリガーされます\n<i><color=#F0DAA0>[ロード画面なしでアクセス可能な屋外の場所の屋内エリアは、ゲーム エンジンによって屋外とみなされます]</color></i>
+ModUi/&RaceLightSensitivityApplyOutdoorsOnly=<color=#D89555>Darkelf</color>、<color=#D89555>Dark Kobold</color>、<color=#D89555>Gray Dwarf</color> の <color=#D89555>Light Sensitivity</color> を有効にすると、日中の屋外でのみトリガーされます\n<i><color=#F0DAA0>[08:00 から 18:00 まで。夜間の松明ではトリガーされず、魔法の暗闇、フォグ・クラウド、煙など、キャラクターを完全に覆い隠す雲の中では発動しません。オフ: 屋内外を問わず、明るい光の下でトリガーされます。ロード画面なしでアクセス可能な屋外の場所の屋内エリアは、ゲーム エンジンによって屋外とみなされます]</color></i>
 ModUi/&Races=<color=#F0DAA0>レース</color>
 ModUi/&RecipeCost=<color=white>レシピのコスト</color>
+ModUi/&RefreshLightingWhenObscurementChanges=<color=#D89555>暗闇</color>、<color=#D89555>フォグ・クラウド</color>、煙など、クリーチャーを完全に覆い隠す雲が出現・移動・終了したら、すぐにそのクリーチャーの照明を更新する\n<i><color=#F0DAA0>[近くに松明やランプがないと、クリーチャーが移動するまでゲームが古い照明状態と日光過敏などの光感度を保持してしまう問題を修正します。デフォルトでオン]</color></i>
 ModUi/&RefreshVoice=ボイスリストを更新
 ModUi/&RelicForgeries=遺物の偽造
 ModUi/&RemoveAttunementRequirements=調整要件を削除します <b><i><color=#C04040E0>[再起動が必要です]</color></i></b>

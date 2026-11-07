@@ -375,9 +375,10 @@ ModUi/&Pause=Pause
 ModUi/&PortraitsOpenFolder=Ordner „Portraits“ öffnen
 ModUi/&PrimedItems=Präparierte Gegenstände
 ModUi/&QuickCastLightCantripOnWornItemsFirst=Aktivieren Sie den Schnellzauber <color=#D89555>Light Cantrip</color>, um zuerst am Kopf, Hals oder Rumpf getragene Gegenstände zu verwenden.
-ModUi/&RaceLightSensitivityApplyOutdoorsOnly=Aktivieren Sie <color=#D89555>Lichtempfindlichkeit</color> bei <color=#D89555>Dunkelelf</color>, <color=#D89555>Dunkelkobold</color> und <color=#D89555>Grauer Zwerg</color>, damit diese nur im Freien ausgelöst wird\n<i><color=#F0DAA0>[Innenbereiche an Außenbereichen, die ohne Ladebildschirm zugänglich sind, werden von der Spiel-Engine als Außenbereiche betrachtet]</color></i>
+ModUi/&RaceLightSensitivityApplyOutdoorsOnly=Aktivieren Sie <color=#D89555>Lichtempfindlichkeit</color> bei <color=#D89555>Dunkelelf</color>, <color=#D89555>Dunkelkobold</color> und <color=#D89555>Grauer Zwerg</color>, damit diese nur im Freien bei Tageslicht ausgelöst wird\n<i><color=#F0DAA0>[von 08:00 bis 18:00; eine Fackel bei Nacht löst sie nicht aus, und magische Dunkelheit, Nebelwolke, Rauch oder eine andere Wolke, die den Charakter vollständig verhüllt, verhindert sie. Aus: Sie wird bei jedem hellen Licht ausgelöst, drinnen wie draußen. Innenbereiche an Außenbereichen, die ohne Ladebildschirm zugänglich sind, werden von der Spiel-Engine als Außenbereiche betrachtet]</color></i>
 ModUi/&Races=<color=#F0DAA0>Rennen</color>
 ModUi/&RecipeCost=<color=white>Kosten des Rezepts</color>
+ModUi/&RefreshLightingWhenObscurementChanges=Beleuchtung von Kreaturen sofort aktualisieren, wenn <color=#D89555>Dunkelheit</color>, <color=#D89555>Nebelwolke</color>, Rauch oder eine andere Wolke, die sie vollständig verhüllt, erscheint, sich bewegt oder endet\n<i><color=#F0DAA0>[behebt, dass das Spiel ihre alte Beleuchtung und Lichtempfindlichkeiten wie Sonnenlichtempfindlichkeit beibehält, bis sie sich bewegen, wenn keine Fackel oder Lampe in der Nähe ist; standardmäßig an]</color></i>
 ModUi/&RefreshVoice=Stimmenliste aktualisieren
 ModUi/&RelicForgeries=Reliquienfälschungen
 ModUi/&RemoveAttunementRequirements=Abstimmungsanforderungen entfernen <b><i><color=#C04040E0>[Neustart erforderlich]</color></i></b>

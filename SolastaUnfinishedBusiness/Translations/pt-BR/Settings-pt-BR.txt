@@ -375,9 +375,10 @@ ModUi/&Pause=Pausar
 ModUi/&PortraitsOpenFolder=Abrir pasta de retratos
 ModUi/&PrimedItems=Itens preparados
 ModUi/&QuickCastLightCantripOnWornItemsFirst=Habilite o lançamento rápido <color=#D89555>Light Cantrip</color> para usar itens usados na cabeça, pescoço ou tronco primeiro
-ModUi/&RaceLightSensitivityApplyOutdoorsOnly=Habilite <color=#D89555>Sensibilidade à Luz</color> em <color=#D89555>Darkelf</color>, <color=#D89555>Dark Kobold</color> e <color=#D89555>Gray Dwarf</color> para serem acionados somente em ambientes externos\n<i><color=#F0DAA0>[áreas internas em locais externos acessíveis sem uma tela de carregamento são consideradas externas pelo mecanismo do jogo]</color></i>
+ModUi/&RaceLightSensitivityApplyOutdoorsOnly=Habilite <color=#D89555>Sensibilidade à Luz</color> em <color=#D89555>Darkelf</color>, <color=#D89555>Dark Kobold</color> e <color=#D89555>Gray Dwarf</color> para ser acionada somente em ambientes externos durante o dia\n<i><color=#F0DAA0>[das 08:00 às 18:00; uma tocha à noite não a aciona, e a escuridão mágica, Névoa Obscurecente, fumaça ou outra nuvem que oculte totalmente o personagem a impede. Desligado: é acionada em qualquer luz forte, dentro ou fora. Áreas internas em locais externos acessíveis sem uma tela de carregamento são consideradas externas pelo mecanismo do jogo]</color></i>
 ModUi/&Races=<color=#F0DAA0>Corridas</color>
 ModUi/&RecipeCost=<color=white>Custo da receita</color>
+ModUi/&RefreshLightingWhenObscurementChanges=Atualizar a iluminação das criaturas assim que <color=#D89555>Escuridão</color>, <color=#D89555>Névoa Obscurecente</color>, fumaça ou outra nuvem que as oculte totalmente aparecer, se mover ou terminar\n<i><color=#F0DAA0>[corrige o jogo manter a iluminação anterior, e sensibilidades à luz como Sensibilidade à Luz Solar, até que se movam quando não há tocha ou lâmpada por perto; ligado por padrão]</color></i>
 ModUi/&RefreshVoice=Atualizar lista de vozes
 ModUi/&RelicForgeries=Falsificações de relíquias
 ModUi/&RemoveAttunementRequirements=Remover requisitos de sintonização <b><i><color=#C04040E0>[Requer reinicialização]</color></i></b>

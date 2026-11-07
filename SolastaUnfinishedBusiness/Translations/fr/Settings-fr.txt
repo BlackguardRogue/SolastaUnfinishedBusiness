@@ -375,9 +375,10 @@ ModUi/&Pause=Pause
 ModUi/&PortraitsOpenFolder=Ouvrir le dossier des portraits
 ModUi/&PrimedItems=Articles apprêtés
 ModUi/&QuickCastLightCantripOnWornItemsFirst=Activez l'incantation rapide <color=#D89555>Cantrip léger</color> pour utiliser d'abord les objets portés sur la tête, le cou ou le torse
-ModUi/&RaceLightSensitivityApplyOutdoorsOnly=Activez la <color=#D89555>sensibilité à la lumière</color> sur <color=#D89555>Darkelf</color>, <color=#D89555>Dark Kobold</color> et <color=#D89555>Gray Dwarf</color> pour qu'elle ne se déclenche qu'à l'extérieur\n<i><color=#F0DAA0>[les zones intérieures dans les emplacements extérieurs accessibles sans écran de chargement sont considérées comme extérieures par le moteur de jeu]</color></i>
+ModUi/&RaceLightSensitivityApplyOutdoorsOnly=Activez la <color=#D89555>sensibilité à la lumière</color> sur <color=#D89555>Darkelf</color>, <color=#D89555>Dark Kobold</color> et <color=#D89555>Gray Dwarf</color> pour qu'elle ne se déclenche qu'à l'extérieur en plein jour\n<i><color=#F0DAA0>[de 08:00 à 18:00 ; une torche la nuit ne la déclenche pas, et les ténèbres magiques, Nappe de brouillard, la fumée ou tout autre nuage qui dissimule entièrement le personnage l'empêchent. Désactivé : elle se déclenche sous toute lumière vive, à l'intérieur comme à l'extérieur. Les zones intérieures dans les emplacements extérieurs accessibles sans écran de chargement sont considérées comme extérieures par le moteur de jeu]</color></i>
 ModUi/&Races=<color=#F0DAA0>Les courses</color>
 ModUi/&RecipeCost=<color=white>Coût de la recette</color>
+ModUi/&RefreshLightingWhenObscurementChanges=Mettre à jour l'éclairage des créatures dès que <color=#D89555>Ténèbres</color>, <color=#D89555>Nappe de brouillard</color>, la fumée ou tout autre nuage qui les dissimule entièrement apparaît, se déplace ou prend fin\n<i><color=#F0DAA0>[corrige le jeu qui conserve leur ancien éclairage, et les sensibilités à la lumière comme Sensibilité au soleil, jusqu'à ce qu'elles bougent quand aucune torche ni lampe n'est proche ; activé par défaut]</color></i>
 ModUi/&RefreshVoice=Actualiser la liste des voix
 ModUi/&RelicForgeries=Contrefaçons de reliques
 ModUi/&RemoveAttunementRequirements=Supprimer les exigences d'harmonisation <b><i><color=#C04040E0>[Nécessite un redémarrage]</color></i></b>

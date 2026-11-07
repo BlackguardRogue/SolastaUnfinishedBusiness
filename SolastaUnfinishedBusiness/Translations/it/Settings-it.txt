@@ -375,9 +375,10 @@ ModUi/&Pause=Pausa
 ModUi/&PortraitsOpenFolder=Apri cartella ritratti
 ModUi/&PrimedItems=Articoli innescati
 ModUi/&QuickCastLightCantripOnWornItemsFirst=Abilita il lancio rapido <color=#D89555>Trucchetto Luce</color> per usare prima gli oggetti indossati sulla testa, sul collo o sul busto
-ModUi/&RaceLightSensitivityApplyOutdoorsOnly=Abilita <color=#D89555>Sensibilità alla luce</color> su <color=#D89555>Elfo oscuro</color>, <color=#D89555>Kobold oscuro</color> e <color=#D89555>Nano grigio</color> per attivarli solo all'aperto\n<i><color=#F0DAA0>[le aree interne in luoghi all'aperto accessibili senza una schermata di caricamento sono considerate all'aperto dal motore di gioco]</color></i>
+ModUi/&RaceLightSensitivityApplyOutdoorsOnly=Abilita <color=#D89555>Sensibilità alla luce</color> su <color=#D89555>Elfo oscuro</color>, <color=#D89555>Kobold oscuro</color> e <color=#D89555>Nano grigio</color> per attivarla solo all'aperto alla luce del giorno\n<i><color=#F0DAA0>[dalle 08:00 alle 18:00; una torcia di notte non la attiva, e l'oscurità magica, Nube di nebbia, il fumo o un'altra nube che oscura completamente il personaggio la impediscono. Disattivato: si attiva con qualsiasi luce intensa, al chiuso o all'aperto. Le aree interne in luoghi all'aperto accessibili senza una schermata di caricamento sono considerate all'aperto dal motore di gioco]</color></i>
 ModUi/&Races=<color=#F0DAA0>Razze</color>
 ModUi/&RecipeCost=<color=white>Costo della ricetta</color>
+ModUi/&RefreshLightingWhenObscurementChanges=Aggiorna l'illuminazione delle creature non appena <color=#D89555>Oscurità</color>, <color=#D89555>Nube di nebbia</color>, il fumo o un'altra nube che le oscura completamente compare, si sposta o termina\n<i><color=#F0DAA0>[corregge il gioco che mantiene la loro vecchia illuminazione, e le sensibilità alla luce come Sensibilità alla luce solare, finché non si muovono quando nessuna torcia o lampada è vicina; attivo per impostazione predefinita]</color></i>
 ModUi/&RefreshVoice=Aggiorna elenco voci
 ModUi/&RelicForgeries=Falsificazioni di reliquie
 ModUi/&RemoveAttunementRequirements=Rimuovi i requisiti di sintonizzazione <b><i><color=#C04040E0>[Richiede riavvio]</color></i></b>
