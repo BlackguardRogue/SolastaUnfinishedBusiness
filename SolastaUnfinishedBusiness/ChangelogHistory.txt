@@ -1,4 +1,7 @@
 Unreleased:
+- Respec: a character's Cells Travelled, Earned XP and Hit Accuracy stats are now kept, like their other campaign stats. They went back to 0.
+- Hero tooltip: Cells Traveled now shows the number of cells, like the end-of-adventure screen. It showed a distance, at 1/25 of the real one.
+- Respec: a party whose heroes have all respecced can no longer long rest a second time the same day.
 - Cutscenes with more than 4 heroes: heroes 5 and 6 now always stand with the party, in a row just behind the first 4. Before, in scenes with a second stage they began far away, out of the scene (for example at the meeting with Kythaela), and when a scene moved the party they could be left behind or end up standing inside another hero. Not tested in game yet.
 
 1.13.0:

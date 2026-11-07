@@ -365,8 +365,6 @@ public static class GuiCharacterPatcher
             var sb = new StringBuilder();
             var totalAttacks = (float)hero.successfulAttacks + hero.failedAttacks;
             var hitAccuracy = totalAttacks > 0 ? hero.successfulAttacks / totalAttacks : 0;
-            var feet = hero.travelledCells / 5f;
-            var meter = feet * 0.3048;
 
             sb.AppendLine(hero.Name);
             sb.AppendLine();
@@ -379,7 +377,8 @@ public static class GuiCharacterPatcher
             sb.AppendLine($"<b>{Gui.Localize("Modal/&StatRestoredHealthTitle")}</b> {hero.restoredHealth:N0}");
             sb.AppendLine($"<b>{Gui.Localize("Modal/&StatUsedMagicAndPowersTitle")}</b> {hero.usedMagicAndPowers:N0}");
             sb.AppendLine($"<b>{Gui.Localize("Modal/&StatKnockOutsTitle")}</b> {hero.knockOuts:N0}");
-            sb.AppendLine($"<b>{Gui.Localize("Modal/&StatTravelledCellsTitle")}</b> {feet:N0}ft / {meter:N0}m");
+            // the plain cell count, as on the game's end-of-adventure screen (HeroStatsColumn.Bind) and as this row's title says.
+            sb.AppendLine($"<b>{Gui.Localize("Modal/&StatTravelledCellsTitle")}</b> {hero.travelledCells:N0}");
 
             tooltip.Content = sb.ToString();
             tooltip.TooltipClass = string.Empty;

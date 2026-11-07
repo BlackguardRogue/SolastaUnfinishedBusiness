@@ -438,6 +438,16 @@ internal static class ToolsContext
             newHero.restoredHealth = oldHero.restoredHealth;
             newHero.usedMagicAndPowers = oldHero.usedMagicAndPowers;
             newHero.knockOuts = oldHero.knockOuts;
+            // the game's other four campaign stats (RulesetCharacterHero.ResetStats and DumpStats list all twelve).
+            // The new hero starts them at 0, so without these a respec reset Cells Travelled, Earned XP and Hit Accuracy.
+            newHero.travelledCells = oldHero.travelledCells;
+            newHero.earnedXP = oldHero.earnedXP;
+            newHero.successfulAttacks = oldHero.successfulAttacks;
+            newHero.failedAttacks = oldHero.failedAttacks;
+            // keeps the day of the hero's last long rest. The new hero starts at -1, which means "hasn't rested", and
+            // RulesetCharacterHero.CanRest blocks a second long rest in a day only for a hero stamped with today. The party
+            // check needs just one such hero, so without this a whole party that respecced could long rest again at once.
+            newHero.lastLongRestDay = oldHero.lastLongRestDay;
 
             //Handle conditions
             TransferConditionsOfCategory(oldHero, newHero, AttributeDefinitions.TagEffect);
@@ -525,6 +535,16 @@ internal static class ToolsContext
                 newHero.restoredHealth = oldHero.restoredHealth;
                 newHero.usedMagicAndPowers = oldHero.usedMagicAndPowers;
                 newHero.knockOuts = oldHero.knockOuts;
+                // the game's other four campaign stats (RulesetCharacterHero.ResetStats and DumpStats list all twelve).
+                // The new hero starts them at 0, so without these a respec reset Cells Travelled, Earned XP and Hit Accuracy.
+                newHero.travelledCells = oldHero.travelledCells;
+                newHero.earnedXP = oldHero.earnedXP;
+                newHero.successfulAttacks = oldHero.successfulAttacks;
+                newHero.failedAttacks = oldHero.failedAttacks;
+                // keeps the day of the hero's last long rest. The new hero starts at -1, which means "hasn't rested", and
+                // RulesetCharacterHero.CanRest blocks a second long rest in a day only for a hero stamped with today. The party
+                // check needs just one such hero, so without this a whole party that respecced could long rest again at once.
+                newHero.lastLongRestDay = oldHero.lastLongRestDay;
 
                 TransferConditionsOfCategory(oldHero, newHero, AttributeDefinitions.TagEffect);
                 CleanupOldHeroConditions(oldHero, newHero);
