@@ -65,6 +65,40 @@ var opposite = CutsceneFormation.Compute(
 Check("opposite-facing seats still give a direction",
     Math.Abs((opposite.Forward.X * opposite.Forward.X) + (opposite.Forward.Z * opposite.Forward.Z) - 1f) < 0.01f);
 
+// Abjuration_03_MeetNikannen1, from the scene file. The second stage is markers 4-7, and GroupMediumB is the camera a hero
+// blocked at 0.33 m; NpcSingle0 is just in front of the row. The high camera is ignored.
+Point[] stageSeats = [new(9.25f, 0f, -17.5f), new(9.75f, 0f, -17.5f), new(10.25f, 0f, -17.5f), new(8.75f, 0f, -17.5f)];
+Point[] stageForwards = [new(0f, 0f, 1f), new(0f, 0f, 1f), new(0f, 0f, 1f), new(0f, 0f, 1f)];
+Point[] stageCameras = [new(9.61f, 0.97f, -19.01f), new(9.5f, 0.11f, -17.61f), new(9.5f, 5f, -18.7f)];
+var stage = CutsceneFormation.Compute(stageSeats, stageForwards, 2, stageCameras);
+
+Check("Nikannen: no spot within the clearance of a camera, as the blocked shot's was", stage.Spots.All(s =>
+    stageCameras.Take(2).All(c => Flat(s, c) >= CutsceneFormation.CameraClearance)));
+Check("Nikannen: the two heroes stay apart", Flat(stage.Spots[0], stage.Spots[1]) >= CutsceneFormation.SideSpacing - 0.01f);
+Check("Nikannen: they stay with the group", stage.Spots.All(s => Flat(s, new Point(9.5f, 0f, -17.5f)) < 3.5f));
+
+var stageNoCameras = CutsceneFormation.Compute(stageSeats, stageForwards, 2);
+
+Check("Nikannen: with no camera nearby, the first spot is behind the middle gap", Math.Abs(stageNoCameras.Spots[0].X - 9.5f) < 0.01f);
+
+// Caer Cyflen with a camera far away: the layout tested in game doesn't move
+var caerFar = CutsceneFormation.Compute(caerSeats, caerForwards, 2, [new Point(0f, 6f, 0f)]);
+
+Check("a far camera moves nothing",
+    Flat(caerFar.Spots[0], caer.Spots[0]) < 0.001f && Flat(caerFar.Spots[1], caer.Spots[1]) < 0.001f);
+
+// 4 + 3: the rear heroes stand behind gaps, on both sides of the middle, and turn with the row
+var seven = CutsceneFormation.Compute(stageSeats, stageForwards, 3);
+
+Check("4 + 3: one each side of the middle", seven.Spots[1].X < 9.5f && seven.Spots[2].X > 9.5f);
+Check("4 + 3: all behind the row", seven.Spots.All(s => Math.Abs(s.Z - (-18.7f)) < 0.01f));
+
+Point[] turnedSeats = [new(0f, 0f, 9.25f), new(0f, 0f, 9.75f), new(0f, 0f, 10.25f), new(0f, 0f, 8.75f)];
+Point[] turnedForwards = [new(-1f, 0f, 0f), new(-1f, 0f, 0f), new(-1f, 0f, 0f), new(-1f, 0f, 0f)];
+var turned = CutsceneFormation.Compute(turnedSeats, turnedForwards, 3);
+
+Check("a row facing another way has its back row behind it", turned.Spots.All(s => Math.Abs(s.X - 1.2f) < 0.01f));
+
 Console.WriteLine(failures == 0 ? "All passed." : $"{failures} FAILED.");
 
 return failures == 0 ? 0 : 1;

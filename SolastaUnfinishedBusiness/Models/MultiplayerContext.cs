@@ -766,7 +766,7 @@ internal static class MultiplayerContext
             return;
         }
 
-        StandHeroesBehindSeats(seats, extras, sequence.NarrativeTreeDefinition.IsTopDownNarrativeSequence);
+        StandHeroesBehindSeats(sequence, seats, extras, sequence.NarrativeTreeDefinition.IsTopDownNarrativeSequence);
 
         LogCutsceneParty("after", sequence, markers, actors);
     }
@@ -824,19 +824,36 @@ internal static class MultiplayerContext
             return;
         }
 
-        StandHeroesBehindSeats(seats, left, state is NarrativeStateTeleportCharacterGameplay);
+        StandHeroesBehindSeats(sequence, seats, left, state is NarrativeStateTeleportCharacterGameplay);
 
         LogCutsceneParty("after teleport", sequence, markers, actors);
     }
 
     // onGrid: a sequence played on the map, where a hero also has to take up a real cell, as the game's
     // TeleportCharacterToStartingPosition does. Otherwise the hero is only shown there, as the game does for seated heroes.
-    private static void StandHeroesBehindSeats(List<Transform> seats, List<WorldLocationCharacter> heroes, bool onGrid)
+    //
+    // Only the back row's order is free: who stands on a seat decides which of the scene's per-seat cameras frames them, and
+    // the script gives seats by role, so the first 4 keep their places. In the back row the shortest hero takes the first
+    // spot, at the centre, and taller ones the flanks. Height comes from the character, so it's the same on all computers,
+    // and the sort is stable, so equal heights keep the party's order.
+    private static void StandHeroesBehindSeats(
+        NarrativeSequence sequence, List<Transform> seats, List<WorldLocationCharacter> unordered, bool onGrid)
     {
+        var heroes = unordered.OrderBy(HeightOf).ToList();
+        // The scene's shots, to keep clear of. Only off the grid: there a hero is only shown at the spot, so a difference
+        // between computers changes nothing but the picture. A live shot's transform may have moved with its target, and a
+        // grid move has to be identical everywhere, so map-played sequences don't look at cameras.
+        var cameras = onGrid
+            ? null
+            : sequence.CameraShotsMap?.Values
+                .Where(x => x != null)
+                .Select(x => ToPoint(x.transform.position))
+                .ToList();
         var formation = CutsceneFormation.Compute(
             seats.Select(x => ToPoint(x.position)).ToList(),
             seats.Select(x => ToPoint(x.forward)).ToList(),
-            heroes.Count);
+            heroes.Count,
+            cameras);
         var forward = ToVector(formation.Forward);
         var right = ToVector(formation.Right);
         var positioningService = ServiceRepository.GetService<IGameLocationPositioningService>();
@@ -907,6 +924,13 @@ internal static class MultiplayerContext
         }
 
         return false;
+    }
+
+    private static int HeightOf(WorldLocationCharacter hero)
+    {
+        return hero.GameLocationCharacter?.RulesetCharacter is RulesetCharacterHero character
+            ? character.HeightInches
+            : int.MaxValue;
     }
 
     private static CutsceneFormation.Point ToPoint(Vector3 vector)

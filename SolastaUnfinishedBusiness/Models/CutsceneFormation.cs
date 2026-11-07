@@ -1,20 +1,31 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace SolastaUnfinishedBusiness.Models;
 
-// Where heroes without an authored cutscene seat stand: a row one step behind the seated heroes. Plain arithmetic with
-// no game or Unity types, so Tests/CutsceneChecks can run it outside the game. It uses only its inputs, which come from
-// the scene's markers, so every computer gets the same answer.
+// Where heroes without an authored cutscene seat stand: a row one step behind the seated heroes, staggered so they show
+// between them. Plain arithmetic with no game or Unity types, so Tests/CutsceneChecks can run it outside the game. It uses
+// only its inputs, which come from the scene, so every computer gets the same answer.
 internal static class CutsceneFormation
 {
-    // how far the back row stands behind the rearmost seat. A hero at about this distance could be seen through a gap in
-    // the front row in the Caer Cyflen party shot
+    // how far the back row stands behind the rearmost seat. A hero at this distance behind the row's middle gap can be seen
+    // in the Caer Cyflen party shot (evidence/cutscene-placement-8fa1ae67)
     internal const float BackRowDistance = 1.2f;
 
-    // how far past the end of the seated row the first hero on each side stands, and the step between further heroes
+    // how far past the end of the seated row a hero stands, and the smallest distance between two back-row heroes
     internal const float SideMargin = 0.4f;
     internal const float SideSpacing = 0.8f;
+
+    // Scenes are authored for 4 heroes, so some cameras stand where the back row would: in the Nikannen scene GroupMediumB
+    // is 1.5 m behind the second-stage row, and a hero 0.33 m from it filled the frame. 23 of 87 spots checked in Coparann's
+    // scenes were within this distance of a camera. A camera this much above the seats is over the heroes' heads.
+    internal const float CameraClearance = 1f;
+    internal const float CameraHeightAboveSeats = 2.2f;
+
+    // how a spot next to a camera moves along the row: in these steps, out to this far
+    private const float ShiftStep = 0.25f;
+    private const int ShiftSteps = 12;
 
     internal readonly struct Point(float x, float y, float z)
     {
@@ -34,14 +45,21 @@ internal static class CutsceneFormation
         internal Point[] Spots { get; } = spots;
     }
 
-    // Spots for spotCount heroes given the seats they stand behind, and those seats' forward directions. The first spot
-    // is behind the middle of the row, and the next ones go outward, past each end in turn.
+    // Spots for spotCount heroes given the seats they stand behind, those seats' forward directions, and the scene's camera
+    // positions. Everything is measured from the seats given, so the row turns with the party at each whole-party teleport.
     //
-    // The first side is the one away from Right. In every scene logged so far seats 0 and 1 are in the middle and seat 2
-    // is at that end, which is the right of the screen in the Caer Cyflen party shot. There the other end of the row is
-    // hard up against the edge of the frame, so that side is used last. Cameras are authored per scene for 4 heroes, so
-    // no spot can be sure of being in every shot.
-    internal static Result Compute(IReadOnlyList<Point> seats, IReadOnlyList<Point> seatForwards, int spotCount)
+    // The first spot is behind the row's middle gap. With 2 spots the second goes past the end of the row, as the layout
+    // tested in game: behind the outer gaps of a row of markers 0.5 m apart, both heroes were hidden (1.6.17.2,
+    // evidence/ingame-cutscene-1.6.17.2). With 3 or more they go behind the other gaps, then past the ends: 4 in front and 3
+    // behind for 7. Parties stop at 6 today, so that case isn't reached in play.
+    //
+    // The first side is the one away from Right. In every scene logged so far seat 2 is at that end, which is the right of
+    // the screen in the Caer Cyflen party shot, where the other end is hard up against the frame.
+    internal static Result Compute(
+        IReadOnlyList<Point> seats,
+        IReadOnlyList<Point> seatForwards,
+        int spotCount,
+        IReadOnlyList<Point> cameras = null)
     {
         if (seats.Count == 0)
         {
@@ -50,51 +68,124 @@ internal static class CutsceneFormation
 
         var forward = AverageFlatDirection(seatForwards);
         var right = new Point(forward.Z, 0f, -forward.X);
-        var minLateral = float.MaxValue;
-        var maxLateral = float.MinValue;
-        var rearmost = float.MaxValue;
-        var height = 0f;
-
-        foreach (var seat in seats)
-        {
-            var lateral = (seat.X * right.X) + (seat.Z * right.Z);
-            var depth = (seat.X * forward.X) + (seat.Z * forward.Z);
-
-            minLateral = Math.Min(minLateral, lateral);
-            maxLateral = Math.Max(maxLateral, lateral);
-            rearmost = Math.Min(rearmost, depth);
-            height += seat.Y;
-        }
-
-        height /= seats.Count;
-
-        var middle = (minLateral + maxLateral) * 0.5f;
-        // never closer to the middle spot than the spacing, however short the seated row is
-        var firstSideOffset = Math.Max(((maxLateral - minLateral) * 0.5f) + SideMargin, SideSpacing);
+        var laterals = seats.Select(seat => (seat.X * right.X) + (seat.Z * right.Z)).OrderBy(x => x).ToList();
+        var rearmost = seats.Min(seat => (seat.X * forward.X) + (seat.Z * forward.Z));
+        var height = seats.Average(seat => seat.Y);
         var depthOfRow = rearmost - BackRowDistance;
-        var spots = new Point[spotCount];
+        var preferred = PreferredLaterals(laterals, spotCount);
+        var obstacles = (cameras ?? [])
+            .Where(camera => camera.Y - height < CameraHeightAboveSeats)
+            .ToList();
+        var chosen = new List<Point>();
 
-        for (var i = 0; i < spotCount; i++)
+        Point SpotAt(float lateral)
         {
-            var offset = 0f;
-
-            if (i > 0)
-            {
-                var rank = (i + 1) / 2;
-                var side = i % 2 == 1 ? -1f : 1f;
-
-                offset = side * (firstSideOffset + ((rank - 1) * SideSpacing));
-            }
-
-            var lateral = middle + offset;
-
-            spots[i] = new Point(
+            return new Point(
                 (right.X * lateral) + (forward.X * depthOfRow),
                 height,
                 (right.Z * lateral) + (forward.Z * depthOfRow));
         }
 
-        return new Result(forward, right, spots);
+        bool IsClear(Point spot)
+        {
+            return obstacles.All(camera => FlatDistance(spot, camera) >= CameraClearance) &&
+                   chosen.All(other => FlatDistance(spot, other) >= SideSpacing - 0.001f);
+        }
+
+        var centre = (laterals[0] + laterals[laterals.Count - 1]) * 0.5f;
+
+        foreach (var lateral in preferred)
+        {
+            var spot = SpotAt(lateral);
+
+            // Move along the row until clear, trying outward first. A hero beside a camera is out of its view, one ahead of
+            // it isn't, so moving sideways is what helps. If nothing is clear the preferred spot stands: no scene is better
+            // for losing a hero.
+            if (!IsClear(spot))
+            {
+                var outward = lateral > centre ? 1f : -1f;
+
+                for (var step = 1; step <= ShiftSteps; step++)
+                {
+                    var further = SpotAt(lateral + (outward * step * ShiftStep));
+                    var nearer = SpotAt(lateral - (outward * step * ShiftStep));
+
+                    if (IsClear(further))
+                    {
+                        spot = further;
+                        break;
+                    }
+
+                    if (IsClear(nearer))
+                    {
+                        spot = nearer;
+                        break;
+                    }
+                }
+            }
+
+            chosen.Add(spot);
+        }
+
+        return new Result(forward, right, chosen.ToArray());
+    }
+
+    // positions along the row, before keeping clear of cameras. laterals is sorted.
+    private static List<float> PreferredLaterals(List<float> laterals, int spotCount)
+    {
+        var centre = (laterals[0] + laterals[laterals.Count - 1]) * 0.5f;
+        var gaps = laterals.Zip(laterals.Skip(1), (a, b) => (a + b) * 0.5f).ToList();
+        var result = new List<float>();
+
+        if (spotCount == 0)
+        {
+            return result;
+        }
+
+        // a real gap between two heroes, the one nearest the row's centre; a lone seat has none
+        var middleIndex = gaps.Count == 0
+            ? -1
+            : gaps.IndexOf(gaps.OrderBy(gap => Math.Abs(gap - centre)).First());
+        var middle = middleIndex < 0 ? centre : gaps[middleIndex];
+        var pastEnd = Math.Max(((laterals[laterals.Count - 1] - laterals[0]) * 0.5f) + SideMargin, SideSpacing);
+
+        result.Add(middle);
+
+        if (spotCount == 2)
+        {
+            result.Add(middle - pastEnd);
+
+            return result;
+        }
+
+        // walks outward from the middle on each side, through that side's gaps and then past the end of the row
+        var low = middle;
+        var high = middle;
+        var lowGap = middleIndex - 1;
+        var highGap = middleIndex + 1;
+
+        for (var i = 1; i < spotCount; i++)
+        {
+            if (i % 2 == 1)
+            {
+                low = Math.Min(lowGap >= 0 ? gaps[lowGap] : low - SideSpacing, low - SideSpacing);
+                lowGap--;
+                result.Add(low);
+            }
+            else
+            {
+                high = Math.Max(highGap >= 0 && highGap < gaps.Count ? gaps[highGap] : high + SideSpacing, high + SideSpacing);
+                highGap++;
+                result.Add(high);
+            }
+        }
+
+        return result;
+    }
+
+    private static float FlatDistance(Point a, Point b)
+    {
+        return (float)Math.Sqrt(((a.X - b.X) * (a.X - b.X)) + ((a.Z - b.Z) * (a.Z - b.Z)));
     }
 
     // the seats' facing can differ (the outer ones turn inward), so the row's facing is their average, kept flat
