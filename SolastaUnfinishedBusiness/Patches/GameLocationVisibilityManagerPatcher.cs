@@ -38,20 +38,18 @@ public static class GameLocationVisibilityManagerPatcher
                 return;
             }
 
-            if (illuminable is not GameLocationCharacter { RulesetCharacter: not null } glc)
+            if (__result != LocationDefinitions.LightingState.Bright ||
+                illuminable is not GameLocationCharacter { RulesetCharacter: not null } glc)
             {
                 return;
             }
 
             var originalHero = glc.RulesetCharacter.GetOriginalHero();
 
-            // A torch or magical darkness can keep personal illumination constant across a
-            // sector or daylight change. Recheck the Kobold on every real illumination update.
-            var subrace = originalHero?.SubRaceDefinition;
-            if (subrace != null && (subrace == RaceKoboldBuilder.SubraceDarkKobold ||
-                (__result == LocationDefinitions.LightingState.Bright &&
-                 (subrace == SubraceDarkelfBuilder.SubraceDarkelf ||
-                  subrace == SubraceGrayDwarfBuilder.SubraceGrayDwarf))))
+            if (originalHero != null &&
+                (originalHero.SubRaceDefinition == RaceKoboldBuilder.SubraceDarkKobold ||
+                 originalHero.SubRaceDefinition == SubraceDarkelfBuilder.SubraceDarkelf ||
+                 originalHero.SubRaceDefinition == SubraceGrayDwarfBuilder.SubraceGrayDwarf))
             {
                 glc.CheckLightingAffinityEffects();
             }
