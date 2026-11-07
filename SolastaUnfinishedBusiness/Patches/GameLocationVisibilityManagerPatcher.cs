@@ -97,9 +97,15 @@ public static class GameLocationVisibilityManagerPatcher
 
             foreach (var character in __instance.gameLocationCharacterService.ValidCharacters)
             {
+                // the game's light check samples every cell of the creature's perception box (GetAllPositionsToCheck),
+                // so a large creature whose origin is in one sector can stand partly in another; test the whole box
+                // (Codex's review of 1f44353a). Boxes are inclusive, built the same way as the game's own handler.
+                var characterBox = character.LocationPerceptionBoundingBox;
+
                 foreach (var sector in impactedSectors)
                 {
-                    if (sector == null || !sector.ContainsPosition(character.LocationPosition))
+                    if (sector == null ||
+                        !new BoxInt(sector.MinPosition, sector.MaxPosition).Intersects(characterBox))
                     {
                         continue;
                     }
