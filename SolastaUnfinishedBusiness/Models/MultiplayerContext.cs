@@ -847,7 +847,7 @@ internal static class MultiplayerContext
             ? null
             : sequence.CameraShotsMap?.Values
                 .Where(x => x != null)
-                .Select(x => ToPoint(x.transform.position))
+                .Select(x => new CutsceneFormation.Camera(ToPoint(x.transform.position), ToPoint(x.transform.forward)))
                 .ToList();
         var formation = CutsceneFormation.Compute(
             seats.Select(x => ToPoint(x.position)).ToList(),

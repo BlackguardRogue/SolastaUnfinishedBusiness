@@ -13,17 +13,23 @@ internal static class CutsceneFormation
     // in the Caer Cyflen party shot (evidence/cutscene-placement-8fa1ae67)
     internal const float BackRowDistance = 1.2f;
 
+    // the closest the back row may stand to the front row when a camera needs the room (user direction, 2026-11-07)
+    internal const float MinBackRowDistance = 0.3f;
+
     // how far past the end of the seated row a hero stands, and the smallest distance between two back-row heroes
     internal const float SideMargin = 0.4f;
     internal const float SideSpacing = 0.8f;
 
     // Scenes are authored for 4 heroes, so some cameras stand where the back row would: in the Nikannen scene GroupMediumB
     // is 1.5 m behind the second-stage row, and a hero 0.33 m from it filled the frame. 23 of 87 spots checked in Coparann's
-    // scenes were within this distance of a camera. A camera this much above the seats is over the heroes' heads.
+    // scenes were within this distance of a camera. Only a camera pointing at the spot counts: NpcSingle0 stands in that
+    // row looking away from the party, so a hero behind it isn't in its shot. A camera this much above the seats is over the
+    // heroes' heads.
     internal const float CameraClearance = 1f;
     internal const float CameraHeightAboveSeats = 2.2f;
 
-    // how a spot next to a camera moves along the row: in these steps, out to this far
+    // how a spot in front of a camera moves: closer to the row first, then along it, in these steps
+    private const float DepthStep = 0.15f;
     private const float ShiftStep = 0.25f;
     private const int ShiftSteps = 12;
 
@@ -32,6 +38,12 @@ internal static class CutsceneFormation
         internal readonly float X = x;
         internal readonly float Y = y;
         internal readonly float Z = z;
+    }
+
+    internal readonly struct Camera(Point position, Point forward)
+    {
+        internal readonly Point Position = position;
+        internal readonly Point Forward = forward;
     }
 
     internal sealed class Result(Point forward, Point right, Point[] spots)
@@ -59,7 +71,7 @@ internal static class CutsceneFormation
         IReadOnlyList<Point> seats,
         IReadOnlyList<Point> seatForwards,
         int spotCount,
-        IReadOnlyList<Point> cameras = null)
+        IReadOnlyList<Camera> cameras = null)
     {
         if (seats.Count == 0)
         {
@@ -71,24 +83,32 @@ internal static class CutsceneFormation
         var laterals = seats.Select(seat => (seat.X * right.X) + (seat.Z * right.Z)).OrderBy(x => x).ToList();
         var rearmost = seats.Min(seat => (seat.X * forward.X) + (seat.Z * forward.Z));
         var height = seats.Average(seat => seat.Y);
-        var depthOfRow = rearmost - BackRowDistance;
         var preferred = PreferredLaterals(laterals, spotCount);
         var obstacles = (cameras ?? [])
-            .Where(camera => camera.Y - height < CameraHeightAboveSeats)
+            .Where(camera => camera.Position.Y - height < CameraHeightAboveSeats)
             .ToList();
         var chosen = new List<Point>();
 
-        Point SpotAt(float lateral)
+        Point SpotAt(float lateral, float distanceBehind)
         {
+            var depth = rearmost - distanceBehind;
+
             return new Point(
-                (right.X * lateral) + (forward.X * depthOfRow),
+                (right.X * lateral) + (forward.X * depth),
                 height,
-                (right.Z * lateral) + (forward.Z * depthOfRow));
+                (right.Z * lateral) + (forward.Z * depth));
+        }
+
+        bool IsInFrontOfCamera(Point spot, Camera camera)
+        {
+            return FlatDistance(spot, camera.Position) < CameraClearance &&
+                   ((spot.X - camera.Position.X) * camera.Forward.X) +
+                   ((spot.Z - camera.Position.Z) * camera.Forward.Z) > 0f;
         }
 
         bool IsClear(Point spot)
         {
-            return obstacles.All(camera => FlatDistance(spot, camera) >= CameraClearance) &&
+            return !obstacles.Any(camera => IsInFrontOfCamera(spot, camera)) &&
                    chosen.All(other => FlatDistance(spot, other) >= SideSpacing - 0.001f);
         }
 
@@ -96,29 +116,32 @@ internal static class CutsceneFormation
 
         foreach (var lateral in preferred)
         {
-            var spot = SpotAt(lateral);
+            var outward = lateral > centre ? 1f : -1f;
 
-            // Move along the row until clear, trying outward first. A hero beside a camera is out of its view, one ahead of
-            // it isn't, so moving sideways is what helps. If nothing is clear the preferred spot stands: no scene is better
-            // for losing a hero.
-            if (!IsClear(spot))
+            // The preferred place first, then closer to the row at the same place along it, then further along it at each of
+            // those distances, outward first. If nothing is clear the preferred spot stands: no scene is better for losing a
+            // hero. Moving closer leaves a camera's view less blocked and keeps the row centred; moving along it takes the
+            // hero out of the view altogether.
+            var spot = SpotAt(lateral, BackRowDistance);
+            var found = false;
+
+            for (var step = 0; step <= ShiftSteps && !found; step++)
             {
-                var outward = lateral > centre ? 1f : -1f;
-
-                for (var step = 1; step <= ShiftSteps; step++)
+                foreach (var shift in step == 0 ? [0f] : new[] { outward * step * ShiftStep, -outward * step * ShiftStep })
                 {
-                    var further = SpotAt(lateral + (outward * step * ShiftStep));
-                    var nearer = SpotAt(lateral - (outward * step * ShiftStep));
-
-                    if (IsClear(further))
+                    for (var behind = BackRowDistance; behind >= MinBackRowDistance - 0.001f && !found; behind -= DepthStep)
                     {
-                        spot = further;
-                        break;
+                        var candidate = SpotAt(lateral + shift, behind);
+
+                        if (IsClear(candidate))
+                        {
+                            spot = candidate;
+                            found = true;
+                        }
                     }
 
-                    if (IsClear(nearer))
+                    if (found)
                     {
-                        spot = nearer;
                         break;
                     }
                 }
