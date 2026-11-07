@@ -571,6 +571,7 @@ ModUi/&EnableAdditionalLogging=追加ログを有効にする
 ModUi/&LogObjectIdRecords=オブジェクトIDの記録 <i><color=#F0DAA0>[新しいゲームオブジェクト、光の状態の変化、パワーや呪文の結果をファイルに保存し、コンピューター間で比較できるようにします]</color></i>
 ModUi/&LogStaleEffectChecks=古くなったパワーと呪文の効果 <i><color=#F0DAA0>[有効な効果が現在の状況と一致しなくなったときにログに記録します。有効な効果を再確認するため、パフォーマンスにわずかに影響します]</color></i>
 ModUi/&LogPerception=知覚 <i><color=#F0DAA0>[知覚の要求と判定をログに記録します]</color></i>
+ModUi/&LogEncounterPopup=移動中の遭遇ウィンドウ <i><color=#F0DAA0>[開閉とクリック、および表示中のロード・終了・切断]</color></i>
 ModUi/&MultiplayerMenu=マルチプレイ
 ModUi/&MultiplayerMinimumTickBuffer=<color=white>最小の行動遅延（ティック）</color> <i><color=#F0DAA0>[ゲームの既定値4、全員のpingが許す場合のみ使用]</color></i>
 ModUi/&MultiplayerMovementTitle=<color=#F0DAA0>移動</color> <i><color=#F0DAA0>[マルチプレイのみ、シングルプレイはゲームのルールのまま]</color></i><color=#F0DAA0>:</color>

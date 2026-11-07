@@ -571,6 +571,7 @@ ModUi/&EnableAdditionalLogging=Ativar registro adicional
 ModUi/&LogObjectIdRecords=Registros de IDs de objetos <i><color=#F0DAA0>[novos objetos do jogo, mudanças de estados de luz e resultados de poderes ou magias, salvos em arquivos para comparar computadores]</color></i>
 ModUi/&LogStaleEffectChecks=Efeitos de poderes e magias desatualizados <i><color=#F0DAA0>[anota no registro quando um efeito ativo não corresponde mais à situação atual; verifica novamente os efeitos ativos, por isso afeta um pouco o desempenho]</color></i>
 ModUi/&LogPerception=Percepção <i><color=#F0DAA0>[pedidos e testes de percepção no registro]</color></i>
+ModUi/&LogEncounterPopup=Janela de encontro em viagem <i><color=#F0DAA0>[quando abre, fecha e é clicada, e carregamentos, saídas ou desconexões enquanto está aberta]</color></i>
 ModUi/&MultiplayerMenu=Multijogador
 ModUi/&MultiplayerMinimumTickBuffer=<color=white>Atraso de ação mínimo em ticks</color> <i><color=#F0DAA0>[padrão do jogo 4, só usado quando todo ping permite]</color></i>
 ModUi/&MultiplayerMovementTitle=<color=#F0DAA0>Movimento</color> <i><color=#F0DAA0>[só partidas multijogador, o modo solo mantém as regras do jogo]</color></i><color=#F0DAA0>:</color>

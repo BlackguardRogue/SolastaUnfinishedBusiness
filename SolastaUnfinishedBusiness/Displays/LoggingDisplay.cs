@@ -45,5 +45,12 @@ internal static class LoggingDisplay
         {
             Main.Settings.LogPerception = toggle;
         }
+
+        // the travel encounter popup and what ends a game while it's up (issue 11, EncounterPopupContext)
+        toggle = Main.Settings.LogEncounterPopup;
+        if (UI.Toggle(Gui.Localize("ModUi/&LogEncounterPopup"), ref toggle, UI.AutoWidth()))
+        {
+            Main.Settings.LogEncounterPopup = toggle;
+        }
     }
 }
