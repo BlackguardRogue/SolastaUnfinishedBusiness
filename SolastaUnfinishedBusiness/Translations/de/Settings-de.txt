@@ -571,6 +571,7 @@ ModUi/&EnableAdditionalLogging=Zusätzliche Protokollierung aktivieren
 ModUi/&LogObjectIdRecords=Objekt-ID-Aufzeichnungen <i><color=#F0DAA0>[neue Spielobjekte, Änderungen von Lichtzuständen und Ergebnisse von Kräften oder Zaubern, in Dateien gespeichert, um Computer zu vergleichen]</color></i>
 ModUi/&LogStaleEffectChecks=Veraltete Effekte von Kräften und Zaubern <i><color=#F0DAA0>[vermerkt im Protokoll, wenn ein aktiver Effekt nicht mehr zur aktuellen Situation passt; prüft aktive Effekte erneut und kostet daher etwas Leistung]</color></i>
 ModUi/&LogPerception=Wahrnehmung <i><color=#F0DAA0>[Wahrnehmungsanfragen und -würfe im Protokoll]</color></i>
+ModUi/&LogEncounterPopup=Begegnungsfenster auf Reisen <i><color=#F0DAA0>[wann es sich öffnet, schließt und angeklickt wird, sowie Laden, Beenden oder Verbindungsabbrüche, während es offen ist]</color></i>
 ModUi/&MultiplayerMenu=Mehrspieler
 ModUi/&MultiplayerMinimumTickBuffer=<color=white>Minimale Aktionsverzögerung in Ticks</color> <i><color=#F0DAA0>[Spielstandard 4, nur verwendet, wenn jeder Ping es erlaubt]</color></i>
 ModUi/&MultiplayerMovementTitle=<color=#F0DAA0>Bewegung</color> <i><color=#F0DAA0>[nur Mehrspielerpartien, Einzelspieler behält die Spielregeln]</color></i><color=#F0DAA0>:</color>

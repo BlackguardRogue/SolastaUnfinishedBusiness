@@ -571,6 +571,7 @@ ModUi/&EnableAdditionalLogging=Activer la journalisation supplémentaire
 ModUi/&LogObjectIdRecords=Enregistrements des ID d'objets <i><color=#F0DAA0>[nouveaux objets du jeu, changements d'états de lumière et résultats des pouvoirs ou sorts, enregistrés dans des fichiers pour comparer les ordinateurs]</color></i>
 ModUi/&LogStaleEffectChecks=Effets de pouvoirs et de sorts périmés <i><color=#F0DAA0>[note dans le journal lorsqu'un effet actif ne correspond plus à la situation actuelle ; revérifie les effets actifs, ce qui coûte un peu de performances]</color></i>
 ModUi/&LogPerception=Perception <i><color=#F0DAA0>[demandes et jets de perception dans le journal]</color></i>
+ModUi/&LogEncounterPopup=Fenêtre de rencontre en voyage <i><color=#F0DAA0>[quand elle s'ouvre, se ferme et est cliquée, et les chargements, sorties ou déconnexions pendant qu'elle est ouverte]</color></i>
 ModUi/&MultiplayerMenu=Multijoueur
 ModUi/&MultiplayerMinimumTickBuffer=<color=white>Délai d'action minimum en ticks</color> <i><color=#F0DAA0>[4 par défaut dans le jeu, utilisé seulement quand chaque ping le permet]</color></i>
 ModUi/&MultiplayerMovementTitle=<color=#F0DAA0>Déplacement</color> <i><color=#F0DAA0>[parties multijoueur uniquement, le solo garde les règles du jeu]</color></i><color=#F0DAA0>:</color>
