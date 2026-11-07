@@ -17,6 +17,8 @@ namespace SolastaUnfinishedBusiness.Races;
 
 internal static class RaceKoboldBuilder
 {
+    internal const string DarkKoboldLightSensitivity = "LightAffinityDarkKoboldLightSensitivity";
+
     internal static CharacterRaceDefinition RaceKobold { get; } = BuildKobold();
     internal static CharacterRaceDefinition SubraceDarkKobold { get; private set; }
 
@@ -68,7 +70,7 @@ internal static class RaceKoboldBuilder
             .AddToDB();
 
         var lightAffinityDarkKoboldLightSensitivity = FeatureDefinitionLightAffinityBuilder
-            .Create("LightAffinityDarkKoboldLightSensitivity")
+            .Create(DarkKoboldLightSensitivity)
             .SetGuiPresentation(CustomConditionsContext.LightSensitivity.Name, Category.Condition)
             .AddLightingEffectAndCondition(
                 new FeatureDefinitionLightAffinity.LightingEffectAndCondition

@@ -14,6 +14,7 @@ using SolastaUnfinishedBusiness.Behaviors.Specific;
 using SolastaUnfinishedBusiness.CustomUI;
 using SolastaUnfinishedBusiness.Interfaces;
 using SolastaUnfinishedBusiness.Models;
+using SolastaUnfinishedBusiness.Races;
 using SolastaUnfinishedBusiness.Spells;
 using SolastaUnfinishedBusiness.Subclasses;
 using SolastaUnfinishedBusiness.Validators;
@@ -809,11 +810,28 @@ public static class GameLocationCharacterPatcher
 
             // read fully before changing anything: GetLightAffinityFeatures returns a list the game reuses for other
             // feature queries, which the handlers of a condition change could run
-            foreach (var lightingEffectAndConditionList in rulesetCharacter.GetLightAffinityFeatures()
-                         .Select(featureDefinition =>
-                             (featureDefinition as ILightingAffinityProvider)?.LightingEffectAndConditionList)
-                         .Where(lightingEffectAndConditionList => lightingEffectAndConditionList != null))
+            foreach (var feature in rulesetCharacter.GetLightAffinityFeatures())
             {
+                // The exterior sector's global light is Solasta's hourly ambient state.
+                // Only this racial feature ignores personal illumination and the outdoors-only setting.
+                if (feature.Name == RaceKoboldBuilder.DarkKoboldLightSensitivity)
+                {
+                    var location = ServiceRepository.GetService<IGameLocationService>()?.GameLocation;
+                    if (location?.SectorBounds != null &&
+                        new GridAccessor(__instance.LocationPosition).sector is
+                            { IsExterior: true, GlobalLightingState: LightingState.Bright })
+                    {
+                        wantedConditions.Add(CustomConditionsContext.LightSensitivity);
+                    }
+
+                    continue;
+                }
+
+                if (feature is not ILightingAffinityProvider { LightingEffectAndConditionList: { } lightingEffectAndConditionList })
+                {
+                    continue;
+                }
+
                 foreach (var effectAndCondition in lightingEffectAndConditionList.Where(effectAndCondition =>
                              effectAndCondition.lightingState == __instance.lightingState))
                 {
