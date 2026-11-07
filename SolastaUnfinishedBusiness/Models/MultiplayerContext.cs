@@ -899,7 +899,7 @@ internal static class MultiplayerContext
         var (seatHeroes, spotHeroes) = CutsceneFormation.AssignByHeight(
             party.Select(HeightOf).ToList(), CutsceneFormation.SeatsFromCentre(seatPoints, seatForwards));
         var formation = CutsceneFormation.Compute(
-            seatPoints, seatForwards, spotHeroes.Length, CutsceneStagingContext.FrontCameras);
+            seatPoints, seatForwards, spotHeroes.Length);
         var forward = ToVector(formation.Forward);
         var placement = new GameObject("FB_CutsceneHeroPlacement").transform;
 

@@ -23,9 +23,6 @@ internal static class CutsceneStagingContext
     // the party-facing shots of an answer prompt, the one kind of shot where no line of dialogue directs anyone's gaze
     private static readonly Regex PartyShot = new("^(PartyChoice|Group)");
 
-    // the answer prompt's own shot, which looks at the whole party from the front
-    private static readonly Regex FrontShot = new("^PartyChoice");
-
     private static readonly Dictionary<CinemachineVirtualCamera, (Vector3 Position, Quaternion Rotation)> Shots = [];
     private static readonly HashSet<CinemachineVirtualCamera> Moved = [];
     private static readonly List<WorldLocationCharacter> Lookers = [];
@@ -36,14 +33,6 @@ internal static class CutsceneStagingContext
 
     internal static List<WorldLocationCharacter> RearHeroes { get; } = [];
 
-    // The authored positions and facings of the scene's front-facing party shots, which the back row lines up with
-    // (CutsceneFormation.Compute). Authored, not live, so a shot that is moving or was moved for a close-up doesn't matter.
-    internal static List<CutsceneFormation.Camera> FrontCameras =>
-        _sequence?.CameraShotsMap?
-            .Where(x => x.Value != null && FrontShot.IsMatch(x.Key) && Shots.ContainsKey(x.Value))
-            .Select(x => new CutsceneFormation.Camera(
-                ToPoint(Shots[x.Value].Position), ToPoint(Shots[x.Value].Rotation * Vector3.forward)))
-            .ToList() ?? [];
 
     internal static void Begin(NarrativeSequence sequence)
     {

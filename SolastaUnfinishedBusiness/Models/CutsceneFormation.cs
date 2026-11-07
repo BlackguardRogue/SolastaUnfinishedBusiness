@@ -9,9 +9,11 @@ namespace SolastaUnfinishedBusiness.Models;
 // only its inputs, which come from the scene, so every computer gets the same answer.
 internal static class CutsceneFormation
 {
-    // how far the back row stands behind the rearmost seat. A hero at this distance behind the row's middle gap can be seen
-    // in the Caer Cyflen party shot (evidence/cutscene-placement-8fa1ae67)
-    internal const float BackRowDistance = 1.2f;
+    // How far the back row stands behind the rearmost seat (user direction, 2026-11-07: "You can reduce the distance from the
+    // front row"; it was 1.2 m). At 0.6 m a rear hero's body clears a front hero's back, about 0.3 m deep, and stays well
+    // above the 0.3 m the user set as the closest. Measured from the rearmost seat, so the back row is straight even where
+    // the game's markers are staggered.
+    internal const float BackRowDistance = 0.6f;
 
     // How far past the end of the seated row a hero stands, and the step between heroes beyond it. There is no smallest
     // distance between back-row heroes (user direction, 2026-11-07, "remove the minimum spacing between rear heroes"): the
@@ -31,11 +33,6 @@ internal static class CutsceneFormation
         internal readonly float Z = z;
     }
 
-    internal readonly struct Camera(Point position, Point forward)
-    {
-        internal readonly Point Position = position;
-        internal readonly Point Forward = forward;
-    }
 
     internal sealed class Result(Point forward, Point right, Point[] spots)
     {
@@ -48,28 +45,21 @@ internal static class CutsceneFormation
         internal Point[] Spots { get; } = spots;
     }
 
-    // Spots for spotCount heroes given the seats they stand behind, those seats' forward directions, the scene's front-facing
-    // party cameras (the answer prompt's PartyChoice shots) and the shortest seated hero. Everything is measured from the
-    // seats given, so the row turns with the party at each whole-party teleport.
+    // Spots for spotCount heroes given the seats they stand behind and those seats' forward directions. Everything is measured
+    // from the seats given, so the row turns with the party at each whole-party teleport.
     //
-    // Each rear hero stands behind a different pair of neighbouring front heroes, seen through their gap from the front
-    // (user direction, 2026-11-07: rear heroes "properly standing in the gaps" as the front camera shows them, and other
-    // shots' clearance must not move them; overlaps with other cameras are a separate, later issue). Which gaps follows the
-    // user's sketch of the same day (evidence/cutscene-staging-e8e1a944/user-sketch-outer-gaps.jpg): with 2 rear heroes and
-    // 4 seats, one behind each outer gap (seats 1-2 and 3-4 counted along the row), the middle gap left empty. One rear hero
-    // stands behind the middle gap; 3 take all three gaps; more go past the ends of the row. With 2 seats, so a single gap,
-    // the second goes past the end on the side away from Right.
+    // Each rear hero stands exactly halfway between two neighbouring front heroes, measured along the row, and BackRowDistance
+    // behind it, whatever any camera sees (user direction, 2026-11-07: "Ignore the camera completely. Just have them be
+    // objectively between the gaps"). Which gaps follows the user's sketch of the same day
+    // (evidence/cutscene-staging-e8e1a944/user-sketch-outer-gaps.jpg): with 2 rear heroes and 4 seats, one behind each outer
+    // gap (seats 1-2 and 3-4 counted along the row), the middle gap left empty. One rear hero stands behind the middle gap; 3
+    // take all three gaps; more go past the ends of the row. With 2 seats, so a single gap, the second goes past the end on the
+    // side away from Right.
     //
-    // "Behind the gap" is as the front camera sees it. A camera close to the row, like the Nikannen scene's PartyChoice 1.66 m
-    // in front of its second-stage row, sees a hero straight behind a gap's midpoint shifted towards the middle; behind
-    // 8c426790's places past the row's ends it saw the flank heroes instead (evidence/cutscene-staging-8c426790). So each
-    // hero stands on the line from that camera through the gap's midpoint at the front row. A far camera makes that line
-    // nearly straight back, so the place hardly moves; with no front camera it is straight back.
-    internal static Result Compute(
-        IReadOnlyList<Point> seats,
-        IReadOnlyList<Point> seatForwards,
-        int spotCount,
-        IReadOnlyList<Camera> frontCameras = null)
+    // e8e1a944 and 475912d2 instead put each rear hero on the line from the answer prompt's camera through the gap. Where that
+    // camera stands close to the row (1.66 m in Nikannen's second stage) the line spreads outward, and the rear heroes ended
+    // up past the end heroes, not behind the gaps (evidence/cutscene-staging-475912d2).
+    internal static Result Compute(IReadOnlyList<Point> seats, IReadOnlyList<Point> seatForwards, int spotCount)
     {
         if (seats.Count == 0)
         {
@@ -79,62 +69,17 @@ internal static class CutsceneFormation
         var forward = AverageFlatDirection(seatForwards);
         var right = new Point(forward.Z, 0f, -forward.X);
         var laterals = seats.Select(seat => (seat.X * right.X) + (seat.Z * right.Z)).OrderBy(x => x).ToList();
-        var depths = seats.Select(seat => (seat.X * forward.X) + (seat.Z * forward.Z)).ToList();
-        var rearmost = depths.Min();
-        var rowDepth = depths.Average();
+        var rearmost = seats.Min(seat => (seat.X * forward.X) + (seat.Z * forward.Z));
         var height = seats.Average(seat => seat.Y);
-        var preferred = PreferredLaterals(laterals, spotCount);
-        var front = FrontCamera(frontCameras, forward, right, laterals, rowDepth);
         var spotDepth = rearmost - BackRowDistance;
-        var spots = new Point[preferred.Count];
-
-        for (var i = 0; i < preferred.Count; i++)
-        {
-            var lateral = preferred[i];
-
-            // through the camera and the gap's midpoint at the front row's depth, on to the back row's depth
-            if (front is var (cameraLateral, cameraDepth))
-            {
-                lateral = cameraLateral + ((lateral - cameraLateral) * (cameraDepth - spotDepth) / (cameraDepth - rowDepth));
-            }
-
-            spots[i] = new Point(
+        var spots = PreferredLaterals(laterals, spotCount)
+            .Select(lateral => new Point(
                 (right.X * lateral) + (forward.X * spotDepth),
                 height,
-                (right.Z * lateral) + (forward.Z * spotDepth));
-        }
+                (right.Z * lateral) + (forward.Z * spotDepth)))
+            .ToArray();
 
         return new Result(forward, right, spots);
-    }
-
-    // The front camera to line the back row up with, as (lateral, depth) in the row's terms, or null: the nearest of the given
-    // cameras that stands in front of the row, at least 0.5 m ahead, looking back at it, and not further to the side than the
-    // row is wide plus a few metres. The Nikannen scene has one PartyChoice for two stages 12 m apart; at the first stage it
-    // is 13 m away, which moves the places by under 0.1 m.
-    private static (float Lateral, float Depth)? FrontCamera(
-        IReadOnlyList<Camera> cameras, Point forward, Point right, List<float> laterals, float rowDepth)
-    {
-        (float Lateral, float Depth)? best = null;
-
-        foreach (var camera in cameras ?? [])
-        {
-            var depth = (camera.Position.X * forward.X) + (camera.Position.Z * forward.Z);
-            var lateral = (camera.Position.X * right.X) + (camera.Position.Z * right.Z);
-            var looksBack = (camera.Forward.X * forward.X) + (camera.Forward.Z * forward.Z) < 0f;
-
-            if (!looksBack || depth - rowDepth < 0.5f ||
-                lateral < laterals[0] - 3f || lateral > laterals[laterals.Count - 1] + 3f)
-            {
-                continue;
-            }
-
-            if (best is not { } current || depth < current.Depth)
-            {
-                best = (lateral, depth);
-            }
-        }
-
-        return best;
     }
 
     // Who stands where, by height: the sketch's short heroes at the front centre and tall ones on the flanks, with the rest in
@@ -205,7 +150,7 @@ internal static class CutsceneFormation
         return best;
     }
 
-    // positions along the row, at the front row, before the front camera's perspective is applied. laterals is sorted.
+    // positions along the row: gap midpoints, then places past the ends. laterals is sorted.
     private static List<float> PreferredLaterals(List<float> laterals, int spotCount)
     {
         var centre = (laterals[0] + laterals[laterals.Count - 1]) * 0.5f;
