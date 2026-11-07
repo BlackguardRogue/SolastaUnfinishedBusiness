@@ -748,6 +748,12 @@ internal static class MultiplayerContext
     // it for 4 or lower as well"), unless Gameplay > Campaigns > "Keep the game's order for parties of 4 or fewer" is on
     // (DisableCutsceneHeightOrderSmallParties, off by default). Off the grid only: there it changes what's shown, not game
     // state, so computers with different settings stay in sync. Map-played sequences keep the game's placement.
+#if FB_DEVELOPMENT
+    // Development builds only: how many party members take part in cutscenes, 0 for all (NarrativeDirectionManagerPatcher).
+    // Set from the mod menu and kept only while the game runs, never saved, so it can't follow a player into a release.
+    internal static int DevCutsceneHeroLimit;
+#endif
+
     internal static void PlaceExtraHeroes(NarrativeSequence sequence)
     {
         var markers = sequence.PlayerPlacementMarkers;

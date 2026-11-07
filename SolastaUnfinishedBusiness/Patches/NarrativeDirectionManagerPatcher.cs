@@ -27,6 +27,20 @@ public static class NarrativeDirectionManagerPatcher
                              .MonsterDefinition));
             }
 
+#if FB_DEVELOPMENT
+            // Development builds only: play cutscenes with the first N party members, to test the cutscene placement with
+            // parties of 2, 3 and 5 on saves that have 6 (MultiplayerContext.DevCutsceneHeroLimit, mod menu > Gameplay >
+            // Campaigns; 0 = off). Only who appears in the scene changes, not the party or the save; roles of a smaller cast
+            // are filled by the game's padding (NarrativeSequenceBuilderPatcher), as for a real small party.
+            if (MultiplayerContext.DevCutsceneHeroLimit > 0)
+            {
+                var party = Gui.GameCampaign.Party.CharactersList.Select(x => x.RulesetCharacter).ToList();
+
+                involvedGameCharacters.RemoveAll(
+                    x => party.IndexOf(x.RulesetCharacter) >= MultiplayerContext.DevCutsceneHeroLimit);
+            }
+#endif
+
             //PATCH: Only offer the first 4 players on dialogue sequences (PARTYSIZE)
             if (Main.Settings.OverridePartySize <= ToolsContext.GamePartySize
                 || Main.Settings.AllowAllPlayersOnNarrativeSequences)

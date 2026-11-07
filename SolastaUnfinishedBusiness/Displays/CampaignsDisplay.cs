@@ -113,6 +113,12 @@ internal static class CampaignsDisplay
             Main.Settings.DisableCutsceneHeightOrderSmallParties = toggle;
         }
 
+#if FB_DEVELOPMENT
+        // development builds only: play cutscenes with the first N heroes (0 = all), to test smaller parties' placement
+        UI.Slider(Gui.Localize("ModUi/&DevCutsceneHeroLimit"), ref MultiplayerContext.DevCutsceneHeroLimit, 0,
+            ToolsContext.MaxPartySize, 0, string.Empty, UI.AutoWidth());
+#endif
+
         UI.Label();
 
         toggle = Main.Settings.AddPickPocketableLoot;
