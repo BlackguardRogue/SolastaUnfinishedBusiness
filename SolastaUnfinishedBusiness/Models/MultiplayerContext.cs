@@ -742,7 +742,12 @@ internal static class MultiplayerContext
     //
     // The game simply stands hero N on marker N, so with 8 markers heroes 5 and 6 begin on that later stage, out of the
     // scene; with 4 they stay wherever they were on the map. So the number of markers doesn't say who needs a place: with
-    // more than 4 heroes the whole party is staged around the 4 seats. Parties of up to 4 keep the game's placement.
+    // more than 4 heroes the whole party is staged around the 4 seats.
+    //
+    // Parties of up to 4 are put in the same height order on the seats the game used (user direction, 2026-11-07: "implement
+    // it for 4 or lower as well"), unless Gameplay > Campaigns > "Keep the game's order for parties of 4 or fewer" is on
+    // (DisableCutsceneHeightOrderSmallParties, off by default). Off the grid only: there it changes what's shown, not game
+    // state, so computers with different settings stay in sync. Map-played sequences keep the game's placement.
     internal static void PlaceExtraHeroes(NarrativeSequence sequence)
     {
         var markers = sequence.PlayerPlacementMarkers;
@@ -761,14 +766,27 @@ internal static class MultiplayerContext
         // parties under 4 are padded with repeats (NarrativeSequenceBuilderPatcher), and a repeat already has its seat
         var extras = actors.Skip(seatCount).Where(x => x != null && !seated.Contains(x)).Distinct().ToList();
 
-        if (seats.Count == 0 || extras.Count == 0)
+        if (seats.Count == 0)
         {
             return;
         }
 
         var party = actors.Where(x => x != null).Distinct().ToList();
-
         var isTopDown = sequence.NarrativeTreeDefinition.IsTopDownNarrativeSequence;
+
+        if (extras.Count == 0)
+        {
+            // a party of up to 4: the game stood hero N on marker N, so the heroes hold the first party.Count markers (a
+            // padded repeat moves its hero to a later marker, which leaves an earlier one free; these are refilled here)
+            if (!isTopDown && SortsSmallParties(party) && party.Count <= seats.Count)
+            {
+                CutsceneStagingContext.Begin(sequence);
+                StageParty(seats.Take(party.Count).ToList(), party);
+                LogCutsceneParty("after", sequence, markers, actors);
+            }
+
+            return;
+        }
 
         if (isTopDown || party.Count <= seats.Count)
         {
@@ -800,9 +818,15 @@ internal static class MultiplayerContext
         var markers = sequence.PlayerPlacementMarkers;
         var actors = sequence.PlayerActors;
 
-        if (sequence.NarrativeTreeDefinition.IsUserContent ||
-            markers == null || markers.Length == 0 || actors == null || actors.Count <= ToolsContext.GamePartySize)
+        if (sequence.NarrativeTreeDefinition.IsUserContent || markers == null || markers.Length == 0 || actors == null)
         {
+            return;
+        }
+
+        if (actors.Count <= ToolsContext.GamePartySize)
+        {
+            RestageSmallPartyAfterTeleport(state, markers, actors);
+
             return;
         }
 
@@ -886,6 +910,51 @@ internal static class MultiplayerContext
         }
 
         Object.Destroy(placement.gameObject);
+    }
+
+    // A party of up to 4 sorted by height (PlaceExtraHeroes) is mixed up again by a whole-party teleport, which sends each role
+    // holder to its role's marker. When every hero was moved, off the grid, put the party back in height order on the markers
+    // they were sent to. A hero holding two roles (a party under 4 is padded with repeats) ends on the later marker, as in
+    // NarrativeStateTeleportCharacterBase.Begin. A teleport of only some heroes moves part of the party, so it's left alone.
+    private static void RestageSmallPartyAfterTeleport(
+        NarrativeStateTeleportCharacterBase state, Transform[] markers, List<WorldLocationCharacter> actors)
+    {
+        var party = actors.Where(x => x != null).Distinct().ToList();
+
+        if (state is NarrativeStateTeleportCharacterGameplay ||
+            state.NarrativeSequence.NarrativeTreeDefinition.IsTopDownNarrativeSequence || !SortsSmallParties(party))
+        {
+            return;
+        }
+
+        var sentTo = new Dictionary<WorldLocationCharacter, Transform>();
+
+        foreach (var teleport in state.NarrativeStateDescription.CharacterTeleportDescriptions)
+        {
+            var index = teleport.PlayerMarkerIndex;
+
+            if (index >= 0 && index < markers.Length && markers[index] != null &&
+                state.PlayerRolesMap.TryGetValue(teleport.Role, out var actor) && actor != null)
+            {
+                sentTo[actor] = markers[index];
+            }
+        }
+
+        var seats = sentTo.Values.Distinct().ToList();
+
+        if (sentTo.Count != party.Count || seats.Count != party.Count)
+        {
+            return;
+        }
+
+        StageParty(seats, party);
+        LogCutsceneParty("after teleport", state.NarrativeSequence, markers, actors);
+    }
+
+    // whether a party of up to 4 is put in height order: two or more heroes, and the player hasn't asked to keep the game's order
+    private static bool SortsSmallParties(List<WorldLocationCharacter> party)
+    {
+        return party.Count >= 2 && !Main.Settings.DisableCutsceneHeightOrderSmallParties;
     }
 
     // Places the whole party off the grid: the shortest heroes in front (shorter at the centre, taller on the flanks), the

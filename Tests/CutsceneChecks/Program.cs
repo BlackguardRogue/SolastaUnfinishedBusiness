@@ -153,6 +153,23 @@ var (firstRankSeats, _) = CutsceneFormation.AssignByHeight(ranked, CutsceneForma
 Check("first stage: front row left to right reads 3 1 2 4",
     Enumerable.Range(0, 4).OrderByDescending(i => firstRow[i].X).Select(i => ranked[firstRankSeats[i]]).SequenceEqual(new[] { 3, 1, 2, 4 }));
 
+// parties of up to 4 (user direction, 2026-11-07): the same order on the markers the game used, the first N
+string SmallParty(int count)
+{
+    var seats = stageSeats.Take(count).ToArray();
+    var forwards = stageForwards.Take(count).ToArray();
+    var heights = Enumerable.Range(1, count).ToArray();
+    var (placed, rear) = CutsceneFormation.AssignByHeight(heights, CutsceneFormation.SeatsFromCentre(seats, forwards));
+
+    return rear.Length > 0
+        ? "rear!"
+        : string.Join(" ", Enumerable.Range(0, count).OrderByDescending(i => seats[i].X).Select(i => heights[placed[i]]));
+}
+
+Check("4 heroes: 3 1 2 4", SmallParty(4) == "3 1 2 4");
+Check("3 heroes: 3 1 2", SmallParty(3) == "3 1 2");
+Check("2 heroes: 1 2", SmallParty(2) == "1 2");
+
 // equal heights keep the party's order, so the result doesn't depend on anything but the party
 var (sameSeats, sameSpots) = CutsceneFormation.AssignByHeight([70, 70, 70, 70, 70], seatsFromCentre);
 
