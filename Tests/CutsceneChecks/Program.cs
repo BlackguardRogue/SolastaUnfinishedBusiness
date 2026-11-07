@@ -54,7 +54,7 @@ var caerGaps = caerLaterals.Zip(caerLaterals.Skip(1), (a, b) => (a + b) * 0.5f).
 
 Check("7 spots are all distinct", smallestGap >= 0.01f);
 Check("7 spots: the gaps are used at their midpoints",
-    caerGaps.All(g => many.Spots.Take(3).Any(s => Math.Abs(Along(s, many.Right) - g) < 0.001f)));
+    caerGaps.All(g => many.Spots.Any(s => Math.Abs(Along(s, many.Right) - g) < 0.001f)));
 Check("spots go out to both ends", many.Spots.Any(s => s.Z > 9.2f) && many.Spots.Any(s => s.Z < 7.8f));
 
 // a single seat: the spots still don't stack
@@ -80,7 +80,7 @@ var stage = CutsceneFormation.Compute(stageSeats, stageForwards, 2);
 // 475912d2 put them at 8.64 and 10.36, past the end heroes, by lining them up with the prompt camera.
 Console.WriteLine($"      Nikannen second stage: {string.Join(" ", stage.Spots.Select(s => $"({s.X:F2}, {s.Z:F2})"))}");
 Check("Nikannen: rear heroes exactly behind the outer gaps (9.0 and 10.0)",
-    Math.Abs(stage.Spots[0].X - 9.0f) < 0.001f && Math.Abs(stage.Spots[1].X - 10.0f) < 0.001f);
+    Math.Abs(stage.Spots[0].X - 10.0f) < 0.001f && Math.Abs(stage.Spots[1].X - 9.0f) < 0.001f);
 Check("Nikannen: both inside the row's span, between the end heroes", stage.Spots.All(s => s.X is > 8.75f and < 10.25f));
 Check("Nikannen: both at the back-row distance (0.6 m)",
     stage.Spots.All(s => Math.Abs(s.Z - (-17.5f - CutsceneFormation.BackRowDistance)) < 0.001f));
@@ -91,7 +91,7 @@ Point[] firstForwards = [new(0f, 0f, 1f), new(0f, 0f, 1f), new(0.2f, 0f, 1f), ne
 var first = CutsceneFormation.Compute(firstSeats, firstForwards, 2);
 
 Check("first stage: behind the outer gaps (9.05 and 10.15), 0.6 m behind the rearmost marker",
-    Math.Abs(first.Spots[0].X - 9.05f) < 0.001f && Math.Abs(first.Spots[1].X - 10.15f) < 0.001f &&
+    Math.Abs(first.Spots[0].X - 10.15f) < 0.001f && Math.Abs(first.Spots[1].X - 9.05f) < 0.001f &&
     first.Spots.All(s => Math.Abs(s.Z - (-29.4f - CutsceneFormation.BackRowDistance)) < 0.001f));
 
 // one rear hero: behind the middle gap; two seats (one gap): the second past the end
@@ -107,7 +107,7 @@ Check("two seats: one behind the gap, one past an end",
 // 4 + 3: the rear heroes stand behind gaps, on both sides of the middle, and turn with the row
 var seven = CutsceneFormation.Compute(stageSeats, stageForwards, 3);
 
-Check("4 + 3: one each side of the middle", seven.Spots[1].X < 9.5f && seven.Spots[2].X > 9.5f);
+Check("4 + 3: one each side of the middle", seven.Spots.Any(s => s.X < 9.4f) && seven.Spots.Any(s => s.X > 9.6f) && seven.Spots[0].X > seven.Spots[2].X);
 Check("4 + 3: all behind the row", seven.Spots.All(s => Math.Abs(s.Z - (-17.5f - CutsceneFormation.BackRowDistance)) < 0.01f));
 
 Point[] turnedSeats = [new(0f, 0f, 9.25f), new(0f, 0f, 9.75f), new(0f, 0f, 10.25f), new(0f, 0f, 8.75f)];
@@ -132,6 +132,26 @@ Check("the two shortest stand at the front centre", inner.OrderBy(x => x).Sequen
 Check("the next two stand on the flanks (V shape)", outer.OrderBy(x => x).SequenceEqual(new[] { 66, 68 }));
 Check("the two tallest stand behind, shorter first", spotHeroes.Select(h => heights[h]).SequenceEqual(new[] { 70, 75 }));
 Check("everyone has one place", seatHeroes.Concat(spotHeroes).OrderBy(x => x).SequenceEqual(Enumerable.Range(0, 6)));
+
+// the user's layout, heights 1 (shortest) to 6, seen from the front (left = larger x here, the row facing +z):
+//    5 6
+//   3 1 2 4
+int[] ranked = [1, 2, 3, 4, 5, 6];
+var (rankSeats, rankSpots) = CutsceneFormation.AssignByHeight(ranked, seatsFromCentre);
+var frontLeftToRight = Enumerable.Range(0, 4).OrderByDescending(i => stageSeats[i].X).Select(i => ranked[rankSeats[i]]).ToArray();
+var rankStage = CutsceneFormation.Compute(stageSeats, stageForwards, 2);
+
+Check("front row left to right reads 3 1 2 4", frontLeftToRight.SequenceEqual(new[] { 3, 1, 2, 4 }));
+Check("back row: 5 on the left (larger x), 6 on the right",
+    rankSpots.Select(h => ranked[h]).SequenceEqual(new[] { 5, 6 }) && rankStage.Spots[0].X > rankStage.Spots[1].X);
+
+// the first stage's staggered markers (z -29.3 and -29.4) still pair up: 3 1 2 4
+Point[] firstRow = [new(9.3f, 0f, -29.4f), new(9.9f, 0f, -29.3f), new(8.8f, 0f, -29.3f), new(10.4f, 0f, -29.3f)];
+Point[] firstRowForwards = [new(0f, 0f, 1f), new(0f, 0f, 1f), new(0.2f, 0f, 1f), new(-0.2f, 0f, 1f)];
+var (firstRankSeats, _) = CutsceneFormation.AssignByHeight(ranked, CutsceneFormation.SeatsFromCentre(firstRow, firstRowForwards));
+
+Check("first stage: front row left to right reads 3 1 2 4",
+    Enumerable.Range(0, 4).OrderByDescending(i => firstRow[i].X).Select(i => ranked[firstRankSeats[i]]).SequenceEqual(new[] { 3, 1, 2, 4 }));
 
 // equal heights keep the party's order, so the result doesn't depend on anything but the party
 var (sameSeats, sameSpots) = CutsceneFormation.AssignByHeight([70, 70, 70, 70, 70], seatsFromCentre);

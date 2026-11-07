@@ -72,7 +72,10 @@ internal static class CutsceneFormation
         var rearmost = seats.Min(seat => (seat.X * forward.X) + (seat.Z * forward.Z));
         var height = seats.Average(seat => seat.Y);
         var spotDepth = rearmost - BackRowDistance;
+        // left to right as seen from the front (larger lateral first), so the shorter back-row hero, who AssignByHeight lists
+        // first, stands on the left, as in the user's "   5 6 / 3124"
         var spots = PreferredLaterals(laterals, spotCount)
+            .OrderByDescending(lateral => lateral)
             .Select(lateral => new Point(
                 (right.X * lateral) + (forward.X * spotDepth),
                 height,
@@ -85,7 +88,8 @@ internal static class CutsceneFormation
     // Who stands where, by height (user direction, 2026-11-07: "all the shortest characters are in the front row, and the
     // taller characters are behind"): the shortest heroes take the seats and the tallest the back row, where they show over
     // the front row's heads. Within the front row the shorter half stands at the centre and the taller half on the flanks, as
-    // in the user's first sketch. The back row goes shorter first, so the shorter rear hero takes the first spot. Before,
+    // in the user's first sketch, each pair shorter on the left (SeatsFromCentre). The back row goes shorter first, and
+    // Compute lists its spots left first, so the shorter rear hero stands on the left. Before,
     // the tallest stood on the flanks and middle heights behind, and a tall flank hero could hide a rear one
     // (evidence/cutscene-staging-85858711). heights has one entry per hero, in the party's order, which also settles ties.
     // seatsFromCentre lists the seats from the row's centre outward (SeatsFromCentre). Returns the hero index for each seat,
@@ -105,7 +109,12 @@ internal static class CutsceneFormation
         return (seats, sorted.Skip(seatCount).ToArray());
     }
 
-    // the seats' indexes from the row's centre outward; equally central seats keep their order
+    // The seats' indexes from the row's centre outward, in pairs, and within each pair the one on the left as seen from the
+    // front first. Seen from the front means facing the party, as an answer prompt's camera does, so the left is the
+    // party's own right, the larger lateral (in Nikannen's second stage Thgil, at x 10.3, stood at the left of the prompt
+    // shot). AssignByHeight gives these places out from the shortest, so the front row reads 3 1 2 4 from left to right
+    // (user direction, 2026-11-07: each pair shorter to taller from left to right, "   5 6 / 3124"). Pairs are taken by
+    // rank rather than by equal distance, because staggered markers are never exactly equally far from the centre.
     internal static int[] SeatsFromCentre(IReadOnlyList<Point> seats, IReadOnlyList<Point> seatForwards)
     {
         var forward = AverageFlatDirection(seatForwards);
@@ -113,7 +122,13 @@ internal static class CutsceneFormation
         var laterals = seats.Select(seat => (seat.X * right.X) + (seat.Z * right.Z)).ToList();
         var centre = (laterals.Min() + laterals.Max()) * 0.5f;
 
-        return Enumerable.Range(0, seats.Count).OrderBy(i => Math.Abs(laterals[i] - centre)).ToArray();
+        return Enumerable.Range(0, seats.Count)
+            .OrderBy(i => Math.Abs(laterals[i] - centre))
+            .Select((seat, rank) => (seat, pair: rank / 2))
+            .OrderBy(x => x.pair)
+            .ThenByDescending(x => laterals[x.seat])
+            .Select(x => x.seat)
+            .ToArray();
     }
 
     // Which of the points a camera looks at, or -1. Scene cameras' numbers don't say which marker they're for (the Nikannen
