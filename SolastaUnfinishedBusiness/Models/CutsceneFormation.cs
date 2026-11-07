@@ -32,6 +32,12 @@ internal static class CutsceneFormation
     private const float FramedPointTolerance = 0.3f;
     private const float FramedPointReach = 6f;
 
+    // A camera behind the party, looking the way it faces, shows the NPC over the heroes' shoulders. A hero in the middle of
+    // that view blocks it even at a distance: in the Nikannen scene one 1.07 m ahead of GroupMediumB filled the frame in 5 lines
+    // (evidence/cutscene-staging-168c8aa2). The front row, at the distance the shot is authored for, stays at its edges.
+    internal const float ViewCorridorLength = 2.5f;
+    internal const float ViewCorridorHalfWidth = 0.6f;
+
     // how a spot in front of a camera moves: closer to the row first, then along it, in these steps
     private const float DepthStep = 0.15f;
     private const float ShiftStep = 0.25f;
@@ -64,18 +70,17 @@ internal static class CutsceneFormation
     // Spots for spotCount heroes given the seats they stand behind, those seats' forward directions, and the scene's camera
     // positions. Everything is measured from the seats given, so the row turns with the party at each whole-party teleport.
     //
-    // The first spot is behind the row's middle gap. With 2 spots the second goes past the end of the row, as the layout
-    // tested in game: behind the outer gaps of a row of markers 0.5 m apart, both heroes were hidden (1.6.17.2,
-    // evidence/ingame-cutscene-1.6.17.2). With 3 or more they go behind the other gaps, then past the ends: 4 in front and 3
-    // behind for 7. Parties stop at 6 today, so that case isn't reached in play.
-    //
-    // The first side is the one away from Right. In every scene logged so far seat 2 is at that end, which is the right of
-    // the screen in the Caer Cyflen party shot, where the other end is hard up against the frame.
+    // The first spot is behind the row's middle gap. With 2 spots the second goes behind the gap beside shortestSeat, where the
+    // short hero leaves a hero behind visible. Past the end of the row, a tall hero on the flank hid them
+    // (evidence/cutscene-staging-168c8aa2). With no shortestSeat (map-played sequences, which aren't staged by height) it goes
+    // past the end of the row, on the side away from Right. With 3 or more they go behind the other gaps, then past the ends: 4
+    // in front and 3 behind for 7. Parties stop at 6 today, so that case isn't reached in play.
     internal static Result Compute(
         IReadOnlyList<Point> seats,
         IReadOnlyList<Point> seatForwards,
         int spotCount,
-        IReadOnlyList<Camera> cameras = null)
+        IReadOnlyList<Camera> cameras = null,
+        Point? shortestSeat = null)
     {
         if (seats.Count == 0)
         {
@@ -87,7 +92,8 @@ internal static class CutsceneFormation
         var laterals = seats.Select(seat => (seat.X * right.X) + (seat.Z * right.Z)).OrderBy(x => x).ToList();
         var rearmost = seats.Min(seat => (seat.X * forward.X) + (seat.Z * forward.Z));
         var height = seats.Average(seat => seat.Y);
-        var preferred = PreferredLaterals(laterals, spotCount);
+        var preferred = PreferredLaterals(
+            laterals, spotCount, shortestSeat is { } seat2 ? (seat2.X * right.X) + (seat2.Z * right.Z) : null);
         var obstacles = (cameras ?? [])
             .Where(camera => camera.Position.Y - height < CameraHeightAboveSeats)
             .ToList();
@@ -105,9 +111,27 @@ internal static class CutsceneFormation
 
         bool IsInFrontOfCamera(Point spot, Camera camera)
         {
-            return FlatDistance(spot, camera.Position) < CameraClearance &&
-                   ((spot.X - camera.Position.X) * camera.Forward.X) +
-                   ((spot.Z - camera.Position.Z) * camera.Forward.Z) > 0f;
+            var dx = spot.X - camera.Position.X;
+            var dz = spot.Z - camera.Position.Z;
+            var length = (float)Math.Sqrt((camera.Forward.X * camera.Forward.X) + (camera.Forward.Z * camera.Forward.Z));
+
+            if (length < 0.001f)
+            {
+                return false;
+            }
+
+            var along = ((dx * camera.Forward.X) + (dz * camera.Forward.Z)) / length;
+
+            if (along <= 0f)
+            {
+                return false;
+            }
+
+            var across = Math.Abs((dx * camera.Forward.Z) - (dz * camera.Forward.X)) / length;
+            var looksWithParty = (camera.Forward.X * forward.X) + (camera.Forward.Z * forward.Z) > 0f;
+
+            return FlatDistance(spot, camera.Position) < CameraClearance ||
+                   (looksWithParty && along < ViewCorridorLength && across < ViewCorridorHalfWidth);
         }
 
         bool IsClear(Point spot)
@@ -124,8 +148,7 @@ internal static class CutsceneFormation
 
             // The preferred place first, then closer to the row at the same place along it, then further along it at each of
             // those distances, outward first. If nothing is clear the preferred spot stands: no scene is better for losing a
-            // hero. Moving closer leaves a camera's view less blocked and keeps the row centred; moving along it takes the
-            // hero out of the view altogether.
+            // hero. Moving closer helps with a camera to one side; one looking straight along the spot needs the move sideways.
             var spot = SpotAt(lateral, BackRowDistance);
             var found = false;
 
@@ -226,7 +249,7 @@ internal static class CutsceneFormation
     }
 
     // positions along the row, before keeping clear of cameras. laterals is sorted.
-    private static List<float> PreferredLaterals(List<float> laterals, int spotCount)
+    private static List<float> PreferredLaterals(List<float> laterals, int spotCount, float? shortestLateral)
     {
         var centre = (laterals[0] + laterals[laterals.Count - 1]) * 0.5f;
         var gaps = laterals.Zip(laterals.Skip(1), (a, b) => (a + b) * 0.5f).ToList();
@@ -248,7 +271,18 @@ internal static class CutsceneFormation
 
         if (spotCount == 2)
         {
-            result.Add(middle - pastEnd);
+            if (shortestLateral is not { } shortest || gaps.Count == 0)
+            {
+                result.Add(middle - pastEnd);
+
+                return result;
+            }
+
+            var side = shortest < middle ? -1 : 1;
+            var nextGap = middleIndex + side;
+            var distance = nextGap >= 0 && nextGap < gaps.Count ? Math.Abs(gaps[nextGap] - middle) : 0f;
+
+            result.Add(middle + (side * Math.Max(distance, SideSpacing)));
 
             return result;
         }

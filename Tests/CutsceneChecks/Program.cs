@@ -74,12 +74,37 @@ CutsceneFormation.Camera npcSingle0 = new(new Point(9.5f, 0.11f, -17.61f), new P
 CutsceneFormation.Camera high = new(new Point(9.5f, 5f, -18.7f), new Point(0f, -0.5f, 0.8f));
 var stage = CutsceneFormation.Compute(stageSeats, stageForwards, 2, [groupMediumB, npcSingle0, high]);
 
-Check("Nikannen: the spot in front of the camera clears it", Flat(stage.Spots[0], groupMediumB.Position) >= CutsceneFormation.CameraClearance);
-Check("Nikannen: it stays behind the middle gap", Math.Abs(stage.Spots[0].X - 9.5f) < 0.01f);
-Check("Nikannen: by coming closer, no nearer than the smallest distance",
-    stage.Spots[0].Z < -17.5f - CutsceneFormation.MinBackRowDistance + 0.01f && stage.Spots[0].Z > -18.7f);
-Check("Nikannen: the second hero, clear already, stays at the full distance", Math.Abs(stage.Spots[1].Z - (-18.7f)) < 0.01f);
+Check("Nikannen: no spot is in GroupMediumB's view, as Kushiel's was at 0.45 m", stage.Spots.All(s =>
+    Math.Abs(s.X - groupMediumB.Position.X) >= CutsceneFormation.ViewCorridorHalfWidth - 0.05f));
+Check("Nikannen: no spot is within the clearance of it", stage.Spots.All(s =>
+    Flat(s, groupMediumB.Position) >= CutsceneFormation.CameraClearance));
+Check("Nikannen: all stay behind the row, no closer than the smallest distance", stage.Spots.All(s =>
+    s.Z <= -17.5f - CutsceneFormation.MinBackRowDistance + 0.01f));
 Check("Nikannen: the two heroes stay apart", Flat(stage.Spots[0], stage.Spots[1]) >= CutsceneFormation.SideSpacing - 0.01f);
+Check("Nikannen: they stay with the group", stage.Spots.All(s => Flat(s, new Point(9.5f, 0f, -17.5f)) < 3.5f));
+
+// a camera to one side, whose view the spot isn't in: coming closer is enough, and the hero stays behind the gap
+CutsceneFormation.Camera toOneSide = new(new Point(10.2f, 1f, -18.9f), new Point(0f, 0f, 1f));
+var closer = CutsceneFormation.Compute(stageSeats, stageForwards, 1, [toOneSide]);
+
+Check("a camera to one side: the hero comes closer", closer.Spots[0].Z > -18.7f && Math.Abs(closer.Spots[0].X - 9.5f) < 0.01f);
+Check("and no closer than the limit", closer.Spots[0].Z <= -17.5f - CutsceneFormation.MinBackRowDistance + 0.01f);
+
+// a camera in front of the party, looking back at it, only counts when very close: heroes behind the row are in its shot anyway
+CutsceneFormation.Camera fromTheFront = new(new Point(9.5f, 1f, -16.5f), new Point(0f, 0f, -1f));
+var frontView = CutsceneFormation.Compute(stageSeats, stageForwards, 1, [fromTheFront]);
+
+Check("a camera in front moves nothing", Math.Abs(frontView.Spots[0].Z - (-18.7f)) < 0.01f && Math.Abs(frontView.Spots[0].X - 9.5f) < 0.01f);
+
+// the second rear hero stands on the side of the shortest front hero, not past the end behind a tall one
+var besideShort = CutsceneFormation.Compute(stageSeats, stageForwards, 2, null, stageSeats[1]);
+var besideShortOther = CutsceneFormation.Compute(stageSeats, stageForwards, 2, null, stageSeats[0]);
+
+Check("second rear hero: towards the shortest hero's side", besideShort.Spots[1].X != besideShortOther.Spots[1].X);
+Check("second rear hero: inside the row's span, not past its end",
+    besideShort.Spots[1].X is > 8.75f and < 10.5f && besideShortOther.Spots[1].X is > 8.65f and < 10.25f);
+Check("second rear hero: at least the spacing from the first",
+    Flat(besideShort.Spots[0], besideShort.Spots[1]) >= CutsceneFormation.SideSpacing - 0.01f);
 
 // a camera so placed that every allowed distance is within its clearance, in front of it: the hero moves along the row
 CutsceneFormation.Camera tight = new(new Point(9.5f, 1f, -18.75f), new Point(0f, 0f, 1f));
