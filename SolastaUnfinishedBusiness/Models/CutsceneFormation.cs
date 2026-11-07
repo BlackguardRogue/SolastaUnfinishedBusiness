@@ -54,11 +54,11 @@ internal static class CutsceneFormation
     //
     // Each rear hero stands behind a different pair of neighbouring front heroes, seen through their gap from the front
     // (user direction, 2026-11-07: rear heroes "properly standing in the gaps" as the front camera shows them, and other
-    // shots' clearance must not move them; overlaps with other cameras are a separate, later issue). The first is behind the
-    // middle gap. With 2, the second is behind the gap beside shortestSeat, where the short hero leaves them visible; past the
-    // end of the row a tall flank hero hid them (evidence/cutscene-staging-168c8aa2). With no shortestSeat (map-played
-    // sequences, which aren't staged by height) it goes past the end of the row, on the side away from Right. With 3 or more
-    // they take the other gaps, then places past the ends: 4 in front and 3 behind for 7. Parties stop at 6 today.
+    // shots' clearance must not move them; overlaps with other cameras are a separate, later issue). Which gaps follows the
+    // user's sketch of the same day (evidence/cutscene-staging-e8e1a944/user-sketch-outer-gaps.jpg): with 2 rear heroes and
+    // 4 seats, one behind each outer gap (seats 1-2 and 3-4 counted along the row), the middle gap left empty. One rear hero
+    // stands behind the middle gap; 3 take all three gaps; more go past the ends of the row. With 2 seats, so a single gap,
+    // the second goes past the end on the side away from Right.
     //
     // "Behind the gap" is as the front camera sees it. A camera close to the row, like the Nikannen scene's PartyChoice 1.66 m
     // in front of its second-stage row, sees a hero straight behind a gap's midpoint shifted towards the middle; behind
@@ -69,8 +69,7 @@ internal static class CutsceneFormation
         IReadOnlyList<Point> seats,
         IReadOnlyList<Point> seatForwards,
         int spotCount,
-        IReadOnlyList<Camera> frontCameras = null,
-        Point? shortestSeat = null)
+        IReadOnlyList<Camera> frontCameras = null)
     {
         if (seats.Count == 0)
         {
@@ -84,8 +83,7 @@ internal static class CutsceneFormation
         var rearmost = depths.Min();
         var rowDepth = depths.Average();
         var height = seats.Average(seat => seat.Y);
-        var preferred = PreferredLaterals(
-            laterals, spotCount, shortestSeat is { } seat2 ? (seat2.X * right.X) + (seat2.Z * right.Z) : null);
+        var preferred = PreferredLaterals(laterals, spotCount);
         var front = FrontCamera(frontCameras, forward, right, laterals, rowDepth);
         var spotDepth = rearmost - BackRowDistance;
         var spots = new Point[preferred.Count];
@@ -208,7 +206,7 @@ internal static class CutsceneFormation
     }
 
     // positions along the row, at the front row, before the front camera's perspective is applied. laterals is sorted.
-    private static List<float> PreferredLaterals(List<float> laterals, int spotCount, float? shortestLateral)
+    private static List<float> PreferredLaterals(List<float> laterals, int spotCount)
     {
         var centre = (laterals[0] + laterals[laterals.Count - 1]) * 0.5f;
         var gaps = laterals.Zip(laterals.Skip(1), (a, b) => (a + b) * 0.5f).ToList();
@@ -226,24 +224,20 @@ internal static class CutsceneFormation
         var middle = middleIndex < 0 ? centre : gaps[middleIndex];
         var pastEnd = Math.Max(((laterals[laterals.Count - 1] - laterals[0]) * 0.5f) + SideMargin, PastEndStep);
 
+        // the user's sketch: two rear heroes behind the two outer gaps, the middle one left empty
+        if (spotCount == 2 && gaps.Count >= 2)
+        {
+            result.Add(gaps[0]);
+            result.Add(gaps[gaps.Count - 1]);
+
+            return result;
+        }
+
         result.Add(middle);
 
         if (spotCount == 2)
         {
-            if (shortestLateral is not { } shortest || gaps.Count == 0)
-            {
-                result.Add(middle - pastEnd);
-
-                return result;
-            }
-
-            // the gap on the shortest hero's side, at its midpoint however narrow; past that end of the row if there is none
-            var side = shortest < middle ? -1 : 1;
-            var nextGap = middleIndex + side;
-
-            result.Add(nextGap >= 0 && nextGap < gaps.Count
-                ? gaps[nextGap]
-                : (side < 0 ? laterals[0] - SideMargin : laterals[laterals.Count - 1] + SideMargin));
+            result.Add(middle - pastEnd);
 
             return result;
         }

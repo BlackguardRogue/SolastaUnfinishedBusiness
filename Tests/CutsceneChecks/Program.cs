@@ -26,9 +26,10 @@ var caer = CutsceneFormation.Compute(caerSeats, caerForwards, 2);
 Check("the party faces the seats' way", caer.Forward.X > 0.99f);
 Check("heroes 5 and 6 are behind every seat", caer.Spots.All(s =>
     caerSeats.All(seat => Along(s, caer.Forward) <= Along(seat, caer.Forward) - 1f)));
-Check("hero 5 is behind the middle of the row (z about 8.5)", Math.Abs(caer.Spots[0].Z - 8.5f) < 0.15f);
-Check("hero 6 is past seat 2's end of the row (z above 9.2)", caer.Spots[1].Z > 9.2f);
-Check("heroes 5 and 6 are at least 1 m apart (they were 0.5 m apart)", Flat(caer.Spots[0], caer.Spots[1]) >= 1f);
+// the user's sketch (evidence/cutscene-staging-e8e1a944/user-sketch-outer-gaps.jpg): behind the two outer gaps, z about 9.0 and 8.05
+Check("heroes 5 and 6 behind the two outer gaps (z about 9.0 and 8.05)",
+    caer.Spots.Any(s => Math.Abs(s.Z - 9.0f) < 0.1f) && caer.Spots.Any(s => Math.Abs(s.Z - 8.05f) < 0.1f));
+Check("nobody behind the middle gap (z about 8.55)", caer.Spots.All(s => Math.Abs(s.Z - 8.55f) > 0.3f));
 Check("they stand within 3 m of the row's middle", caer.Spots.All(s => Flat(s, new Point(7.1f, 6f, 8.5f)) < 3f));
 Check("they stand at the seats' height", caer.Spots.All(s => Math.Abs(s.Y - 6f) < 0.01f));
 
@@ -83,54 +84,46 @@ CutsceneFormation.Camera npcSingle0 = new(new Point(9.5f, 0.11f, -17.61f), new P
 static float SeenAtRow(CutsceneFormation.Camera camera, Point spot) =>
     camera.Position.X + ((spot.X - camera.Position.X) * (-17.5f - camera.Position.Z) / (spot.Z - camera.Position.Z));
 
-var stage = CutsceneFormation.Compute(stageSeats, stageForwards, 2, [partyChoice, groupMediumB, npcSingle0], stageSeats[1]);
+var stage = CutsceneFormation.Compute(stageSeats, stageForwards, 2, [partyChoice, groupMediumB, npcSingle0]);
 
 Console.WriteLine($"      Nikannen second stage: {string.Join(" ", stage.Spots.Select(s => $"({s.X:F2}, {s.Z:F2})"))}");
-Check("Nikannen: from PartyChoice the first rear hero is seen through the middle gap (9.5)",
-    Math.Abs(SeenAtRow(partyChoice, stage.Spots[0]) - 9.5f) < 0.001f);
-Check("Nikannen: and the second through the gap beside the shortest hero (10.0)",
+Check("Nikannen: from PartyChoice the rear heroes are seen through the two outer gaps (9.0 and 10.0)",
+    Math.Abs(SeenAtRow(partyChoice, stage.Spots[0]) - 9.0f) < 0.001f &&
     Math.Abs(SeenAtRow(partyChoice, stage.Spots[1]) - 10.0f) < 0.001f);
+Check("Nikannen: the middle gap (9.5) is left empty, as in the user's sketch",
+    stage.Spots.All(s => Math.Abs(SeenAtRow(partyChoice, s) - 9.5f) > 0.25f));
 Check("Nikannen: both at the back-row distance",
     stage.Spots.All(s => Math.Abs(s.Z - (-17.5f - CutsceneFormation.BackRowDistance)) < 0.001f));
 
 // other cameras don't move them (user direction, 2026-11-07); clearing them is a later, separate change
-var frontOnly = CutsceneFormation.Compute(stageSeats, stageForwards, 2, [partyChoice], stageSeats[1]);
+var frontOnly = CutsceneFormation.Compute(stageSeats, stageForwards, 2, [partyChoice]);
 
 Check("Nikannen: cameras behind the row or looking away move nothing",
     stage.Spots.Zip(frontOnly.Spots, (a, b) => Flat(a, b)).All(x => x < 0.001f));
 
-var notFront = CutsceneFormation.Compute(stageSeats, stageForwards, 2, [groupMediumB, npcSingle0], stageSeats[1]);
+var notFront = CutsceneFormation.Compute(stageSeats, stageForwards, 2, [groupMediumB, npcSingle0]);
 
-Check("Nikannen: with no front camera, straight behind the gaps' midpoints",
-    Math.Abs(notFront.Spots[0].X - 9.5f) < 0.001f && Math.Abs(notFront.Spots[1].X - 10.0f) < 0.001f);
+Check("Nikannen: with no front camera, straight behind the outer gaps' midpoints",
+    Math.Abs(notFront.Spots[0].X - 9.0f) < 0.001f && Math.Abs(notFront.Spots[1].X - 10.0f) < 0.001f);
 
 // the first stage, 12 m further back: the same PartyChoice is 13.5 m away, so the places hardly move
 Point[] firstSeats = [new(9.3f, 0f, -29.4f), new(9.9f, 0f, -29.3f), new(8.8f, 0f, -29.3f), new(10.4f, 0f, -29.3f)];
 Point[] firstForwards = [new(0f, 0f, 1f), new(0f, 0f, 1f), new(0.2f, 0f, 1f), new(-0.2f, 0f, 1f)];
-var firstFar = CutsceneFormation.Compute(firstSeats, firstForwards, 2, [partyChoice], firstSeats[1]);
-var firstNone = CutsceneFormation.Compute(firstSeats, firstForwards, 2, null, firstSeats[1]);
+var firstFar = CutsceneFormation.Compute(firstSeats, firstForwards, 2, [partyChoice]);
+var firstNone = CutsceneFormation.Compute(firstSeats, firstForwards, 2);
 
 Check("first stage: a front camera 13.5 m away moves the places by under 0.1 m",
     firstFar.Spots.Zip(firstNone.Spots, (a, b) => Flat(a, b)).All(x => x < 0.1f));
 
-// the second rear hero stands on the side of the shortest front hero, not past the end behind a tall one
-var besideShort = CutsceneFormation.Compute(stageSeats, stageForwards, 2, null, stageSeats[1]);
-var besideShortOther = CutsceneFormation.Compute(stageSeats, stageForwards, 2, null, stageSeats[0]);
+// one rear hero: behind the middle gap; two seats (one gap): the second past the end
+var single1 = CutsceneFormation.Compute(stageSeats, stageForwards, 1);
 
-Check("second rear hero: towards the shortest hero's side", besideShort.Spots[1].X != besideShortOther.Spots[1].X);
-Check("second rear hero: inside the row's span, not past its end",
-    besideShort.Spots[1].X is > 8.75f and < 10.5f && besideShortOther.Spots[1].X is > 8.65f and < 10.25f);
-// a narrow row (markers 0.5 m apart) with no camera in the way: both rear heroes at the exact gap midpoints, 0.5 m apart,
-// not pushed out to behind a flank hero as the old 0.8 m floor did (evidence/cutscene-staging-79619edc)
-Check("narrow row: first rear hero at the middle gap's midpoint", Math.Abs(besideShort.Spots[0].X - 9.5f) < 0.001f);
-Check("narrow row: second at the next gap's midpoint, shortest hero's side",
-    Math.Abs(besideShort.Spots[1].X - 10.0f) < 0.001f && Math.Abs(besideShortOther.Spots[1].X - 9.0f) < 0.001f);
-Check("narrow row: both at the back-row distance",
-    besideShort.Spots.All(s => Math.Abs(s.Z - (-17.5f - CutsceneFormation.BackRowDistance)) < 0.001f));
+Check("one rear hero: behind the middle gap", Math.Abs(single1.Spots[0].X - 9.5f) < 0.001f);
 
-var stageNoCameras = CutsceneFormation.Compute(stageSeats, stageForwards, 2);
+var twoSeats = CutsceneFormation.Compute([stageSeats[0], stageSeats[1]], [stageForwards[0], stageForwards[1]], 2);
 
-Check("Nikannen: with no camera nearby, the first spot is behind the middle gap", Math.Abs(stageNoCameras.Spots[0].X - 9.5f) < 0.01f);
+Check("two seats: one behind the gap, one past an end",
+    Math.Abs(twoSeats.Spots[0].X - 9.5f) < 0.001f && (twoSeats.Spots[1].X < 9.25f || twoSeats.Spots[1].X > 9.75f));
 
 // Caer Cyflen with a camera far away: the layout tested in game doesn't move
 var caerFar = CutsceneFormation.Compute(caerSeats, caerForwards, 2,
