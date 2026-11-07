@@ -21,14 +21,15 @@ namespace SolastaUnfinishedBusiness.Races;
 ///             GameLocationCharacterPatcher) applies it in the shared light category.
 ///         </item>
 ///         <item>
-///             On: the daylight rule here. The condition applies while the hero stands in an exterior sector whose
+///             On: the daylight rule here, with a condition of its own, Sunlight Sensitivity, whose tooltip states
+///             these terms. It applies while the hero stands in an exterior sector whose
 ///             hourly outdoor light is Bright (08:00 to 18:00 in Solasta 1.5.97), whatever light sources are near: a
 ///             torch at night doesn't trigger it. Magical darkness or a heavily obscuring area (Fog Cloud, smoke)
 ///             around the hero stops it (<see cref="IsShelteredFromSunlight" />). The light affinity code then skips
 ///             these three features, so the two rules never both apply.
 ///         </item>
 ///     </list>
-///     The condition itself (-1d4 on attack rolls, disadvantage on Wisdom (Perception)) is the same in both.
+///     Both conditions have the same effects (-1d4 on attack rolls, disadvantage on Wisdom (Perception)).
 /// </summary>
 [HarmonyPatch(typeof(GameLocationVisibilityManager), nameof(GameLocationVisibilityManager.ComputeIllumination))]
 internal static class RacialSunlightSensitivity
@@ -37,6 +38,9 @@ internal static class RacialSunlightSensitivity
     // shared light category, never sees it as surplus and removes it, and the two rules can't remove each other's.
     private const string ConditionCategory = "RacialSunlightSensitivity";
     private static readonly HashSet<FeatureDefinition> RacialFeatures = [];
+
+    // Sunlight Sensitivity, the daylight rule's condition (BuildSunlightSensitivity)
+    private static ConditionDefinition SunlightSensitivity;
 
     // the mod's magical darkness condition (LightingAndObscurementContext, official obscurement rules on)
     private const string ConditionInMagicalDarknessName = "ConditionInMagicalDarkness";
@@ -64,6 +68,8 @@ internal static class RacialSunlightSensitivity
     /// </summary>
     internal static FeatureDefinitionLightAffinity Build(string name)
     {
+        SunlightSensitivity ??= BuildSunlightSensitivity();
+
         var feature = FeatureDefinitionLightAffinityBuilder.Create(name)
             .SetGuiPresentation(CustomConditionsContext.LightSensitivity.Name, Category.Condition)
             .AddLightingEffectAndCondition(
@@ -77,6 +83,27 @@ internal static class RacialSunlightSensitivity
         RacialFeatures.Add(feature);
 
         return feature;
+    }
+
+    /// <summary>
+    ///     The daylight rule's condition, Sunlight Sensitivity (user direction, 2026-11-08: a condition of its own for
+    ///     these races, whose tooltip says when it applies). It copies Light Sensitivity, so its effects are the same
+    ///     (-1d4 on attack rolls, disadvantage on Wisdom (Perception)), shown as detrimental and silent when added or
+    ///     removed; only its name and description differ. The original rule (setting off) keeps Light Sensitivity.
+    ///     Built once, on the first racial feature, after CustomConditionsContext has made Light Sensitivity.
+    /// </summary>
+    private static ConditionDefinition BuildSunlightSensitivity()
+    {
+        var condition = ConditionDefinitionBuilder
+            .Create(CustomConditionsContext.LightSensitivity, "ConditionSunlightSensitivity")
+            .SetOrUpdateGuiPresentation(Category.Condition)
+            .AddToDB();
+
+        // set both terms explicitly: the copy keeps Light Sensitivity's description term otherwise
+        condition.GuiPresentation.title = "Condition/&ConditionSunlightSensitivityTitle";
+        condition.GuiPresentation.description = "Condition/&ConditionSunlightSensitivityDescription";
+
+        return condition;
     }
 
     [UsedImplicitly]
@@ -93,7 +120,18 @@ internal static class RacialSunlightSensitivity
             return;
         }
 
-        var sensitivity = CustomConditionsContext.LightSensitivity;
+        var lightSensitivity = CustomConditionsContext.LightSensitivity;
+        var sensitivity = SunlightSensitivity;
+
+        // Development builds of this rule (1.13.0-dev.102e1124 to 674f98f6) gave Light Sensitivity in this category,
+        // and a save made with one ("TEST - Combat Hamlet wolves") keeps it. This category only ever holds the
+        // daylight rule's condition, so anything else in it is such a leftover and is removed.
+        if (hero.ConditionsByCategory.TryGetValue(ConditionCategory, out var stale) &&
+            stale.FirstOrDefault(x => x.ConditionDefinition != sensitivity) is { } leftover)
+        {
+            hero.RemoveConditionOfCategory(ConditionCategory, leftover, true, false, true);
+        }
+
         var active = hero.ConditionsByCategory.TryGetValue(ConditionCategory, out var conditions)
             ? conditions.FirstOrDefault(x => x.ConditionDefinition == sensitivity)
             : null;
@@ -125,10 +163,10 @@ internal static class RacialSunlightSensitivity
         var exposed = sector is { IsExterior: true, GlobalLightingState: LocationDefinitions.LightingState.Bright } &&
                       !IsShelteredFromSunlight(character, hero);
 
-        // A copy given by the original rule (an older save, or a check made while the setting was off) sits in the
-        // shared light category. Remove that one condition only, leaving other light affinities' conditions alone.
+        // Light Sensitivity given by the original rule (an older save, or a check made while the setting was off) sits
+        // in the shared light category. Remove that one condition only, leaving other light affinities' conditions.
         if (hero.ConditionsByCategory.TryGetValue(AttributeDefinitions.TagLightSensitivity, out var previous) &&
-            previous.FirstOrDefault(x => x.ConditionDefinition == sensitivity) is { } legacy)
+            previous.FirstOrDefault(x => x.ConditionDefinition == lightSensitivity) is { } legacy)
         {
             hero.RemoveConditionOfCategory(AttributeDefinitions.TagLightSensitivity, legacy, true, false, true);
         }
