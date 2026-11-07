@@ -27,6 +27,22 @@ public static class NarrativeDirectionManagerPatcher
                              .MonsterDefinition));
             }
 
+#if FB_DEVELOPMENT
+            // Development builds only: play cutscenes with the first N party members, to test the cutscene placement with
+            // parties of 2, 3 and 5 on saves that have 6 (MultiplayerContext.DevCutsceneHeroLimit, mod menu > Gameplay >
+            // Campaigns; 0 = off). Only who appears in the scene changes, not the party or the save; roles of a smaller cast
+            // are filled by the game's padding (NarrativeSequenceBuilderPatcher), as for a real small party. Single player
+            // only: it changes who holds the scene's roles, and it isn't part of the settings the host sends, so in a
+            // multiplayer room one computer could build a different cast (Codex's review of f00afc52).
+            if (MultiplayerContext.DevCutsceneHeroLimit > 0 && !Global.IsMultiplayer)
+            {
+                var party = Gui.GameCampaign.Party.CharactersList.Select(x => x.RulesetCharacter).ToList();
+
+                involvedGameCharacters.RemoveAll(
+                    x => party.IndexOf(x.RulesetCharacter) >= MultiplayerContext.DevCutsceneHeroLimit);
+            }
+#endif
+
             //PATCH: Only offer the first 4 players on dialogue sequences (PARTYSIZE)
             if (Main.Settings.OverridePartySize <= ToolsContext.GamePartySize
                 || Main.Settings.AllowAllPlayersOnNarrativeSequences)
@@ -51,10 +67,10 @@ public static class NarrativeDirectionManagerPatcher
     public static class PrepareCharacters_Patch
     {
         [UsedImplicitly]
-        public static void Postfix(NarrativeDirectionManager __instance, NarrativeSequence narrativeSequence)
+        public static void Postfix(NarrativeSequence narrativeSequence)
         {
-            //PATCH: places heroes 5 and 6 behind the authored 4 player markers (MULTIPLAYER)
-            MultiplayerContext.PlaceExtraHeroes(__instance, narrativeSequence);
+            //PATCH: places every hero past the 4th behind the 4 authored seats (PARTYSIZE)
+            MultiplayerContext.PlaceExtraHeroes(narrativeSequence);
         }
     }
 
