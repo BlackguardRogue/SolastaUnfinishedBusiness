@@ -199,7 +199,8 @@ internal static class CutsceneFormation
                     }
                 }
 
-                break;
+                // no break here: every hero on this mover's place is handled, not only the first (Codex's review of
+                // 49e616ba: two heroes 0.25 m either side of a mover's new place left the second where it was)
             }
         }
 

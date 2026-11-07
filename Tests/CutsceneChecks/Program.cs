@@ -222,6 +222,13 @@ Check("displaced: a hero on another level stays", above[0] == null);
 var underneath = CutsceneFormation.PlacesForDisplaced([A], [B], [B, new Point(0f, 3f, 0f)]);
 Check("displaced: a place under a hero on another level is free", underneath[0] is { } s3 && Flat(s3, A) < 0.001f);
 
+// two heroes on one mover's new place both move (Codex's case on 49e616ba): movers 2->0 and 3->4, heroes at -0.25 and 0.25
+var two = CutsceneFormation.PlacesForDisplaced(
+    [new Point(2f, 0f, 0f), new Point(3f, 0f, 0f)], [new Point(0f, 0f, 0f), new Point(4f, 0f, 0f)],
+    [new Point(-0.25f, 0f, 0f), new Point(0.25f, 0f, 0f)]);
+Check("displaced: both heroes on one place move, to the two places left (2 and 3)",
+    two[0] is { } t0 && two[1] is { } t1 && new[] { t0.X, t1.X }.OrderBy(x => x).SequenceEqual(new[] { 2f, 3f }));
+
 // equal heights keep the party's order, so the result doesn't depend on anything but the party
 var (sameSeats, sameSpots) = CutsceneFormation.AssignByHeight([70, 70, 70, 70, 70], seatsFromCentre);
 
