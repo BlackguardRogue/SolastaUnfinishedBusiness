@@ -5,6 +5,7 @@ using JetBrains.Annotations;
 using SolastaUnfinishedBusiness.Builders;
 using SolastaUnfinishedBusiness.Builders.Features;
 using SolastaUnfinishedBusiness.Models;
+using TA;
 using static RuleDefinitions;
 
 namespace SolastaUnfinishedBusiness.Races;
@@ -21,9 +22,10 @@ namespace SolastaUnfinishedBusiness.Races;
 ///         </item>
 ///         <item>
 ///             On: the daylight rule here. The condition applies while the hero stands in an exterior sector whose
-///             hourly outdoor light is Bright (08:00 to 18:00 in Solasta 1.5.97), whatever the hero's own light: a
-///             torch at night doesn't trigger it, magical darkness at noon doesn't stop it. The light affinity code
-///             then skips these three features, so the two rules never both apply.
+///             hourly outdoor light is Bright (08:00 to 18:00 in Solasta 1.5.97), whatever light sources are near: a
+///             torch at night doesn't trigger it. Magical darkness or a heavily obscuring area (Fog Cloud, smoke)
+///             around the hero stops it (<see cref="IsShelteredFromSunlight" />). The light affinity code then skips
+///             these three features, so the two rules never both apply.
 ///         </item>
 ///     </list>
 ///     The condition itself (-1d4 on attack rolls, disadvantage on Wisdom (Perception)) is the same in both.
@@ -35,6 +37,12 @@ internal static class RacialSunlightSensitivity
     // shared light category, never sees it as surplus and removes it, and the two rules can't remove each other's.
     private const string ConditionCategory = "RacialSunlightSensitivity";
     private static readonly HashSet<FeatureDefinition> RacialFeatures = [];
+
+    // the mod's magical darkness condition (LightingAndObscurementContext, official obscurement rules on)
+    private const string ConditionInMagicalDarknessName = "ConditionInMagicalDarkness";
+
+    // reused for the cells a hero occupies; only touched on the main thread during light updates
+    private static readonly List<int3> PositionCache = [];
 
     /// <summary>
     ///     True when the daylight rule is in use. Read at every check, so switching the setting takes effect at each
@@ -111,10 +119,11 @@ internal static class RacialSunlightSensitivity
 
         // Exterior sectors receive their global light from the campaign hour
         // (GameLocationVisibilityManager.UpdateGlobalIlluminationState, which also marks every character for a light
-        // update when it changes). Torches, magical darkness and other personal illumination don't enter this test.
-        // A position outside every sector counts as not exposed.
+        // update when it changes). Torches and other light sources don't enter this test. A position outside every
+        // sector counts as not exposed.
         var sector = new GridAccessor(character.LocationPosition).sector;
-        var exposed = sector is { IsExterior: true, GlobalLightingState: LocationDefinitions.LightingState.Bright };
+        var exposed = sector is { IsExterior: true, GlobalLightingState: LocationDefinitions.LightingState.Bright } &&
+                      !IsShelteredFromSunlight(character, hero);
 
         // A copy given by the original rule (an older save, or a check made while the setting was off) sits in the
         // shared light category. Remove that one condition only, leaving other light affinities' conditions alone.
@@ -135,5 +144,51 @@ internal static class RacialSunlightSensitivity
         {
             hero.RemoveConditionOfCategory(ConditionCategory, active, true, false, true);
         }
+    }
+
+    /// <summary>
+    ///     True when magical darkness or an area that fully obscures the hero keeps the sun off them (user direction,
+    ///     2026-11-08): the Darkness spell and other magical darkness, Fog Cloud, smoke and the other heavily
+    ///     obscuring clouds. These are the same two signs the game's own light check
+    ///     (<c>GameLocationVisibilityManager.ComputeIllumination</c>) tests first:
+    ///     <list type="bullet">
+    ///         <item>
+    ///             A darkness condition on the hero: the game's <c>ConditionDarkness</c>, which Darkness, Way of
+    ///             Shadow's Darkness and Maddening Darkness give with the official obscurement rules off, or the
+    ///             mod's <c>ConditionInMagicalDarkness</c>, which they give with those rules on
+    ///             (LightingAndObscurementContext.SwitchMagicalDarknessOnObscurementRules).
+    ///         </item>
+    ///         <item>
+    ///             A cell the hero occupies marked sight impaired (<c>CellFlags.Runtime.DynamicSightImpaired</c>). The
+    ///             game sets it on every cell covered by an effect with a sight-impaired topology form: heavily
+    ///             obscuring areas such as Fog Cloud, Stinking Cloud, Cloudkill, Sleet Storm, Petal Storm and smoke.
+    ///             Lightly obscuring areas don't set it (the mod's Insect Plague under official rules), so they don't
+    ///             shelter a hero, as dim light or light fog doesn't.
+    ///         </item>
+    ///     </list>
+    ///     A hero standing in such an area at noon loses the penalty; it comes back when they leave it or it ends,
+    ///     at the hero's next light update.
+    /// </summary>
+    private static bool IsShelteredFromSunlight(GameLocationCharacter character, RulesetCharacterHero hero)
+    {
+        if (hero.HasConditionOfType(ConditionDarkness) ||
+            hero.HasConditionOfType(ConditionInMagicalDarknessName))
+        {
+            return true;
+        }
+
+        // A large hero occupies several cells; any one of them inside the area counts, as in the game's check.
+        PositionCache.Clear();
+        ((IIlluminable)character).GetAllPositionsToCheck(PositionCache);
+
+        foreach (var position in PositionCache)
+        {
+            if ((new GridAccessor(position).RuntimeFlags(position) & CellFlags.Runtime.DynamicSightImpaired) != 0)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }
