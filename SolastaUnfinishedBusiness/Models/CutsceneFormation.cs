@@ -41,10 +41,11 @@ internal static class CutsceneFormation
     internal const float ViewCorridorLength = 2.5f;
     internal const float ViewCorridorHalfWidth = 0.6f;
 
-    // how a spot in front of a camera moves: closer to the row first, then along it, in these steps
+    // how a spot in front of a camera moves: closer to the row first, in these steps, then to another gap or past an end
     private const float DepthStep = 0.15f;
-    private const float ShiftStep = 0.25f;
-    private const int ShiftSteps = 12;
+
+    // how many places past each end of the row a hero may be moved to, PastEndStep apart
+    private const int PastEndPlaces = 4;
 
     internal readonly struct Point(float x, float y, float z)
     {
@@ -137,48 +138,67 @@ internal static class CutsceneFormation
                    (looksWithParty && along < ViewCorridorLength && across < ViewCorridorHalfWidth);
         }
 
-        // Clear of the cameras, and not the very place another back-row hero already took: the camera search moves spots on
-        // a 0.25 m lattice, so two could otherwise land on one point. Being near another hero is allowed.
         bool IsClear(Point spot)
         {
-            return !obstacles.Any(camera => IsInFrontOfCamera(spot, camera)) &&
-                   chosen.All(other => FlatDistance(spot, other) >= 0.01f);
+            return !obstacles.Any(camera => IsInFrontOfCamera(spot, camera));
         }
 
         var centre = (laterals[0] + laterals[laterals.Count - 1]) * 0.5f;
+        var gaps = laterals.Zip(laterals.Skip(1), (a, b) => (a + b) * 0.5f).ToList();
+        var pastEnds = Enumerable.Range(0, PastEndPlaces)
+            .SelectMany(k => new[]
+            {
+                laterals[0] - SideMargin - (k * PastEndStep),
+                laterals[laterals.Count - 1] + SideMargin + (k * PastEndStep)
+            })
+            .ToList();
+        var takenLaterals = new List<float>();
 
         foreach (var lateral in preferred)
         {
             var outward = lateral > centre ? 1f : -1f;
 
-            // The preferred place first, then closer to the row at the same place along it, then further along it at each of
-            // those distances, outward first. If nothing is clear the preferred spot stands: no scene is better for losing a
-            // hero. Moving closer helps with a camera to one side; one looking straight along the spot needs the move sideways.
+            // Where a hero may stand along the row: their preferred place, then the other gaps' midpoints, nearest first
+            // (outward first when two are as near), then past the ends of the row, nearest first. Never along a seat's line,
+            // where the front hero would hide them: moving in small steps to clear a camera's view put both rear heroes in
+            // Nikannen's second stage straight behind the tall flank heroes (evidence/cutscene-staging-79619edc; user's
+            // choice, 2026-11-07). A place another rear hero took is skipped, so nobody stands straight behind them either.
+            var places = new[] { lateral }
+                .Concat(gaps
+                    .OrderBy(gap => Math.Abs(gap - lateral))
+                    .ThenBy(gap => (gap - lateral) * outward >= 0f ? 0 : 1))
+                .Concat(pastEnds.OrderBy(end => Math.Abs(end - lateral)))
+                .Where(place => takenLaterals.All(taken => Math.Abs(taken - place) >= 0.01f))
+                .ToList();
+
+            // At each place the full back-row distance first, then closer to the row: closer is enough for a camera to one
+            // side, and keeps the hero at their place. If nothing is clear the preferred spot stands: no scene is better for
+            // losing a hero.
             var spot = SpotAt(lateral, BackRowDistance);
+            var spotLateral = lateral;
             var found = false;
 
-            for (var step = 0; step <= ShiftSteps && !found; step++)
+            foreach (var place in places)
             {
-                foreach (var shift in step == 0 ? [0f] : new[] { outward * step * ShiftStep, -outward * step * ShiftStep })
+                for (var behind = BackRowDistance; behind >= MinBackRowDistance - 0.001f && !found; behind -= DepthStep)
                 {
-                    for (var behind = BackRowDistance; behind >= MinBackRowDistance - 0.001f && !found; behind -= DepthStep)
-                    {
-                        var candidate = SpotAt(lateral + shift, behind);
+                    var candidate = SpotAt(place, behind);
 
-                        if (IsClear(candidate))
-                        {
-                            spot = candidate;
-                            found = true;
-                        }
-                    }
-
-                    if (found)
+                    if (IsClear(candidate))
                     {
-                        break;
+                        spot = candidate;
+                        spotLateral = place;
+                        found = true;
                     }
+                }
+
+                if (found)
+                {
+                    break;
                 }
             }
 
+            takenLaterals.Add(spotLateral);
             chosen.Add(spot);
         }
 

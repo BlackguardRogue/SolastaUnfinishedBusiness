@@ -88,6 +88,18 @@ Check("Nikannen: all stay behind the row, no closer than the smallest distance",
 Check("Nikannen: the two heroes don't share a place", Flat(stage.Spots[0], stage.Spots[1]) >= 0.01f);
 Check("Nikannen: they stay with the group", stage.Spots.All(s => Flat(s, new Point(9.5f, 0f, -17.5f)) < 3.5f));
 
+// moved out of GroupMediumB's view, they go to a gap or past an end, never straight behind a front hero: in game on 79619edc
+// both stood behind the tall flank heroes here (evidence/cutscene-staging-79619edc)
+var stageShortest = CutsceneFormation.Compute(stageSeats, stageForwards, 2, [groupMediumB, npcSingle0, high], stageSeats[1]);
+
+Check("Nikannen: no rear hero on a front seat's line", stageShortest.Spots.All(s =>
+    stageSeats.All(seat => Math.Abs(s.X - seat.X) >= 0.2f)));
+Check("Nikannen: still clear of GroupMediumB's view", stageShortest.Spots.All(s =>
+    Math.Abs(s.X - groupMediumB.Position.X) >= CutsceneFormation.ViewCorridorHalfWidth - 0.05f));
+Check("Nikannen: the two rear heroes at different places along the row",
+    Math.Abs(stageShortest.Spots[0].X - stageShortest.Spots[1].X) >= 0.01f);
+Console.WriteLine($"      Nikannen second stage: {string.Join(" ", stageShortest.Spots.Select(s => $"({s.X:F2}, {s.Z:F2})"))}");
+
 // a camera to one side, whose view the spot isn't in: coming closer is enough, and the hero stays behind the gap
 CutsceneFormation.Camera toOneSide = new(new Point(10.2f, 1f, -18.9f), new Point(0f, 0f, 1f));
 var closer = CutsceneFormation.Compute(stageSeats, stageForwards, 1, [toOneSide]);
