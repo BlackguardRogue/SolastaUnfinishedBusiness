@@ -82,31 +82,27 @@ internal static class CutsceneFormation
         return new Result(forward, right, spots);
     }
 
-    // Who stands where, by height: the sketch's short heroes at the front centre and tall ones on the flanks, with the rest in
-    // the back row, where a medium height shows over the shoulders of the short ones. heights has one entry per hero, in the
-    // party's order, which also settles ties. seatsFromCentre lists the seats from the row's centre outward (SeatsFromCentre).
-    // Returns the hero index for each seat, and for each back-row spot from the first. It changes no list in the game: actor
-    // order decides roles and shots, so those stay as they were.
+    // Who stands where, by height (user direction, 2026-11-07: "all the shortest characters are in the front row, and the
+    // taller characters are behind"): the shortest heroes take the seats and the tallest the back row, where they show over
+    // the front row's heads. Within the front row the shorter half stands at the centre and the taller half on the flanks, as
+    // in the user's first sketch. The back row goes shorter first, so the shorter rear hero takes the first spot. Before,
+    // the tallest stood on the flanks and middle heights behind, and a tall flank hero could hide a rear one
+    // (evidence/cutscene-staging-85858711). heights has one entry per hero, in the party's order, which also settles ties.
+    // seatsFromCentre lists the seats from the row's centre outward (SeatsFromCentre). Returns the hero index for each seat,
+    // and for each back-row spot from the first. It changes no list in the game: actor order decides roles and shots, so
+    // those stay as they were.
     internal static (int[] Seats, int[] Spots) AssignByHeight(IReadOnlyList<int> heights, IReadOnlyList<int> seatsFromCentre)
     {
         var sorted = Enumerable.Range(0, heights.Count).OrderBy(i => heights[i]).ToList();
-        var seatCount = seatsFromCentre.Count;
-        var innerCount = seatCount / 2;
-        var outerCount = seatCount - innerCount;
-        var spotCount = sorted.Count - seatCount;
-        var seats = new int[seatCount];
+        var seatCount = Math.Min(seatsFromCentre.Count, sorted.Count);
+        var seats = new int[seatsFromCentre.Count];
 
-        for (var i = 0; i < innerCount; i++)
+        for (var i = 0; i < seatCount; i++)
         {
             seats[seatsFromCentre[i]] = sorted[i];
         }
 
-        for (var i = 0; i < outerCount; i++)
-        {
-            seats[seatsFromCentre[innerCount + i]] = sorted[innerCount + spotCount + i];
-        }
-
-        return (seats, sorted.Skip(innerCount).Take(spotCount).ToArray());
+        return (seats, sorted.Skip(seatCount).ToArray());
     }
 
     // the seats' indexes from the row's centre outward; equally central seats keep their order

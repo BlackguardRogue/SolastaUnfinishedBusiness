@@ -127,24 +127,25 @@ var (seatHeroes, spotHeroes) = CutsceneFormation.AssignByHeight(heights, seatsFr
 var inner = seatsFromCentre.Take(2).Select(s => heights[seatHeroes[s]]).ToList();
 var outer = seatsFromCentre.Skip(2).Select(s => heights[seatHeroes[s]]).ToList();
 
+// the user's order, 2026-11-07: the shortest in front, the tallest behind, and a V within the front row
 Check("the two shortest stand at the front centre", inner.OrderBy(x => x).SequenceEqual(new[] { 60, 64 }));
-Check("the two tallest stand on the flanks", outer.OrderBy(x => x).SequenceEqual(new[] { 70, 75 }));
-Check("the medium heights stand behind, shorter first", spotHeroes.Select(h => heights[h]).SequenceEqual(new[] { 66, 68 }));
+Check("the next two stand on the flanks (V shape)", outer.OrderBy(x => x).SequenceEqual(new[] { 66, 68 }));
+Check("the two tallest stand behind, shorter first", spotHeroes.Select(h => heights[h]).SequenceEqual(new[] { 70, 75 }));
 Check("everyone has one place", seatHeroes.Concat(spotHeroes).OrderBy(x => x).SequenceEqual(Enumerable.Range(0, 6)));
 
 // equal heights keep the party's order, so the result doesn't depend on anything but the party
 var (sameSeats, sameSpots) = CutsceneFormation.AssignByHeight([70, 70, 70, 70, 70], seatsFromCentre);
 
 Check("equal heights: the same answer each time, with party order settling it",
-    sameSeats[seatsFromCentre[0]] == 0 && sameSpots.SequenceEqual(new[] { 2 }));
+    sameSeats[seatsFromCentre[0]] == 0 && sameSpots.SequenceEqual(new[] { 4 }));
 
 // the seats a teleport uses can be in any order: the same heights land in the same places
 Point[] reversedSeats = [stageSeats[3], stageSeats[2], stageSeats[1], stageSeats[0]];
 var reversedOrder = CutsceneFormation.SeatsFromCentre(reversedSeats, stageForwards);
 var (reversedHeroes, _) = CutsceneFormation.AssignByHeight(heights, reversedOrder);
-var tallestSeat = reversedSeats[Array.IndexOf(reversedHeroes, 3)];
+var tallestFrontSeat = reversedSeats[Array.IndexOf(reversedHeroes, 5)];
 
-Check("the tallest hero is on a flank whatever the seats' order", tallestSeat.X is 8.75f or 10.25f);
+Check("the tallest front hero is on a flank whatever the seats' order", tallestFrontSeat.X is 8.75f or 10.25f);
 
 // Close-ups, from the Nikannen scene's authored cameras and markers. Their numbers don't match the markers.
 Point[] nikannenMarkers =

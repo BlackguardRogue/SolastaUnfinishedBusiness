@@ -888,8 +888,8 @@ internal static class MultiplayerContext
         Object.Destroy(placement.gameObject);
     }
 
-    // Places the whole party off the grid: short heroes at the front centre, tall ones on the flanks, the rest behind the gaps
-    // (CutsceneFormation.AssignByHeight). PlayerActors isn't touched, because it decides roles, speakers and shots;
+    // Places the whole party off the grid: the shortest heroes in front (shorter at the centre, taller on the flanks), the
+    // tallest behind the gaps (CutsceneFormation.AssignByHeight). PlayerActors isn't touched, because it decides roles, speakers and shots;
     // CutsceneStagingContext moves a close-up to wherever its speaker ended up. Everything is measured from the seats given,
     // so the formation turns with the party at each whole-party teleport.
     private static void StageParty(List<Transform> seats, List<WorldLocationCharacter> party)
