@@ -299,6 +299,12 @@ internal static class MultiplayerDisplay
             Main.Settings.MultiplayerResolveOverlapsOnBattleStart = toggle;
         }
 
+        toggle = Main.Settings.MultiplayerSyncBattleStartPositions;
+        if (UI.Toggle(Gui.Localize("ModUi/&MultiplayerSyncBattleStartPositions"), ref toggle, UI.AutoWidth()))
+        {
+            Main.Settings.MultiplayerSyncBattleStartPositions = toggle;
+        }
+
         toggle = Main.Settings.MultiplayerAllowAlliesToPassThroughInCombat;
         if (UI.Toggle(Gui.Localize("ModUi/&MultiplayerAllowAlliesToPassThroughInCombat"), ref toggle,
                 UI.AutoWidth()))

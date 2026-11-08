@@ -587,6 +587,7 @@ ModUi/&MultiplayerPingVisibleToHostOnly=プレイヤーのpingと行動遅延は
 ModUi/&MultiplayerPlayersVersions=<color=white>このルームのビルド：</color>
 ModUi/&MultiplayerRequireApprovalForTimeConsumingActions=ゲーム内時間が経過する行動は全プレイヤーに承認を求める：小休憩と大休憩、巻物からの呪文の習得や筆写、神の聖印、儀式、1分以上かかる呪文や能力 <i><color=#F0DAA0>[ポップアップで何をどれだけの時間行うかを表示。キャラクターが戦闘中やカットシーン中は誰にも尋ねず、求めたプレイヤーにどのキャラクターかを伝える]</color></i>
 ModUi/&MultiplayerResolveOverlapsOnBattleStart=戦闘開始時、同じマスにいるキャラクターを最寄りの安全なマスへ移動する <i><color=#F0DAA0>[無償・無害で、忍び足中なら敵に気づかれない。どの敵からも見えないマスに忍び足のキャラクターが1人だけならそのマスに残り、それ以外は最初に作られたキャラクターが残る]</color></i>
+ModUi/&MultiplayerSyncBattleStartPositions=戦闘開始位置をホストと同期する <i><color=#F0DAA0>[戦闘開始時にホストが全員を配置し、全プレイヤーがその位置を受け取るまでイニシアチブを待つ。オフ：各コンピューターが自分で配置するため、ゲーム間で差が生じることがある]</color></i>
 ModUi/&MultiplayerSecondsBeforeLowerTickBuffer=<color=white>遅延を下げるまでの待ちのない秒数</color> <i><color=#F0DAA0>[ゲームの既定値10]</color></i>
 ModUi/&MultiplayerShowFpsOverlay=マルチプレイ中、左上に見られるフレームレートとpingを表示する小さなオーバーレイを出す
 ModUi/&MultiplayerSpreadOverlappedCharacters=同じマスにいるキャラクターを少し離して描き、それぞれを指せるようにする <i><color=#F0DAA0>[見た目のみ：2人は横並び、3人は三角形、それ以上はより広い輪。移動すると中央に戻る]</color></i>

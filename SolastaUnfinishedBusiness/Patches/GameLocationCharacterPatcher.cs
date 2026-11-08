@@ -324,7 +324,9 @@ public static class GameLocationCharacterPatcher
             CharacterBattleListenersPatch.OnCharacterBattleStarted(__instance, surprise);
 
             // characters sharing a cell at battle start (MULTIPLAYER) are separated by the host once every contender
-            // has started, and the other computers take its formation: see MultiplayerBattlePlacementContext
+            // has started, and the other computers take its formation: see MultiplayerBattlePlacementContext. With
+            // that sync switched off, each computer separates them itself, as before it
+            MultiplayerBattlePlacementContext.OnContenderStartedBattle(__instance);
         }
     }
 

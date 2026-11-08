@@ -25,11 +25,10 @@ internal static class RestCommandContext
     // a command that hasn't come back by then is given up, so a lost connection can't keep the rest screen waiting
     private const float WaitSeconds = 30f;
 
-    // nonces of commands this computer has handled and whether they ran, so the sender can tell when its own copy has
-    // run; bounded, as only the last few are ever waited for
-    private static readonly Queue<string> AppliedOrder = new();
-    private static readonly Dictionary<string, bool> Applied = new();
-    private const int AppliedLimit = 64;
+    // the commands this computer sent and is waiting for, registered before sending: null until its own copy has run,
+    // then whether it did. Only the sender's waits are kept (other computers' commands aren't recorded), each removed
+    // when its wait ends, and all of them on joining a room (Codex's suggestion on PR #28)
+    private static readonly Dictionary<string, bool?> Waiting = new();
 
     private static readonly Dictionary<string, Func<RulesetCharacterHero, string, bool>> Handlers = new();
 
@@ -89,6 +88,7 @@ internal static class RestCommandContext
     internal static void OnJoinedRoom()
     {
         Departed.Clear();
+        Waiting.Clear();
     }
 
     private sealed class LeaveWatcher : Photon.Realtime.IInRoomCallbacks
@@ -218,25 +218,32 @@ internal static class RestCommandContext
         // unique per sender: the actor number keeps two players' commands apart
         var nonce = $"{PhotonNetwork.LocalPlayer?.ActorNumber ?? 0}-{++_sequence}";
 
+        Waiting[nonce] = null;
+
         networking.view.RPC(nameof(NetworkingManager.AssignClassLevelRPC), RpcTarget.AllViaServer,
             networking.CommandTick, (long)hero.Guid, $"{Marker}{nonce}:{verb}:{argument}", false);
         PhotonNetwork.SendAllOutgoingCommands();
 
         var deadline = Time.realtimeSinceStartup + WaitSeconds;
+        bool? ran = null;
 
-        while (!Applied.ContainsKey(nonce) && Global.IsMultiplayer && Time.realtimeSinceStartup < deadline)
+        while (Global.IsMultiplayer && Time.realtimeSinceStartup < deadline &&
+               Waiting.TryGetValue(nonce, out ran) && ran == null)
         {
             yield return null;
         }
 
+        Waiting.TryGetValue(nonce, out ran);
+        Waiting.Remove(nonce);
+
         Outcome outcome;
 
-        if (!Applied.TryGetValue(nonce, out var ran))
+        if (ran == null)
         {
             outcome = Outcome.TimedOut;
             Main.Error($"[RestCommand] {verb} for {hero.Name} hasn't run here after {WaitSeconds} s; not carrying on");
         }
-        else if (!ran)
+        else if (ran == false)
         {
             outcome = Outcome.Failed;
             Main.Error($"[RestCommand] {verb} for {hero.Name} couldn't run; not carrying on");
@@ -295,12 +302,10 @@ internal static class RestCommandContext
         }
 
         // recorded even when it didn't run, so the sender stops waiting; every computer got the same answer
-        Applied[nonce] = ran;
-        AppliedOrder.Enqueue(nonce);
-
-        while (AppliedOrder.Count > AppliedLimit)
+        // recorded only where its sender is waiting for it (this computer's own command)
+        if (Waiting.ContainsKey(nonce))
         {
-            Applied.Remove(AppliedOrder.Dequeue());
+            Waiting[nonce] = ran;
         }
 
         yield break;

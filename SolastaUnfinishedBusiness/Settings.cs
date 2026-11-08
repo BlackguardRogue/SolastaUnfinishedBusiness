@@ -213,6 +213,7 @@ public class Settings : UnityModManager.ModSettings
         MultiplayerContext.DefaultSecondsBeforeLowerTickBuffer;
     public bool MultiplayerAllowCharactersToOverlapOutOfCombat { get; set; } = true;
     public bool MultiplayerResolveOverlapsOnBattleStart { get; set; } = true;
+    public bool MultiplayerSyncBattleStartPositions { get; set; } = true;
     public bool MultiplayerAllowAlliesToPassThroughInCombat { get; set; } = true;
     public bool MultiplayerSpreadOverlappedCharacters { get; set; } = true;
     public bool MultiplayerRequireApprovalForTimeConsumingActions { get; set; } = true;

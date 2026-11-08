@@ -48,6 +48,10 @@ namespace SolastaUnfinishedBusiness.Models;
 // 6. When each battle's first turn begins, every computer logs the occupancy signature again ("first turn"), so
 //    players' logs can be compared after initiative.
 // Single player is unchanged: the separation never ran there.
+// The sync is its own setting (Multiplayer > Movement, on by default, user request 2026-11-09 via Codex): off, none
+// of this runs and each computer separates characters itself as before; on, it syncs every battle start, overlap or
+// not, and "move characters sharing a cell" only decides whether the host's own separation runs before the game's
+// unstack.
 internal static class MultiplayerBattlePlacementContext
 {
     private const byte EventCode = 175;
@@ -67,9 +71,9 @@ internal static class MultiplayerBattlePlacementContext
     // they arrived; dropped when the host releases that battle or after ClientWaitSeconds
     private static readonly Dictionary<string, (object[] Data, float Received)> EarlyFormations = new();
 
-    // client: the host's releases for battles this computer hadn't placed, so a late start doesn't wait for one again
-    private static readonly Dictionary<string, bool> ReleasedBattles = new();
-    private static readonly Queue<string> ReleasedOrder = new();
+    // client: the host's battle IDs released before this computer placed them (the last RememberedBattles), whose
+    // formations are never applied
+    private static readonly List<string> ReleasedBattles = [];
 
     // the initiative state's Begin is held while placing, then run once released
     private static BattleState_Initiative _heldInitiative;
@@ -82,7 +86,20 @@ internal static class MultiplayerBattlePlacementContext
     private static bool IsOnlineRoom =>
         Global.IsMultiplayer && PhotonNetwork.InRoom && !PhotonNetwork.OfflineMode;
 
-    private static bool IsActive => IsOnlineRoom && Main.Settings.MultiplayerResolveOverlapsOnBattleStart;
+    // Multiplayer > "Synchronize battle starting positions with the host" (host-shared, on by default): the whole
+    // handshake. Off, nothing here runs and nothing waits; each computer separates characters itself at their battle
+    // start if "move characters sharing a cell" is on (OnContenderStartedBattle), as before the sync existed.
+    private static bool IsActive => IsOnlineRoom && Main.Settings.MultiplayerSyncBattleStartPositions;
+
+    // GameLocationCharacter.StartBattle postfix: the separation without the sync, on each computer
+    internal static void OnContenderStartedBattle(GameLocationCharacter character)
+    {
+        if (IsOnlineRoom && !Main.Settings.MultiplayerSyncBattleStartPositions &&
+            Main.Settings.MultiplayerResolveOverlapsOnBattleStart)
+        {
+            MultiplayerContext.SeparateFromSharedCell(character);
+        }
+    }
 
     private static string LocationName => Gui.GameLocation?.LocationDefinition?.Name ?? string.Empty;
 
@@ -155,7 +172,6 @@ internal static class MultiplayerBattlePlacementContext
         _pending = null;
         EarlyFormations.Clear();
         ReleasedBattles.Clear();
-        ReleasedOrder.Clear();
     }
 
     #endregion
@@ -232,10 +248,14 @@ internal static class MultiplayerBattlePlacementContext
 
     private static void PlaceAsHost(GameLocationBattle battle)
     {
-        // one contender after the other: each separation teleports at once, so the next sees that cell taken
-        foreach (var contender in battle.AllContenders.Where(x => x != null).ToList())
+        // one contender after the other: each separation teleports at once, so the next sees that cell taken. With
+        // "move characters sharing a cell" off, only the game's own unstack below runs, here on the host
+        if (Main.Settings.MultiplayerResolveOverlapsOnBattleStart)
         {
-            MultiplayerContext.SeparateFromSharedCell(contender);
+            foreach (var contender in battle.AllContenders.Where(x => x != null).ToList())
+            {
+                MultiplayerContext.SeparateFromSharedCell(contender);
+            }
         }
 
         var extras = UnstackAsHost(battle);
@@ -261,6 +281,7 @@ internal static class MultiplayerBattlePlacementContext
         }
 
         _pending.HostBattleId = Guid.NewGuid().ToString("N");
+        _pending.SentAt = Time.realtimeSinceStartup;
         _pending.Roster = PhotonNetwork.PlayerList.Select(x => x.ActorNumber).ToArray();
         _pending.Reported.Add(PhotonNetwork.LocalPlayer.ActorNumber);
 
@@ -334,7 +355,7 @@ internal static class MultiplayerBattlePlacementContext
             return;
         }
 
-        if (_pending?.HostBattleId == id || ReleasedBattles.ContainsKey(id))
+        if (_pending?.HostBattleId == id || ReleasedBattles.Contains(id))
         {
             // a duplicate, or a battle the host already released
             return;
@@ -620,12 +641,11 @@ internal static class MultiplayerBattlePlacementContext
         // only after the host gave up waiting (HostWaitSeconds) can't tell its own released formation from an older
         // battle's, so it gets none and releases itself after ClientWaitSeconds with the alert; the host has already
         // offered the Resync for it
-        ReleasedBattles[id] = matched;
-        ReleasedOrder.Enqueue(id);
+        ReleasedBattles.Add(id);
 
-        while (ReleasedOrder.Count > RememberedBattles)
+        if (ReleasedBattles.Count > RememberedBattles)
         {
-            ReleasedBattles.Remove(ReleasedOrder.Dequeue());
+            ReleasedBattles.RemoveAt(0);
         }
     }
 
@@ -645,7 +665,8 @@ internal static class MultiplayerBattlePlacementContext
         // players who left can't report; anyone who joined since isn't in this battle's start
         var present = new HashSet<int>(PhotonNetwork.PlayerList.Select(x => x.ActorNumber));
         var missing = _pending.Roster.Where(x => present.Contains(x) && !_pending.Reported.Contains(x)).ToList();
-        var timedOut = Time.realtimeSinceStartup - _pending.Started >= HostWaitSeconds;
+        // counted from the send, so a slow placement here doesn't eat into the players' time to answer
+        var timedOut = Time.realtimeSinceStartup - _pending.SentAt >= HostWaitSeconds;
 
         if (missing.Count > 0 && !timedOut)
         {
@@ -867,6 +888,9 @@ internal static class MultiplayerBattlePlacementContext
 
         internal bool Released;
         internal int[] Roster;
+
+        // host: when the formation was sent
+        internal float SentAt;
     }
 
     [HarmonyPatch(typeof(GameLocationBattleManager), nameof(GameLocationBattleManager.TriggerBattleStart))]

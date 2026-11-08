@@ -382,10 +382,11 @@ internal static class MultiplayerContext
 
     // multiplayer, at battle start: a character sharing a cell, unless it's the cell keeper (see CellKeeper), steps to
     // the closest safe cell: free, not dangerous, and not perceived by any enemy if the character is sneaking.
-    // Only the host runs this (MultiplayerBattlePlacementContext), and the other computers take its result. It used to
-    // run on every computer, on the assumption that the same game state gave the same result everywhere, but "perceived
-    // by an enemy" comes from each computer's own visibility service, which isn't lockstep state, so computers could
-    // pick different cells (desync issue 04).
+    // With "Synchronize battle starting positions with the host" on (the default), only the host runs this
+    // (MultiplayerBattlePlacementContext), and the other computers take its result. It used to run on every computer,
+    // on the assumption that the same game state gave the same result everywhere, but "perceived by an enemy" comes
+    // from each computer's own visibility service, which isn't lockstep state, so computers could pick different cells
+    // (desync issue 04). With the sync off it runs on every computer again, as it did.
     internal static void SeparateFromSharedCell(GameLocationCharacter character)
     {
         if (character?.RulesetCharacter is not { IsDeadOrUnconscious: false })
