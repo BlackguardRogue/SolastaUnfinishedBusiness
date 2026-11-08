@@ -514,10 +514,12 @@ internal static class MultiplayerBattlePlacementContext
         }
 
         // the order of the contender lists, which initiative rolls in before it sorts: the same characters listed in
-        // another order would get other dice (Codex's review of 66bfef30)
+        // another order would get other dice (Codex's review of 66bfef30). Only the ones it rolls for: RollInitiative
+        // skips the dead (RulesetActor.IsDead) on both sides
         foreach (var list in new[] { battle?.PlayerContenders, battle?.EnemyContenders })
         {
-            var order = list?.Where(x => x != null).Select(x => (long)x.Guid).ToList() ?? [];
+            var order = list?.Where(x => x?.RulesetCharacter is { IsDead: false }).Select(x => (long)x.Guid).ToList() ??
+                        [];
 
             Mix(order.Count);
 
