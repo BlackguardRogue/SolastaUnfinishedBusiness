@@ -948,9 +948,11 @@ internal static class MultiplayerDesyncContext
                 Tick = tick,
                 Dice = Hash(CaptureRandomState()),
                 Perception = PerceptionContext.Digest(),
-                // nothing moving or acting, and no perception check requested or waiting for its command
+                // nothing moving or acting, no perception check requested or waiting for its command, and no battle start
+                // waiting for the host's formation
                 Quiet = characters.All(x => !x.MoveInProgress && actions?.IsCharacterActing(x) != true) &&
-                        PerceptionContext.IsIdle
+                        PerceptionContext.IsIdle &&
+                        !MultiplayerBattlePlacementContext.IsPlacing
             };
 
             foreach (var character in characters.Where(x => x.RulesetCharacter != null).OrderBy(x => x.Guid))

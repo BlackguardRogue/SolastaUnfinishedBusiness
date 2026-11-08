@@ -513,6 +513,20 @@ internal static class MultiplayerBattlePlacementContext
             }
         }
 
+        // the order of the contender lists, which initiative rolls in before it sorts: the same characters listed in
+        // another order would get other dice (Codex's review of 66bfef30)
+        foreach (var list in new[] { battle?.PlayerContenders, battle?.EnemyContenders })
+        {
+            var order = list?.Where(x => x != null).Select(x => (long)x.Guid).ToList() ?? [];
+
+            Mix(order.Count);
+
+            foreach (var guid in order)
+            {
+                Mix(guid);
+            }
+        }
+
         var surprised = battle?.surprisedEnemyContenders?.Where(x => x != null).Select(x => (long)x.Guid)
             .OrderBy(x => x).ToList() ?? [];
 
@@ -749,6 +763,10 @@ internal static class MultiplayerBattlePlacementContext
     #region Initiative hold
 
     private static bool Holds => _pending is { Released: false };
+
+    // a battle start held for the host's formation: positions may differ between computers until it's released, so
+    // the desync check doesn't compare them meanwhile (Codex's review of 66bfef30)
+    internal static bool IsPlacing => Holds;
 
     // BattleState_Initiative.Begin prefix: false skips Begin for now; it runs from Update once released
     internal static bool BeforeInitiativeBegin(BattleState_Initiative state, object[] parameters)
