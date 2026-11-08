@@ -127,9 +127,19 @@ internal static class MultiplayerBattlePlacementContext
 
     internal static void OnMasterClientSwitched()
     {
-        if (_pending is { Released: false })
+        if (_pending is not { Released: false })
         {
-            Release(false, "the host changed before every player confirmed the formation");
+            return;
+        }
+
+        Release(false, "the host changed before every player confirmed the formation");
+
+        // the new host offers the Resync, as the old one would have for an unconfirmed placement
+        if (PhotonNetwork.IsMasterClient)
+        {
+            MultiplayerDesyncContext.OfferResyncForBattlePlacement(string.Join(", ", PhotonNetwork.PlayerList
+                .Where(x => x.ActorNumber != PhotonNetwork.LocalPlayer.ActorNumber)
+                .Select(x => x.NickName)));
         }
     }
 
@@ -201,7 +211,8 @@ internal static class MultiplayerBattlePlacementContext
 
         var early = EarlyFormations.Values
             .Where(x => x.Data[2] is string location && location == LocationName &&
-                        x.Data[3] is long[] guids && guids.OrderBy(g => g).SequenceEqual(_pending.Guids))
+                        x.Data[3] is long[] guids && x.Data[7] is int count &&
+                        guids.Take(count).OrderBy(g => g).SequenceEqual(_pending.Guids))
             .OrderByDescending(x => x.Received)
             .Select(x => x.Data)
             .FirstOrDefault();
@@ -226,15 +237,16 @@ internal static class MultiplayerBattlePlacementContext
             MultiplayerContext.SeparateFromSharedCell(contender);
         }
 
-        UnstackAsHost(battle);
-
+        var extras = UnstackAsHost(battle);
         var contenders = Contenders(battle);
-        var guids = contenders.Select(x => (long)x.Guid).ToArray();
-        var cells = contenders
+        // contenders first, then the non-contenders the unstack moved (by ID each)
+        var placed = contenders.Concat(extras.OrderBy(x => x.Guid)).ToList();
+        var guids = placed.Select(x => (long)x.Guid).ToArray();
+        var cells = placed
             .SelectMany(x => new[] { x.LocationPosition.x, x.LocationPosition.y, x.LocationPosition.z })
             .ToArray();
-        var facings = contenders.Select(x => (int)x.Orientation).ToArray();
-        var signature = OccupancySignature(contenders, out var shared);
+        var facings = placed.Select(x => (int)x.Orientation).ToArray();
+        var signature = OccupancySignature(placed, battle, out var shared);
 
         if (shared.Count > 0)
         {
@@ -254,20 +266,23 @@ internal static class MultiplayerBattlePlacementContext
 
         Send(new object[]
         {
-            FormationKind, _pending.HostBattleId, LocationName, guids, cells, facings, signature
+            FormationKind, _pending.HostBattleId, LocationName, guids, cells, facings, signature, contenders.Count
         }, ReceiverGroup.Others);
         PumpHost();
     }
 
     // host: the game's own unstack, which BattleState_Initiative.Begin runs on every computer from that computer's
     // grid, run here once, its cells applied, so the formation sent leaves nothing for it to do anywhere
-    private static void UnstackAsHost(GameLocationBattle battle)
+    // Its search also takes in other movable characters standing in the stacked cells, contenders or not, so it
+    // returns the non-contenders it moved: they go into the formation too (Codex's review of e2402bae).
+    private static List<GameLocationCharacter> UnstackAsHost(GameLocationBattle battle)
     {
         var positioningService = ServiceRepository.GetService<IGameLocationPositioningService>();
+        var movedOthers = new List<GameLocationCharacter>();
 
         if (positioningService == null)
         {
-            return;
+            return movedOthers;
         }
 
         var found = new Dictionary<GameLocationCharacter, int3>();
@@ -284,16 +299,25 @@ internal static class MultiplayerBattlePlacementContext
 
             Log($"unstacking {pair.Key.Name} from {pair.Key.LocationPosition} to {pair.Value} (the game's own rule)");
             positioningService.TeleportCharacter(pair.Key, pair.Value, pair.Key.Orientation);
+
+            if (!battle.AllContenders.Contains(pair.Key))
+            {
+                movedOthers.Add(pair.Key);
+            }
         }
+
+        return movedOthers;
     }
 
     // client: the host's formation for the pending battle, kept for a battle this computer hasn't started yet, or
     // ignored
     private static void ApplyFormation(object[] data)
     {
-        if (data.Length != 7 || data[1] is not string id || data[2] is not string location ||
+        if (data.Length != 8 || data[1] is not string id || data[2] is not string location ||
             data[3] is not long[] guids || data[4] is not int[] cells || data[5] is not int[] facings ||
-            data[6] is not long signature || cells.Length != guids.Length * 3 || facings.Length != guids.Length)
+            data[6] is not long signature || data[7] is not int contenderCount ||
+            cells.Length != guids.Length * 3 || facings.Length != guids.Length ||
+            contenderCount < 0 || contenderCount > guids.Length)
         {
             Log("ignored a malformed formation");
 
@@ -321,7 +345,7 @@ internal static class MultiplayerBattlePlacementContext
             return;
         }
 
-        if (!guids.OrderBy(x => x).SequenceEqual(_pending.Guids))
+        if (!guids.Take(contenderCount).OrderBy(x => x).SequenceEqual(_pending.Guids))
         {
             // other contenders: boards that already differ, or a battle that starts later here. It doesn't use up
             // this battle's placement; Pump reports the mismatch if nothing better comes
@@ -329,7 +353,8 @@ internal static class MultiplayerBattlePlacementContext
             {
                 _pending.MismatchId = id;
                 _pending.MismatchSeen = Time.realtimeSinceStartup;
-                Log($"battle {Short(id)}: the host's contenders ({string.Join(",", guids.OrderBy(x => x))}) " +
+                Log($"battle {Short(id)}: the host's contenders " +
+                    $"({string.Join(",", guids.Take(contenderCount).OrderBy(x => x))}) " +
                     $"aren't this battle's ({string.Join(",", _pending.Guids)})");
             }
 
@@ -361,7 +386,25 @@ internal static class MultiplayerBattlePlacementContext
             return false;
         }
 
+        // contenders, and any other character the host's unstack moved
         var byGuid = _pending.Battle.AllContenders.Where(x => x != null).ToDictionary(x => (long)x.Guid);
+
+        foreach (var guid in guids.Where(x => !byGuid.ContainsKey(x)))
+        {
+            var other = (ServiceRepository.GetService<IGameLocationCharacterService>()?.ValidCharacters ?? [])
+                .FirstOrDefault(x => (long)x.Guid == guid);
+
+            if (other == null)
+            {
+                problem = $"no character {guid} here, which the host moved";
+
+                return false;
+            }
+
+            byGuid[guid] = other;
+        }
+
+        var placed = guids.Select(x => byGuid[x]).ToList();
 
         for (var i = 0; i < guids.Length; i++)
         {
@@ -392,7 +435,7 @@ internal static class MultiplayerBattlePlacementContext
         }
 
         // the whole footprints and who else stands in them, which anchors and facings alone don't show
-        var local = OccupancySignature(Contenders(_pending.Battle), out var shared);
+        var local = OccupancySignature(placed, _pending.Battle, out var shared);
 
         if (local != signature)
         {
@@ -405,10 +448,13 @@ internal static class MultiplayerBattlePlacementContext
         return wrong.Count == 0;
     }
 
-    // FNV-1a over every contender (by ID): its cell, facing, and each grid cell of its footprint with the IDs of all
-    // the characters registered there. Equal on two computers when contenders stand alike and the grid holds the same
-    // occupants in their cells. Cells holding more than one living character are listed in shared.
-    private static long OccupancySignature(List<GameLocationCharacter> contenders, out List<string> shared)
+    // FNV-1a over every placed character (by ID): its cell, facing, and each grid cell of its footprint with the IDs of
+    // all the characters registered there; then the enemies the battle start found surprised. That was rolled inside
+    // TriggerBattleStart from each computer's positions before any placement, so it's compared here too (Codex's
+    // review of e2402bae). Equal on two computers when characters stand alike, the grid holds the same occupants in
+    // their cells and the same enemies are surprised. Cells holding more than one living character are listed in shared.
+    private static long OccupancySignature(
+        List<GameLocationCharacter> contenders, GameLocationBattle battle, out List<string> shared)
     {
         shared = [];
 
@@ -457,6 +503,16 @@ internal static class MultiplayerBattlePlacementContext
                     shared.Add($"{cell}: {string.Join(", ", living.Select(x => x.Name))}");
                 }
             }
+        }
+
+        var surprised = battle?.surprisedEnemyContenders?.Where(x => x != null).Select(x => (long)x.Guid)
+            .OrderBy(x => x).ToList() ?? [];
+
+        Mix(surprised.Count);
+
+        foreach (var guid in surprised)
+        {
+            Mix(guid);
         }
 
         return (long)hash;
@@ -745,7 +801,7 @@ internal static class MultiplayerBattlePlacementContext
 
         _firstTurnLogged = battle;
 
-        var signature = OccupancySignature(Contenders(battle), out var shared);
+        var signature = OccupancySignature(Contenders(battle), battle, out var shared);
         var id = _pending?.Battle == battle ? Short(_pending.HostBattleId) : "?";
 
         Log($"battle {id} first turn: occupancy {signature:X16}" +
