@@ -238,8 +238,11 @@ internal static class MultiplayerBattlePlacementContext
 
         if (shared.Count > 0)
         {
-            // not even the game's unstack found cells for them; they stay alike on every computer that matches
-            Log($"still sharing cells after separation and unstack: {string.Join("; ", shared)}");
+            // not even the game's unstack found cells for them here. Initiative's own unstack will try again on every
+            // computer, searching cells outside the contenders' that the signature doesn't cover, so the boards may
+            // part there: the placement counts as unconfirmed (alert and Resync offer), whatever the players report
+            _pending.HostUnresolved = string.Join("; ", shared);
+            Log($"still sharing cells after separation and unstack: {_pending.HostUnresolved}");
         }
 
         _pending.HostBattleId = Guid.NewGuid().ToString("N");
@@ -570,7 +573,8 @@ internal static class MultiplayerBattlePlacementContext
         }
 
         var differing = missing.Concat(_pending.Failed.Where(present.Contains)).Distinct().ToList();
-        var matched = differing.Count == 0;
+        var others = _pending.Roster.Count(x => present.Contains(x) && x != PhotonNetwork.LocalPlayer.ActorNumber);
+        var matched = differing.Count == 0 && (_pending.HostUnresolved == null || others == 0);
 
         Send(new object[] { ReleaseKind, _pending.HostBattleId, matched }, ReceiverGroup.Others);
 
@@ -586,11 +590,22 @@ internal static class MultiplayerBattlePlacementContext
             problems.Add($"not applied by {string.Join(", ", _pending.Failed.Select(PlayerName))}");
         }
 
+        if (_pending.HostUnresolved != null)
+        {
+            problems.Add($"characters still sharing cells, left to each computer's initiative: {_pending.HostUnresolved}");
+        }
+
         Release(matched, matched ? null : string.Join("; ", problems));
 
         if (!matched)
         {
-            MultiplayerDesyncContext.OfferResyncForBattlePlacement(string.Join(", ", differing.Select(PlayerName)));
+            // with only the host's unresolved cells, every other player may differ
+            var named = differing.Count > 0
+                ? differing
+                : _pending.Roster.Where(x => present.Contains(x) && x != PhotonNetwork.LocalPlayer.ActorNumber)
+                    .ToList();
+
+            MultiplayerDesyncContext.OfferResyncForBattlePlacement(string.Join(", ", named.Select(PlayerName)));
         }
     }
 
@@ -750,6 +765,9 @@ internal static class MultiplayerBattlePlacementContext
 
         // the host's ID for this battle: the host's own, or (client) the one of the formation applied
         internal string HostBattleId;
+
+        // host: cells still shared after its separation and unstack, which make the placement unconfirmed
+        internal string HostUnresolved;
 
         // client: the first formation for other contenders, and whether its mismatch was reported
         internal string MismatchId;

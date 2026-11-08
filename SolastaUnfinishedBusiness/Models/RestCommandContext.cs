@@ -57,7 +57,8 @@ internal static class RestCommandContext
         return dash > 0 && int.TryParse(transactionId.Substring(0, dash), out var actor) ? actor : 0;
     }
 
-    // sends a command without waiting for it: the host uses this to clean up after a player who left
+    // sends a command without waiting for it: the host uses this to clean up after a player who left. With no hero,
+    // the handler gets null (a command about the game, not one hero)
     internal static void Post(RulesetCharacterHero hero, string verb, string argument)
     {
         if (!Global.IsMultiplayer)
@@ -72,7 +73,7 @@ internal static class RestCommandContext
 
         if (ServiceRepository.GetService<INetworkingService>() is not NetworkingManager { view: not null } networking)
         {
-            Main.Error($"[RestCommand] {verb} for {hero.Name} not sent: no network in a multiplayer game");
+            Main.Error($"[RestCommand] {verb} for {hero?.Name} not sent: no network in a multiplayer game");
 
             return;
         }
@@ -80,7 +81,7 @@ internal static class RestCommandContext
         var nonce = $"{PhotonNetwork.LocalPlayer?.ActorNumber ?? 0}-{++_sequence}";
 
         networking.view.RPC(nameof(NetworkingManager.AssignClassLevelRPC), RpcTarget.AllViaServer,
-            networking.CommandTick, (long)hero.Guid, $"{Marker}{nonce}:{verb}:{argument}", false);
+            networking.CommandTick, (long)(hero?.Guid ?? 0UL), $"{Marker}{nonce}:{verb}:{argument}", false);
         PhotonNetwork.SendAllOutgoingCommands();
     }
 
@@ -111,7 +112,10 @@ internal static class RestCommandContext
 
         if (!Global.IsMultiplayer)
         {
-            done?.Invoke(handler(hero, argument ?? string.Empty) ? Outcome.Ran : Outcome.Failed);
+            // run first, then report: inside done?.Invoke(...) the call would be skipped with no callback
+            var handled = handler(hero, argument ?? string.Empty);
+
+            done?.Invoke(handled ? Outcome.Ran : Outcome.Failed);
             yield break;
         }
 
@@ -182,10 +186,11 @@ internal static class RestCommandContext
     private static IEnumerator RunAsync(
         NetworkingManager networking, long heroGuid, string nonce, string verb, string argument)
     {
-        var hero = networking.GetEntityFromGuid<RulesetCharacterHero>(heroGuid, false);
+        // hero ID 0: a command about the game, not one hero (Post with no hero)
+        var hero = heroGuid == 0 ? null : networking.GetEntityFromGuid<RulesetCharacterHero>(heroGuid, false);
         var ran = false;
 
-        if (hero != null && Handlers.TryGetValue(verb, out var handler))
+        if ((hero != null || heroGuid == 0) && Handlers.TryGetValue(verb, out var handler))
         {
             try
             {

@@ -373,6 +373,7 @@ public static class MultiplayerPatcher
             MultiplayerContext.Guarded("joining a room", MultiplayerApprovalContext.OnJoinedRoom);
             MultiplayerContext.Guarded("joining a room", MultiplayerTurnSpeedContext.OnJoinedRoom);
             MultiplayerContext.Guarded("joining a room", MultiplayerBattlePlacementContext.OnJoinedRoom);
+            MultiplayerContext.Guarded("joining a room", Level20Context.OnJoinedRoom);
             MultiplayerContext.Guarded("joining a room", MultiplayerPerfContext.OnJoinedRoom);
         }
     }
