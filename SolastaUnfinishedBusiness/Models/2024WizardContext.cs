@@ -271,6 +271,10 @@ public static partial class Tabletop2024Context
     internal static void OnJoinedRoom()
     {
         LatestMemorizePress.Clear();
+
+        // a press or screen of the old game can't block or carry into the new one
+        _memorizePressOutSince = -1f;
+        _memorizeSession = null;
     }
 
     // runs on every computer at the same tick (RestCommandContext): the screen's chosen spells, and the swap made on it
