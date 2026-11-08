@@ -646,7 +646,8 @@ internal static class Level20Context
     // the screen's choice reached everyone through the game's PrepareSpells command, so the other computers were left
     // with the picks as their prepared spells and no picks at all (found reading the code for desync issue 04). Both
     // switches now run on every computer at the same tick (RestCommandContext); the clicker waits for each.
-    // a new room: forget open Spell Mastery or Signature Spells preparations from the last one
+    // a new room or a destroyed game (GameManagerPatcher): forget open Spell Mastery or Signature Spells preparations
+    // and their heroes
     internal static void OnJoinedRoom()
     {
         TaggedSpellPreparation.OnJoinedRoom();

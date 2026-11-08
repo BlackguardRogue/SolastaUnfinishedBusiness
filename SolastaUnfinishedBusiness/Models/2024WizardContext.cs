@@ -266,7 +266,8 @@ public static partial class Tabletop2024Context
         }
     }
 
-    // a new room: presses from the last one can't be reverted
+    // a new room or a destroyed game (GameManagerPatcher): presses from before can't be reverted, and their heroes
+    // mustn't be kept alive
     internal static void OnJoinedRoom()
     {
         LatestMemorizePress.Clear();
