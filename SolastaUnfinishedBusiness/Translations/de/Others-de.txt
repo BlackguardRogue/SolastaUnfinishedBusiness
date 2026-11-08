@@ -768,6 +768,7 @@ Message/&MultiplayerDesyncResyncNoSave=Die Neusynchronisierung wurde abgebrochen
 Message/&MultiplayerDesyncResyncNoSaveRecovery=Die Neusynchronisierung wurde abgebrochen: Der Spielstand konnte nicht angelegt werden ({0}), daher wurde nichts geladen. Der letzte Wiederherstellungsspeicherstand ist „{1}“: Du kannst ihn im Menü „Spiel laden“ laden oder manuell speichern und diesen Spielstand laden.
 Message/&MultiplayerDesyncResyncTitle=Mehrspieler-Desync
 Message/&MultiplayerDesyncSpellSlots=Zauberplätze
+Message/&MultiplayerDesyncPowerUses=Kraftanwendungen
 Message/&MultiplayerDesyncTemporaryHitPoints=temporäre TP
 Message/&MultiplayerHostSettingsRestartAccept=Nächster Start
 Message/&MultiplayerHostSettingsRestartDecline=Nicht jetzt

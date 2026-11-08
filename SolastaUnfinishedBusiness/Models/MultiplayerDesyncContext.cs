@@ -25,7 +25,7 @@ internal static class MultiplayerDesyncContext
     private const byte ResyncKind = 3;
     private const byte ResyncCancelledKind = 6;
     private const ulong FingerprintTickInterval = 100;
-    private const int ValuesPerCharacter = 13;
+    private const int ValuesPerCharacter = 15;
 
     // Marks a game log line whose button starts a resync. The game's own actions are 0 to 2, and it hides the button of its
     // own load action in multiplayer, so this needs one of its own. The line isn't saved with the game.
@@ -442,6 +442,11 @@ internal static class MultiplayerDesyncContext
             if (hostCharacter.SpellSlots != otherCharacter.SpellSlots)
             {
                 Add("SpellSlots", DifferenceType.State, "-", "-");
+            }
+
+            if (hostCharacter.PowerUses != otherCharacter.PowerUses)
+            {
+                Add("PowerUses", DifferenceType.State, "-", "-");
             }
 
             if (hostCharacter.Conditions != otherCharacter.Conditions)
@@ -907,6 +912,10 @@ internal static class MultiplayerDesyncContext
         internal int HitPoints;
         internal int3 Position;
         internal long SpellSlots;
+
+        // the remaining uses of each of the character's powers, by name: a power used on one computer only (an
+        // after-rest power whose command didn't run everywhere, Codex's review of PR #28) shows here
+        internal long PowerUses;
         internal int TemporaryHitPoints;
     }
 
@@ -977,7 +986,12 @@ internal static class MultiplayerDesyncContext
                         .Select(x => $"{x.ConditionDefinition?.Name}:{x.RemainingRounds}")
                         .SelectMany(TextValues)),
                     SpellSlots = Hash(SpellSlotEntries(character)
-                        .SelectMany(x => new[] { x.repertoire, x.level, x.used }))
+                        .SelectMany(x => new[] { x.repertoire, x.level, x.used })),
+                    PowerUses = Hash(ruleset.UsablePowers
+                        .Where(x => x?.PowerDefinition != null)
+                        .Select(x => $"{x.PowerDefinition.Name}:{x.RemainingUses}")
+                        .OrderBy(x => x, StringComparer.Ordinal)
+                        .SelectMany(TextValues))
                 });
             }
 
@@ -1006,6 +1020,8 @@ internal static class MultiplayerDesyncContext
                 values[o + 10] = (int)c.ConditionIds;
                 values[o + 11] = (int)(c.ConditionRounds >> 32);
                 values[o + 12] = (int)c.ConditionRounds;
+                values[o + 13] = (int)(c.PowerUses >> 32);
+                values[o + 14] = (int)c.PowerUses;
             }
 
             return
@@ -1041,7 +1057,8 @@ internal static class MultiplayerDesyncContext
                     Conditions = ((long)values[o + 5] << 32) | (uint)values[o + 6],
                     SpellSlots = ((long)values[o + 7] << 32) | (uint)values[o + 8],
                     ConditionIds = ((long)values[o + 9] << 32) | (uint)values[o + 10],
-                    ConditionRounds = ((long)values[o + 11] << 32) | (uint)values[o + 12]
+                    ConditionRounds = ((long)values[o + 11] << 32) | (uint)values[o + 12],
+                    PowerUses = ((long)values[o + 13] << 32) | (uint)values[o + 14]
                 });
             }
 

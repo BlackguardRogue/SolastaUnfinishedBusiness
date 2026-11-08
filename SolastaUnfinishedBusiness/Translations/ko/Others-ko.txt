@@ -768,6 +768,7 @@ Message/&MultiplayerDesyncResyncNoSave=재동기화가 취소되었습니다: �
 Message/&MultiplayerDesyncResyncNoSaveRecovery=재동기화가 취소되었습니다: 저장할 수 없어 ({0}) 아무것도 불러오지 않았습니다. 마지막 복구용 저장은 "{1}"입니다: 불러오기 메뉴에서 불러오거나, 수동 저장한 뒤 그것을 불러오세요.
 Message/&MultiplayerDesyncResyncTitle=멀티플레이 동기화 어긋남
 Message/&MultiplayerDesyncSpellSlots=주문 슬롯
+Message/&MultiplayerDesyncPowerUses=능력 사용 횟수
 Message/&MultiplayerDesyncTemporaryHitPoints=임시 HP
 Message/&MultiplayerHostSettingsRestartAccept=다음 실행 시
 Message/&MultiplayerHostSettingsRestartDecline=나중에

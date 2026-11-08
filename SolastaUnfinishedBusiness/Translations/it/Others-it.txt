@@ -768,6 +768,7 @@ Message/&MultiplayerDesyncResyncNoSave=La risincronizzazione è stata annullata:
 Message/&MultiplayerDesyncResyncNoSaveRecovery=La risincronizzazione è stata annullata: non è stato possibile salvare ({0}), quindi non è stato caricato nulla. L'ultimo salvataggio di recupero è "{1}": puoi caricarlo dal menu Carica partita, oppure fare un salvataggio manuale e caricare quello.
 Message/&MultiplayerDesyncResyncTitle=Desincronizzazione multigiocatore
 Message/&MultiplayerDesyncSpellSlots=slot incantesimo
+Message/&MultiplayerDesyncPowerUses=usi dei poteri
 Message/&MultiplayerDesyncTemporaryHitPoints=PF temporanei
 Message/&MultiplayerHostSettingsRestartAccept=Prossimo avvio
 Message/&MultiplayerHostSettingsRestartDecline=Non ora

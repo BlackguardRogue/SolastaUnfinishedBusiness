@@ -767,6 +767,7 @@ Message/&MultiplayerDesyncResyncNoSave=重新同步已取消：无法存档（{0
 Message/&MultiplayerDesyncResyncNoSaveRecovery=重新同步已取消：无法存档（{0}），因此没有读取任何存档。最近的恢复存档是“{1}”：你可以在读取游戏菜单中读取它，或手动存档后读取。
 Message/&MultiplayerDesyncResyncTitle=多人游戏不同步
 Message/&MultiplayerDesyncSpellSlots=法术位
+Message/&MultiplayerDesyncPowerUses=能力使用次数
 Message/&MultiplayerDesyncTemporaryHitPoints=临时生命值
 Message/&MultiplayerHostSettingsRestartAccept=下次启动
 Message/&MultiplayerHostSettingsRestartDecline=暂不

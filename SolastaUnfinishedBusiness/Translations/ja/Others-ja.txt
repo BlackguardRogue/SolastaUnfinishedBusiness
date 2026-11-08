@@ -768,6 +768,7 @@ Message/&MultiplayerDesyncResyncNoSave=再同期は取り消されました：�
 Message/&MultiplayerDesyncResyncNoSaveRecovery=再同期は取り消されました：セーブを作成できなかったため（{0}）、何もロードされていません。最後の復旧用セーブは「{1}」です。ロードメニューから読み込むか、手動セーブを行ってそれを読み込んでください。
 Message/&MultiplayerDesyncResyncTitle=マルチプレイの同期ずれ
 Message/&MultiplayerDesyncSpellSlots=呪文スロット
+Message/&MultiplayerDesyncPowerUses=パワーの使用回数
 Message/&MultiplayerDesyncTemporaryHitPoints=一時的HP
 Message/&MultiplayerHostSettingsRestartAccept=次回の起動
 Message/&MultiplayerHostSettingsRestartDecline=今はしない

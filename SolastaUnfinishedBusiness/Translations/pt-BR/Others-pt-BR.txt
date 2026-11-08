@@ -768,6 +768,7 @@ Message/&MultiplayerDesyncResyncNoSave=A ressincronização foi cancelada: não 
 Message/&MultiplayerDesyncResyncNoSaveRecovery=A ressincronização foi cancelada: não foi possível salvar ({0}), então nada foi carregado. O último salvamento de recuperação é "{1}": você pode carregá-lo no menu Carregar jogo, ou salvar manualmente e carregar esse.
 Message/&MultiplayerDesyncResyncTitle=Dessincronização multijogador
 Message/&MultiplayerDesyncSpellSlots=espaços de magia
+Message/&MultiplayerDesyncPowerUses=usos de poderes
 Message/&MultiplayerDesyncTemporaryHitPoints=PV temporários
 Message/&MultiplayerHostSettingsRestartAccept=Próxima inicialização
 Message/&MultiplayerHostSettingsRestartDecline=Agora não

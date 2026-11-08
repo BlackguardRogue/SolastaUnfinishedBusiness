@@ -57,6 +57,7 @@ internal static class MultiplayerBattlePlacementContext
     private const float ClientWaitSeconds = 20f;
     private const float MismatchGraceSeconds = 2f;
     private const int RememberedBattles = 8;
+    private const string SurprisedConditionName = "ConditionSurprised";
 
     private static bool _eventHandlerRegistered;
 
@@ -241,6 +242,8 @@ internal static class MultiplayerBattlePlacementContext
         var contenders = Contenders(battle);
         // contenders first, then the non-contenders the unstack moved (by ID each)
         var placed = contenders.Concat(extras.OrderBy(x => x.Guid)).ToList();
+
+        _pending.PlacedOthers = extras;
         var guids = placed.Select(x => (long)x.Guid).ToArray();
         var cells = placed
             .SelectMany(x => new[] { x.LocationPosition.x, x.LocationPosition.y, x.LocationPosition.z })
@@ -406,6 +409,8 @@ internal static class MultiplayerBattlePlacementContext
 
         var placed = guids.Select(x => byGuid[x]).ToList();
 
+        _pending.PlacedOthers = placed.Where(x => !_pending.Battle.AllContenders.Contains(x)).ToList();
+
         for (var i = 0; i < guids.Length; i++)
         {
             var character = byGuid[guids[i]];
@@ -474,6 +479,9 @@ internal static class MultiplayerBattlePlacementContext
         foreach (var contender in contenders)
         {
             Mix((long)contender.Guid);
+
+            // the Surprised condition itself, which the battle start gives party members and enemies alike
+            Mix(contender.RulesetCharacter?.HasConditionOfType(SurprisedConditionName) == true ? 1 : 0);
             Mix(contender.LocationPosition.x);
             Mix(contender.LocationPosition.y);
             Mix(contender.LocationPosition.z);
@@ -801,7 +809,11 @@ internal static class MultiplayerBattlePlacementContext
 
         _firstTurnLogged = battle;
 
-        var signature = OccupancySignature(Contenders(battle), battle, out var shared);
+        // the non-contenders placed with this battle too, so their final cells are compared as well
+        var others = _pending?.Battle == battle ? _pending.PlacedOthers ?? [] : [];
+        var signature = OccupancySignature(
+            Contenders(battle).Concat(others.Where(x => x != null).OrderBy(x => x.Guid)).ToList(), battle,
+            out var shared);
         var id = _pending?.Battle == battle ? Short(_pending.HostBattleId) : "?";
 
         Log($"battle {id} first turn: occupancy {signature:X16}" +
@@ -824,6 +836,9 @@ internal static class MultiplayerBattlePlacementContext
 
         // host: cells still shared after its separation and unstack, which make the placement unconfirmed
         internal string HostUnresolved;
+
+        // non-contenders the host's unstack moved, which the formation placed too
+        internal List<GameLocationCharacter> PlacedOthers;
 
         // client: the first formation for other contenders, and whether its mismatch was reported
         internal string MismatchId;

@@ -716,6 +716,7 @@ Message/&MultiplayerDesyncHitPoints=HP
 Message/&MultiplayerDesyncTemporaryHitPoints=temporary HP
 Message/&MultiplayerDesyncPosition=position
 Message/&MultiplayerDesyncSpellSlots=spell slots
+Message/&MultiplayerDesyncPowerUses=power uses
 Message/&MultiplayerDesyncConditions=conditions
 Message/&ModErrorWarningDetectedDescription=Solasta has detected an instability.\n\n<b>Cause:</b> {0}\n<b>Where:</b> {1}\n\nThe full details are in <b>{2}</b>. If it keeps happening, share that file and the save file with the %ModName% mod community.
 Message/&ModErrorSourceMod=in %ModName% ({0})

@@ -768,6 +768,7 @@ Message/&MultiplayerDesyncResyncNoSave=Повторная синхронизац
 Message/&MultiplayerDesyncResyncNoSaveRecovery=Повторная синхронизация отменена: сохранение не удалось создать ({0}), поэтому ничего не загружено. Последнее сохранение для восстановления — «{1}»: его можно загрузить через меню загрузки или сохраниться вручную и загрузить это сохранение.
 Message/&MultiplayerDesyncResyncTitle=Рассинхронизация
 Message/&MultiplayerDesyncSpellSlots=ячейки заклинаний
+Message/&MultiplayerDesyncPowerUses=использования способностей
 Message/&MultiplayerDesyncTemporaryHitPoints=временные ОЗ
 Message/&MultiplayerHostSettingsRestartAccept=При следующем запуске
 Message/&MultiplayerHostSettingsRestartDecline=Не сейчас

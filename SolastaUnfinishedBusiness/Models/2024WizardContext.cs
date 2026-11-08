@@ -182,6 +182,12 @@ public static partial class Tabletop2024Context
     // game's PrepareSpells, so no computer can get one without the other (a disconnect between two commands could
     // otherwise change the spells but not the record). The screen closes as the game's own would, once the command has
     // run here; if it doesn't run, the screen stays open with nothing changed. False: not Memorize Spell mode.
+    //
+    // Each press is a session, tied to the condition it was made for, so a press that arrives after the condition was
+    // replaced (a rest) changes nothing. If the press hasn't come back after the command's wait, it may still arrive
+    // later, after the player has given up on it or closed the screen: a revert with the spells and record from before
+    // the press is sent at once, and runs after the press everywhere (one sender's commands keep their order), undoing
+    // it where it ran (Codex's review of PR #28).
     internal static bool TryPrepareMemorizeSpell(SpellRepertoirePanel panel)
     {
         var character = panel.GuiCharacter?.RulesetCharacter;
@@ -192,13 +198,24 @@ public static partial class Tabletop2024Context
         }
 
         var session = GetMemorizeSession(condition);
-        var argument = string.Join("|",
-            panel.SpellRepertoire.SpellCastingFeature.Name,
+        var sessionId = RestCommandContext.NewTransactionId();
+        var feature = panel.SpellRepertoire.SpellCastingFeature.Name;
+        var argument = string.Join("|", sessionId, condition.Guid, feature,
             $"{session.Amount},{session.SpellIndex}",
             string.Join(";", panel.preparedSpells.Select(x => x.Name)));
+        var revert = string.Join("|", sessionId, condition.Guid, feature,
+            $"{condition.Amount},{condition.SourceProficiencyBonus}",
+            string.Join(";", panel.SpellRepertoire.PreparedSpells.Select(x => x.Name)));
 
         panel.StartCoroutine(RestCommandContext.Send(hero, nameof(MemorizeSpellPrepare), argument, outcome =>
         {
+            if (outcome == RestCommandContext.Outcome.TimedOut)
+            {
+                RestCommandContext.Post(hero, nameof(MemorizeSpellRevert), revert);
+
+                return;
+            }
+
             if (outcome != RestCommandContext.Outcome.Ran || !panel)
             {
                 return;
@@ -211,27 +228,70 @@ public static partial class Tabletop2024Context
         return true;
     }
 
+    // presses that ran, by session, so only a press that ran is reverted; the same on every computer (commands only)
+    private static readonly HashSet<string> MemorizePresses = [];
+    private static readonly Queue<string> MemorizePressOrder = new();
+
     // runs on every computer at the same tick (RestCommandContext): the screen's chosen spells, and the swap made on it
     // as the record. Nothing changes unless every part is found, alike everywhere.
     private static bool MemorizeSpellPrepare(RulesetCharacterHero hero, string argument)
     {
+        if (!ApplyMemorizeSpells(hero, argument, out var sessionId))
+        {
+            return false;
+        }
+
+        MemorizePresses.Add(sessionId);
+        MemorizePressOrder.Enqueue(sessionId);
+
+        while (MemorizePressOrder.Count > 16)
+        {
+            MemorizePresses.Remove(MemorizePressOrder.Dequeue());
+        }
+
+        return true;
+    }
+
+    // runs on every computer at the same tick: undoes a press that ran, with the spells and record from before it
+    private static bool MemorizeSpellRevert(RulesetCharacterHero hero, string argument)
+    {
+        var sessionId = argument.Split('|')[0];
+
+        if (!MemorizePresses.Remove(sessionId))
+        {
+            // the press never ran (or was refused): nothing to undo
+            return false;
+        }
+
+        Main.Info($"[RestCommand] Memorize Spell preparation for {hero.Name} came too late; undone");
+
+        return ApplyMemorizeSpells(hero, argument, out _);
+    }
+
+    // session|condition ID|spellcasting feature|amount,spell index|spell;spell...
+    private static bool ApplyMemorizeSpells(RulesetCharacterHero hero, string argument, out string sessionId)
+    {
         var parts = argument.Split('|');
-        var values = parts.Length == 3 ? parts[1].Split(',') : [];
+        var values = parts.Length == 5 ? parts[3].Split(',') : [];
         var spells = new List<SpellDefinition>();
         var database = DatabaseRepository.GetDatabase<SpellDefinition>();
 
-        if (parts.Length != 3 || values.Length != 2 ||
+        sessionId = parts[0];
+
+        if (parts.Length != 5 || values.Length != 2 ||
+            !ulong.TryParse(parts[1], out var conditionGuid) ||
             !int.TryParse(values[0], out var amount) ||
             !int.TryParse(values[1], out var spellIndex) ||
             !TryGetMemorizeSpellCondition(hero, out var condition) ||
-            hero.SpellRepertoires.FirstOrDefault(x => x.SpellCastingFeature.Name == parts[0]) is not { } repertoire)
+            condition.Guid != conditionGuid ||
+            hero.SpellRepertoires.FirstOrDefault(x => x.SpellCastingFeature.Name == parts[2]) is not { } repertoire)
         {
             Main.Error($"[RestCommand] Memorize Spell preparation for {hero.Name} not applied ({argument})");
 
             return false;
         }
 
-        foreach (var name in parts[2].Split([';'], StringSplitOptions.RemoveEmptyEntries))
+        foreach (var name in parts[4].Split([';'], StringSplitOptions.RemoveEmptyEntries))
         {
             if (!database.TryGetElement(name, out var spell))
             {
@@ -279,6 +339,7 @@ public static partial class Tabletop2024Context
             .RegisterFunctor(nameof(FunctorMemorizeSpell), new FunctorMemorizeSpell());
         RestCommandContext.Register(nameof(BeginMemorizeSpell), BeginMemorizeSpell);
         RestCommandContext.Register(nameof(MemorizeSpellPrepare), MemorizeSpellPrepare);
+        RestCommandContext.Register(nameof(MemorizeSpellRevert), MemorizeSpellRevert);
     }
 
     internal static void SwitchWizardMemorizeSpell()

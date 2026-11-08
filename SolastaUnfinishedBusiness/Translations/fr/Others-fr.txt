@@ -768,6 +768,7 @@ Message/&MultiplayerDesyncResyncNoSave=La resynchronisation a été annulée : l
 Message/&MultiplayerDesyncResyncNoSaveRecovery=La resynchronisation a été annulée : la sauvegarde n'a pas pu être créée ({0}), donc rien n'a été chargé. La dernière sauvegarde de secours est « {1} » : vous pouvez la charger depuis le menu Charger une partie, ou faire une sauvegarde manuelle et la charger.
 Message/&MultiplayerDesyncResyncTitle=Désynchronisation multijoueur
 Message/&MultiplayerDesyncSpellSlots=emplacements de sort
+Message/&MultiplayerDesyncPowerUses=utilisations de pouvoirs
 Message/&MultiplayerDesyncTemporaryHitPoints=PV temporaires
 Message/&MultiplayerHostSettingsRestartAccept=Prochain lancement
 Message/&MultiplayerHostSettingsRestartDecline=Pas maintenant
