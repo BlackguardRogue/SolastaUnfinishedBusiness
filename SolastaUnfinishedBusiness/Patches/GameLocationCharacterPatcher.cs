@@ -311,10 +311,25 @@ public static class GameLocationCharacterPatcher
         }
 
         [UsedImplicitly]
-        public static void Postfix(GameLocationCharacter __instance)
+        public static void Postfix(GameLocationCharacter __instance, int roundNumber)
         {
             //PATCH: compares this character with the host's at the end of its turn (MULTIPLAYER)
-            MultiplayerContext.Guarded("checking a turn end", () => MultiplayerDesyncContext.OnTurnEnded(__instance));
+            MultiplayerContext.Guarded("checking a turn end",
+                () => MultiplayerDesyncContext.OnTurnEnded(__instance, roundNumber, false));
+        }
+    }
+
+    //PATCH: a legendary turn ends here instead of EndBattleTurn; compared the same way (MULTIPLAYER)
+    [HarmonyPatch(typeof(GameLocationCharacter), nameof(GameLocationCharacter.EndLegendaryTurn))]
+    [SuppressMessage("Minor Code Smell", "S101:Types should be named in PascalCase", Justification = "Patch")]
+    [UsedImplicitly]
+    public static class EndLegendaryTurn_Patch
+    {
+        [UsedImplicitly]
+        public static void Postfix(GameLocationCharacter __instance)
+        {
+            MultiplayerContext.Guarded("checking a legendary turn end",
+                () => MultiplayerDesyncContext.OnTurnEnded(__instance, Gui.Battle?.CurrentRound ?? 0, true));
         }
     }
 

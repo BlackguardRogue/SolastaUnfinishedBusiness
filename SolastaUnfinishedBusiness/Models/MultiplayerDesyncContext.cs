@@ -653,11 +653,22 @@ internal static class MultiplayerDesyncContext
     private static readonly Dictionary<(int Actor, string Key), TurnPrint> ClientTurns = new();
     private static readonly HashSet<(int Actor, string Key)> TurnsReported = [];
 
+    // A turn is named by the battle, the round, the character, whether it's a legendary turn, and which of that
+    // character's turns this is in the round: Thief Reflexes and Time Stop give one character two turns in a round, and
+    // successive battles reuse rounds and characters (Codex's review of 984cd021). Battles are counted on each computer
+    // as they start; only one battle runs at a time, so every computer counts the same.
+    private static Game _turnGame;
+    private static GameLocationBattle _turnBattle;
+    private static int _turnBattleNumber;
+    private static readonly Dictionary<string, int> TurnsInRound = new();
+
     // a turn-end difference was reported, so the Resync button has something to fix
     private static bool _turnDesyncReported;
 
     private sealed class TurnPrint
     {
+        // host: the players already compared against this turn
+        internal readonly HashSet<int> Answered = [];
         internal CharacterPrint Character;
         internal long Dice;
         internal int Facing;
@@ -667,8 +678,9 @@ internal static class MultiplayerDesyncContext
         internal int Round;
     }
 
-    // GameLocationCharacter.EndBattleTurn postfix, on every computer
-    internal static void OnTurnEnded(GameLocationCharacter character)
+    // GameLocationCharacter.EndBattleTurn and EndLegendaryTurn postfixes, on every computer (a legendary turn ends
+    // through EndLegendaryTurn, which skips EndBattleTurn, so it's hooked too)
+    internal static void OnTurnEnded(GameLocationCharacter character, int round, bool legendary)
     {
         if (!Main.Settings.MultiplayerEnableDesyncDetection ||
             !Main.Settings.MultiplayerEnableStateFingerprint ||
@@ -683,6 +695,26 @@ internal static class MultiplayerDesyncContext
 
         RegisterEventHandler();
 
+        // a new game or battle starts its own numbering
+        if (Gui.Game != _turnGame)
+        {
+            _turnGame = Gui.Game;
+            _turnBattle = null;
+            _turnBattleNumber = 0;
+        }
+
+        if (battle != _turnBattle)
+        {
+            _turnBattle = battle;
+            _turnBattleNumber++;
+            TurnsInRound.Clear();
+        }
+
+        var turnName = $"{_turnBattleNumber}:{round}:{character.Guid}:{(legendary ? "L" : "T")}";
+
+        TurnsInRound.TryGetValue(turnName, out var occurrence);
+        TurnsInRound[turnName] = ++occurrence;
+
         var actions = ServiceRepository.GetService<IGameLocationActionService>();
         var characters = ServiceRepository.GetService<IGameLocationCharacterService>()?.ValidCharacters ?? [];
         var print = new TurnPrint
@@ -690,10 +722,10 @@ internal static class MultiplayerDesyncContext
             Character = Fingerprint.PrintOf(character),
             Dice = Hash(CaptureRandomState()),
             Facing = (int)character.Orientation,
-            Key = $"{battle.CurrentRound}:{character.Guid}",
+            Key = $"{turnName}:{occurrence}",
             Quiet = characters.All(x => x == character || (!x.MoveInProgress && actions?.IsCharacterActing(x) != true)),
             Received = Time.realtimeSinceStartup,
-            Round = battle.CurrentRound
+            Round = round
         };
 
         if (!PhotonNetwork.IsMasterClient)
@@ -704,7 +736,8 @@ internal static class MultiplayerDesyncContext
             PhotonNetwork.RaiseEvent(EventCode,
                 new object[]
                 {
-                    TurnKind, print.Round, (long)character.Guid, values, print.Facing, print.Dice, print.Quiet
+                    TurnKind, print.Round, (long)character.Guid, values, print.Facing, print.Dice, print.Quiet,
+                    print.Key
                 },
                 new RaiseEventOptions { Receivers = ReceiverGroup.MasterClient }, SendOptions.SendReliable);
 
@@ -717,6 +750,7 @@ internal static class MultiplayerDesyncContext
         foreach (var pending in ClientTurns.Where(x => x.Key.Key == print.Key).ToList())
         {
             ClientTurns.Remove(pending.Key);
+            print.Answered.Add(pending.Key.Actor);
             CompareTurn(print, pending.Value, pending.Key.Actor);
         }
     }
@@ -724,9 +758,10 @@ internal static class MultiplayerDesyncContext
     // host: a player's record of a turn end
     private static void OnTurnEvent(object[] data, Player sender)
     {
-        if (!PhotonNetwork.IsMasterClient || sender == null || data.Length != 7 || data[1] is not int round ||
+        if (!PhotonNetwork.IsMasterClient || sender == null || data.Length != 8 || data[1] is not int round ||
             data[2] is not long guid || data[3] is not int[] { Length: ValuesPerCharacter } values ||
-            data[4] is not int facing || data[5] is not long dice || data[6] is not bool quiet)
+            data[4] is not int facing || data[5] is not long dice || data[6] is not bool quiet ||
+            data[7] is not string key)
         {
             return;
         }
@@ -736,7 +771,7 @@ internal static class MultiplayerDesyncContext
             Character = Fingerprint.ReadValues((ulong)guid, values, 0),
             Dice = dice,
             Facing = facing,
-            Key = $"{round}:{(ulong)guid}",
+            Key = key,
             Quiet = quiet,
             Received = Time.realtimeSinceStartup,
             Round = round
@@ -746,7 +781,10 @@ internal static class MultiplayerDesyncContext
 
         if (HostTurns.TryGetValue(print.Key, out var hostPrint))
         {
-            CompareTurn(hostPrint, print, sender.ActorNumber);
+            if (hostPrint.Answered.Add(sender.ActorNumber))
+            {
+                CompareTurn(hostPrint, print, sender.ActorNumber);
+            }
         }
         else
         {
@@ -767,6 +805,9 @@ internal static class MultiplayerDesyncContext
         {
             ClientTurns.Remove(key);
         }
+
+        // reported turns are named by battle too, so a later battle is never suppressed; old ones only take memory
+        TurnsReported.RemoveWhere(x => !HostTurns.ContainsKey(x.Key) && !ClientTurns.ContainsKey((x.Actor, x.Key)));
     }
 
     // host: one character at one turn end; a difference is reported at once (a turn end is a settled point, so there's

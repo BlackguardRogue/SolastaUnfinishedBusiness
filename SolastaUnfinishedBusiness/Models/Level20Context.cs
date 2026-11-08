@@ -658,32 +658,38 @@ internal static class Level20Context
     // (MaxPreparedSpell), as upstream did on that computer alone.
     internal static class TaggedSpellPreparation
     {
-        // the hero and feature the clicker's preparation screen is picking for, or null
-        internal static (ulong Hero, string Tag)? Mode { get; private set; }
+        // the wizard repertoire and feature the clicker's preparation screen is picking for, or null. It's the
+        // repertoire, not the hero, so a multiclass hero's other prepared repertoire (a Cleric's) keeps its own limit,
+        // filter and title while the screen is open
+        private static (RulesetSpellRepertoire Repertoire, string Tag)? Mode { get; set; }
 
-        internal static bool IsMode(RulesetCharacter character, string tag)
+        // the screen's list when it opened in the mode (auto-prepared spells and picks), which Revert goes back to and
+        // compares with
+        private static List<SpellDefinition> _initialPicks = [];
+
+        internal static bool IsMode(RulesetSpellRepertoire repertoire, string tag)
         {
-            return character != null && Mode is { } mode && mode.Hero == character.Guid && mode.Tag == tag;
+            return repertoire != null && Mode is { } mode && mode.Repertoire == repertoire && mode.Tag == tag;
         }
 
+        // the hero's Wizard repertoire: the features are the Wizard's, and a multiclass hero can have another prepared
+        // repertoire listed first (upstream took the first prepared one)
         private static RulesetSpellRepertoire GetRepertoire(RulesetCharacterHero hero)
         {
             return hero.SpellRepertoires.FirstOrDefault(x =>
-                x.SpellCastingFeature.SpellReadyness == SpellReadyness.Prepared);
+                x.SpellCastingClass == Wizard && x.SpellCastingFeature.SpellReadyness == SpellReadyness.Prepared);
         }
 
         internal static void Register(string tag)
         {
-            RestCommandContext.Register($"Set{tag}", (hero, names) => SetPicks(hero, tag, names));
+            RestCommandContext.Register($"Set{tag}", (hero, argument) => SetPicks(hero, tag, argument));
         }
 
         // the screen's list in the mode: the auto-prepared spells and the current picks (upstream showed the
         // auto-prepared spells the first time, the picks after)
         internal static void ShowPicks(SpellRepertoirePanel panel)
         {
-            var character = panel.GuiCharacter?.RulesetCharacter;
-
-            if (Mode is not { } mode || character == null || mode.Hero != character.Guid)
+            if (Mode is not { } mode || panel.SpellRepertoire != mode.Repertoire)
             {
                 return;
             }
@@ -697,7 +703,22 @@ internal static class Level20Context
                 panel.preparedSpells.AddRange(picks.Where(x => !panel.preparedSpells.Contains(x)));
             }
 
+            _initialPicks = [.. panel.preparedSpells];
             panel.RefreshPreparation(false);
+        }
+
+        // RefreshPreparation postfix: the game enables Revert when the list differs from the prepared spells; in the
+        // mode it's enabled when the list differs from the picks the screen opened with, and disabled once back to them
+        internal static void RefreshRevert(SpellRepertoirePanel panel)
+        {
+            if (Mode is not { } mode || panel.SpellRepertoire != mode.Repertoire || !panel.revertPreparationButton)
+            {
+                return;
+            }
+
+            panel.revertPreparationButton.interactable =
+                panel.preparedSpells.Count != _initialPicks.Count ||
+                panel.preparedSpells.Any(x => !_initialPicks.Contains(x));
         }
 
         // DoValidate prefix: in the mode, Prepare sends the chosen spells as the picks. False: not in the mode
@@ -705,14 +726,17 @@ internal static class Level20Context
         {
             var character = panel.GuiCharacter?.RulesetCharacter;
 
-            if (Mode is not { } mode || character is not RulesetCharacterHero hero || mode.Hero != hero.Guid)
+            if (Mode is not { } mode || character is not RulesetCharacterHero hero ||
+                panel.SpellRepertoire != mode.Repertoire)
             {
                 return false;
             }
 
-            var names = string.Join(";", panel.preparedSpells.Select(x => x.Name));
+            // the repertoire by its spellcasting feature, so every computer changes the same one
+            var argument = mode.Repertoire.SpellCastingFeature.Name + "|" +
+                           string.Join(";", panel.preparedSpells.Select(x => x.Name));
 
-            panel.StartCoroutine(RestCommandContext.Send(hero, $"Set{mode.Tag}", names, outcome =>
+            panel.StartCoroutine(RestCommandContext.Send(hero, $"Set{mode.Tag}", argument, outcome =>
             {
                 if (outcome == RestCommandContext.Outcome.Ran && panel)
                 {
@@ -724,19 +748,24 @@ internal static class Level20Context
         }
 
         // runs on every computer at the same tick (RestCommandContext): the chosen spells, less the auto-prepared
-        // ones, become the picks and leave the prepared spells. Nothing changes unless every spell is found.
-        private static bool SetPicks(RulesetCharacterHero hero, string tag, string names)
+        // ones, become the picks and leave the prepared spells. Nothing changes unless the repertoire named is the
+        // hero's Wizard repertoire and every spell is found.
+        // spellcasting feature|spell;spell...
+        private static bool SetPicks(RulesetCharacterHero hero, string tag, string argument)
         {
+            var parts = argument.Split(['|'], 2);
             var repertoire = GetRepertoire(hero);
             var database = DatabaseRepository.GetDatabase<SpellDefinition>();
             var chosen = new List<SpellDefinition>();
 
-            if (repertoire == null)
+            if (parts.Length != 2 || repertoire == null || repertoire.SpellCastingFeature.Name != parts[0])
             {
+                Main.Error($"[RestCommand] {tag} for {hero.Name}: not the Wizard repertoire ({argument}); nothing changed");
+
                 return false;
             }
 
-            foreach (var name in names.Split([';'], StringSplitOptions.RemoveEmptyEntries))
+            foreach (var name in parts[1].Split([';'], StringSplitOptions.RemoveEmptyEntries))
             {
                 if (!database.TryGetElement(name, out var spell))
                 {
@@ -773,7 +802,7 @@ internal static class Level20Context
                 yield break;
             }
 
-            Mode = (hero.Guid, tag);
+            Mode = (spellRepertoire, tag);
 
             try
             {
@@ -788,6 +817,7 @@ internal static class Level20Context
             finally
             {
                 Mode = null;
+                _initialPicks = [];
                 partyStatusScreen.SetupDisplayPreferences(true, true, true);
             }
         }
@@ -818,16 +848,16 @@ internal static class Level20Context
             return activity != RestActivitySpellMastery || hero.GetClassLevel(Wizard) >= 18;
         }
 
-        internal static bool IsInvalidSelectedSpell(RulesetCharacter rulesetCharacter, SpellDefinition spell)
+        internal static bool IsInvalidSelectedSpell(RulesetSpellRepertoire repertoire, SpellDefinition spell)
         {
-            return TaggedSpellPreparation.IsMode(rulesetCharacter, Mastery) && spell.SpellLevel is not (1 or 2);
+            return TaggedSpellPreparation.IsMode(repertoire, Mastery) && spell.SpellLevel is not (1 or 2);
         }
 
-        internal static bool IsPreparation(RulesetCharacter rulesetCharacter, out int maxPreparedSpell)
+        internal static bool IsPreparation(RulesetSpellRepertoire repertoire, out int maxPreparedSpell)
         {
             maxPreparedSpell = 2;
 
-            return TaggedSpellPreparation.IsMode(rulesetCharacter, Mastery);
+            return TaggedSpellPreparation.IsMode(repertoire, Mastery);
         }
 
         internal static bool ShouldConsumeSlot(RulesetCharacter caster, RulesetEffectSpell activeSpell)
@@ -905,16 +935,16 @@ internal static class Level20Context
                       spells.Count == 0)));
         }
 
-        internal static bool IsPreparation(RulesetCharacter rulesetCharacter, out int maxPreparedSpell)
+        internal static bool IsPreparation(RulesetSpellRepertoire repertoire, out int maxPreparedSpell)
         {
             maxPreparedSpell = 2;
 
-            return TaggedSpellPreparation.IsMode(rulesetCharacter, Signature);
+            return TaggedSpellPreparation.IsMode(repertoire, Signature);
         }
 
-        internal static bool IsInvalidSelectedSpell(RulesetCharacter rulesetCharacter, SpellDefinition spell)
+        internal static bool IsInvalidSelectedSpell(RulesetSpellRepertoire repertoire, SpellDefinition spell)
         {
-            return TaggedSpellPreparation.IsMode(rulesetCharacter, Signature) && spell.SpellLevel is not 3;
+            return TaggedSpellPreparation.IsMode(repertoire, Signature) && spell.SpellLevel is not 3;
         }
 
         internal static bool ShouldConsumeSlot(RulesetCharacter caster, RulesetEffectSpell activeSpell)

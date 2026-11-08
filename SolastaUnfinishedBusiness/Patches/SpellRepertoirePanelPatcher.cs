@@ -55,8 +55,8 @@ public static class SpellRepertoirePanelPatcher
             var spellDefinition = spellBox.SpellDefinition;
 
             return !Tabletop2024Context.IsInvalidMemorizeSelectedSpell(__instance, rulesetCharacter, spellDefinition) &&
-                   !WizardSpellMastery.IsInvalidSelectedSpell(rulesetCharacter, spellDefinition) &&
-                   !WizardSignatureSpells.IsInvalidSelectedSpell(rulesetCharacter, spellDefinition);
+                   !WizardSpellMastery.IsInvalidSelectedSpell(__instance.SpellRepertoire, spellDefinition) &&
+                   !WizardSignatureSpells.IsInvalidSelectedSpell(__instance.SpellRepertoire, spellDefinition);
         }
     }
 
@@ -108,6 +108,14 @@ public static class SpellRepertoirePanelPatcher
     [UsedImplicitly]
     public static class RefreshPreparation_Patch
     {
+        //PATCH: in Spell Mastery or Signature Spells mode, Revert is enabled when the list differs from the picks the
+        //screen opened with (TaggedSpellPreparation.RefreshRevert)
+        [UsedImplicitly]
+        public static void Postfix(SpellRepertoirePanel __instance)
+        {
+            TaggedSpellPreparation.RefreshRevert(__instance);
+        }
+
         [UsedImplicitly]
         public static IEnumerable<CodeInstruction> Transpiler([NotNull] IEnumerable<CodeInstruction> instructions)
         {
@@ -163,14 +171,14 @@ public static class SpellRepertoirePanelPatcher
         {
             var rulesetCharacter = spellRepertoirePanel.GuiCharacter.RulesetCharacter;
 
-            if (Tabletop2024Context.IsMemorizeSpellPreparation(rulesetCharacter))
+            if (Tabletop2024Context.IsMemorizeSpellPreparation(rulesetCharacter, spellRepertoirePanel.SpellRepertoire))
             {
                 RepaintPanel(
                     spellRepertoirePanel, Tabletop2024Context.FeatureMemorizeSpell.FormatTitle(),
                     false, false, false,
                     Gui.Localize("Screen/&PreparePanelMemorizeSpellSelect"));
             }
-            else if (WizardSpellMastery.IsPreparation(rulesetCharacter, out _))
+            else if (WizardSpellMastery.IsPreparation(spellRepertoirePanel.SpellRepertoire, out _))
             {
                 RepaintPanel(
                     spellRepertoirePanel, WizardSpellMastery.FeatureSpellMastery.FormatTitle(),
@@ -178,7 +186,7 @@ public static class SpellRepertoirePanelPatcher
 
                 canSelectSpells = spellsByLevelGroup.SpellLevel is 1 or 2;
             }
-            else if (WizardSignatureSpells.IsPreparation(rulesetCharacter, out _))
+            else if (WizardSignatureSpells.IsPreparation(spellRepertoirePanel.SpellRepertoire, out _))
             {
                 RepaintPanel(
                     spellRepertoirePanel, WizardSignatureSpells.PowerSignatureSpells.FormatTitle(),

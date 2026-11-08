@@ -115,9 +115,16 @@ public static partial class Tabletop2024Context
             AttributeDefinitions.TagEffect, ConditionMemorizeSpell.Name, out condition);
     }
 
-    internal static bool IsMemorizeSpellPreparation(RulesetCharacter character)
+    // Memorize Spell is a Wizard feature: its mode only applies to the Wizard repertoire, so a multiclass hero's other
+    // prepared repertoire (a Cleric's) prepares as usual
+    private static bool IsWizardRepertoire(RulesetSpellRepertoire repertoire)
     {
-        return TryGetMemorizeSpellCondition(character, out _);
+        return repertoire?.SpellCastingClass == Wizard;
+    }
+
+    internal static bool IsMemorizeSpellPreparation(RulesetCharacter character, RulesetSpellRepertoire repertoire)
+    {
+        return IsWizardRepertoire(repertoire) && TryGetMemorizeSpellCondition(character, out _);
     }
 
     // The one swap Memorize Spell allows is recorded in the condition, as upstream did: Amount (1 once a spell was
@@ -149,7 +156,8 @@ public static partial class Tabletop2024Context
     internal static bool IsInvalidMemorizeSelectedSpell(
         SpellRepertoirePanel spellRepertoirePanel, RulesetCharacter rulesetCharacter, SpellDefinition spell)
     {
-        if (!TryGetMemorizeSpellCondition(rulesetCharacter, out var activeCondition))
+        if (!IsWizardRepertoire(spellRepertoirePanel.SpellRepertoire) ||
+            !TryGetMemorizeSpellCondition(rulesetCharacter, out var activeCondition))
         {
             return false;
         }
@@ -187,7 +195,8 @@ public static partial class Tabletop2024Context
     {
         var character = panel.GuiCharacter?.RulesetCharacter;
 
-        if (character is not RulesetCharacterHero hero || !TryGetMemorizeSpellCondition(hero, out var condition))
+        if (character is not RulesetCharacterHero hero || !IsWizardRepertoire(panel.SpellRepertoire) ||
+            !TryGetMemorizeSpellCondition(hero, out var condition))
         {
             return false;
         }
@@ -228,7 +237,8 @@ public static partial class Tabletop2024Context
             !int.TryParse(values[1], out var spellIndex) ||
             !TryGetMemorizeSpellCondition(hero, out var condition) ||
             condition.Guid != conditionGuid ||
-            hero.SpellRepertoires.FirstOrDefault(x => x.SpellCastingFeature.Name == parts[1]) is not { } repertoire)
+            hero.SpellRepertoires.FirstOrDefault(x => x.SpellCastingFeature.Name == parts[1]) is not { } repertoire ||
+            !IsWizardRepertoire(repertoire))
         {
             Main.Error($"[RestCommand] Memorize Spell preparation for {hero.Name} not applied ({argument})");
 
@@ -309,8 +319,9 @@ public static partial class Tabletop2024Context
 
             Gui.GuiService.GetScreen<RestModal>().KeepCurrentState = true;
 
+            // the Wizard repertoire: a multiclass hero can have another prepared one listed first
             var spellRepertoire = hero.SpellRepertoires.FirstOrDefault(x =>
-                x.SpellCastingFeature.SpellReadyness == SpellReadyness.Prepared);
+                IsWizardRepertoire(x) && x.SpellCastingFeature.SpellReadyness == SpellReadyness.Prepared);
 
             if (spellRepertoire == null)
             {
