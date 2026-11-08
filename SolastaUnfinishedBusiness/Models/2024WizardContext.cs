@@ -118,11 +118,31 @@ public static partial class Tabletop2024Context
         return TryGetMemorizeSpellCondition(character, out _);
     }
 
-    // The one swap Memorize Spell allows is chosen on the clicking player's preparation screen, so it's tracked on that
-    // computer only, by the condition's object ID: (whether a spell was unselected, the index of the spell last
-    // unselected or selected, -1 before either). A new condition (after the next rest) starts a new record. This used to
-    // be kept in the condition's Amount and SourceProficiencyBonus, which changed a shared game object on one computer.
-    private static readonly Dictionary<ulong, (int Amount, int SpellIndex)> MemorizeSwaps = new();
+    // The one swap Memorize Spell allows is recorded in the condition, as upstream did: Amount (1 once a spell was
+    // unselected) and SourceProficiencyBonus (the index of the spell last unselected or selected, -1 before either).
+    // The condition lasts until the next rest and is saved with the game, so reopening Memorize Spell or loading a
+    // save can't grant a second swap. Upstream changed those fields on every click on the clicker's computer only; now
+    // a click changes only this computer's screen session below, and the record is committed on every computer, by
+    // CommitMemorizeSwap, once the screen closes with a changed preparation (closing without one changes nothing).
+    private static MemorizeSession _memorizeSession;
+
+    private sealed class MemorizeSession(ulong conditionGuid, int amount, int spellIndex)
+    {
+        internal readonly ulong ConditionGuid = conditionGuid;
+        internal int Amount = amount;
+        internal int SpellIndex = spellIndex;
+    }
+
+    // the screen session for this condition, started from the committed record
+    private static MemorizeSession GetMemorizeSession(RulesetCondition condition)
+    {
+        if (_memorizeSession == null || _memorizeSession.ConditionGuid != condition.Guid)
+        {
+            _memorizeSession = new MemorizeSession(condition.Guid, condition.Amount, condition.SourceProficiencyBonus);
+        }
+
+        return _memorizeSession;
+    }
 
     internal static bool IsInvalidMemorizeSelectedSpell(
         SpellRepertoirePanel spellRepertoirePanel, RulesetCharacter rulesetCharacter, SpellDefinition spell)
@@ -132,31 +152,46 @@ public static partial class Tabletop2024Context
             return false;
         }
 
-        if (!MemorizeSwaps.TryGetValue(activeCondition.Guid, out var swap))
-        {
-            // how many spells can be prepared starting at zero as need an unselect event first, and the index of the
-            // unselected spell starting at -1 to allow any spell to be unselected on first take
-            swap = (0, -1);
-        }
-
+        var session = GetMemorizeSession(activeCondition);
         var spellIndex = SpellsContext.Spells.IndexOf(spell);
         var isUncheck = spellRepertoirePanel.preparedSpells.Contains(spell);
 
         if (isUncheck)
         {
-            if (swap.SpellIndex != -1 && swap.SpellIndex != spellIndex)
+            if (session.SpellIndex != -1 && session.SpellIndex != spellIndex)
             {
                 return true;
             }
 
-            MemorizeSwaps[activeCondition.Guid] = (1, spellIndex);
+            session.Amount = 1;
+            session.SpellIndex = spellIndex;
 
             return false;
         }
 
-        MemorizeSwaps[activeCondition.Guid] = (0, spellIndex);
+        session.Amount = 0;
+        session.SpellIndex = spellIndex;
 
         return false;
+    }
+
+    // runs on every computer at the same tick (RestCommandContext): the swap made on the screen becomes the record
+    private static void CommitMemorizeSwap(RulesetCharacterHero hero, string argument)
+    {
+        var values = argument.Split(',');
+
+        if (values.Length != 2 ||
+            !int.TryParse(values[0], out var amount) ||
+            !int.TryParse(values[1], out var spellIndex) ||
+            !TryGetMemorizeSpellCondition(hero, out var condition))
+        {
+            Main.Error($"[RestCommand] Memorize Spell swap for {hero.Name} not recorded ({argument})");
+
+            return;
+        }
+
+        condition.Amount = amount;
+        condition.SourceProficiencyBonus = spellIndex;
     }
 
     // runs on every computer at the same tick (RestCommandContext): the condition that puts the hero's preparation
@@ -185,6 +220,7 @@ public static partial class Tabletop2024Context
         ServiceRepository.GetService<IFunctorService>()
             .RegisterFunctor(nameof(FunctorMemorizeSpell), new FunctorMemorizeSpell());
         RestCommandContext.Register(nameof(BeginMemorizeSpell), BeginMemorizeSpell);
+        RestCommandContext.Register(nameof(CommitMemorizeSwap), CommitMemorizeSwap);
     }
 
     internal static void SwitchWizardMemorizeSpell()
@@ -220,15 +256,23 @@ public static partial class Tabletop2024Context
             }
 
             // the condition is added on every computer (it used to be added on the clicker's only, a desync); the
-            // preparation screen only opens once this computer has it too
-            var begun = false;
+            // preparation screen only opens once this computer has it too. A late Begin (TimedOut) adds the condition
+            // everywhere at once, which is what a successful one does, so there's nothing to undo.
+            var outcome = RestCommandContext.Outcome.Failed;
 
-            yield return RestCommandContext.Send(hero, nameof(BeginMemorizeSpell), string.Empty, x => begun = x);
+            yield return RestCommandContext.Send(hero, nameof(BeginMemorizeSpell), string.Empty, x => outcome = x);
 
-            if (!begun)
+            if (outcome != RestCommandContext.Outcome.Ran ||
+                !TryGetMemorizeSpellCondition(hero, out var condition))
             {
                 yield break;
             }
+
+            // a fresh screen session from the committed record
+            _memorizeSession = null;
+
+            var session = GetMemorizeSession(condition);
+            var preparedBefore = spellRepertoire.PreparedSpells.ToList();
 
             // the chosen spells reach every computer through the game's own PrepareSpells command
             partyStatusScreen.SetupDisplayPreferences(false, false, false);
@@ -238,6 +282,15 @@ public static partial class Tabletop2024Context
             while (context.Async && inspectionScreen.Visible)
             {
                 yield return null;
+            }
+
+            _memorizeSession = null;
+
+            // the screen closes once its PrepareSpells has run here, so a changed list means the swap was made
+            if (!spellRepertoire.PreparedSpells.SequenceEqual(preparedBefore))
+            {
+                yield return RestCommandContext.Send(
+                    hero, nameof(CommitMemorizeSwap), $"{session.Amount},{session.SpellIndex}", null);
             }
 
             partyStatusScreen.SetupDisplayPreferences(true, true, true);

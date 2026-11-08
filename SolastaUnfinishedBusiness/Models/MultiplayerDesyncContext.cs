@@ -77,6 +77,9 @@ internal static class MultiplayerDesyncContext
     // the entity ID check found a gap, which only a load clears, so a Resync button for it is still useful
     private static bool _idDesyncReported;
 
+    // a player's game didn't take the host's battle starting positions (MultiplayerBattlePlacementContext)
+    private static bool _placementDesyncReported;
+
     // the game the two above are about; a load from a save makes a new one
     private static Game _reportedGame;
 
@@ -110,6 +113,7 @@ internal static class MultiplayerDesyncContext
         _reportedGame = game;
         ReportedByActor.Clear();
         _idDesyncReported = false;
+        _placementDesyncReported = false;
         _reofferWhenPossible = false;
     }
 
@@ -119,6 +123,7 @@ internal static class MultiplayerDesyncContext
         _reportedGame = null;
         ReportedByActor.Clear();
         _idDesyncReported = false;
+        _placementDesyncReported = false;
         _reofferWhenPossible = false;
     }
 
@@ -709,6 +714,20 @@ internal static class MultiplayerDesyncContext
         AddResyncLogLine(Gui.Localize("Message/&MultiplayerDesyncIdResyncLine"), true);
     }
 
+    // Host only: a player's game didn't take the host's battle starting positions, or didn't answer, so the boards may
+    // differ from the first turn on. The usual offer (message and log line with Resync), naming the players.
+    internal static void OfferResyncForBattlePlacement(string playerNames)
+    {
+        if (!PhotonNetwork.IsMasterClient)
+        {
+            return;
+        }
+
+        ForgetIfNewGame();
+        _placementDesyncReported = true;
+        OfferResync(playerNames, Gui.Localize("Message/&MultiplayerBattlePlacementDetails"));
+    }
+
     // From the game log's click handler: true if the click was on a Resync button, which the game has nothing to do for.
     internal static bool HandleLogClick(GameRecordEntry entry)
     {
@@ -752,7 +771,7 @@ internal static class MultiplayerDesyncContext
         ForgetDepartedPlayers();
 
         // lines also stay after a check finds the game matching, or the player who differed leaves
-        if (ReportedByActor.Count == 0 && !_idDesyncReported)
+        if (ReportedByActor.Count == 0 && !_idDesyncReported && !_placementDesyncReported)
         {
             Gui.GuiService.ShowAlert("Message/&MultiplayerDesyncResyncNotNeeded", Gui.ColorAlmostWhite, 6f);
 

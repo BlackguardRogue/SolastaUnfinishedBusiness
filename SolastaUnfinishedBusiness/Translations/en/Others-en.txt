@@ -745,6 +745,7 @@ Message/&MultiplayerTurnSpeedUpStarted={0} sped up the enemy turns
 Message/&MultiplayerTurnSpeedUpStopped={0} set the enemy turns back to normal speed
 Message/&MultiplayerTurnSpeedUpCancelled=Enemy-turn speed change cancelled: {0}. The speed didn't change.
 Message/&MultiplayerBattlePlacementUnconfirmed=Not every player confirmed the host's battle starting positions. Positions may differ between players; a Resync puts everyone back on the host's game.
+Message/&MultiplayerBattlePlacementDetails=Their game didn't take the host's battle starting positions, so characters may stand in different places.
 Message/&MultiplayerTurnSpeedUpAutomaticCancelled=The automatic enemy-turn speed-up was cancelled: {0}. The speed didn't change, and it isn't sped up automatically again until the next session; the button still works.
 Message/&MultiplayerTurnSpeedUpCancelTimeout=a player didn't reach the change within 30 seconds
 Message/&MultiplayerTurnSpeedUpCancelRosterChanged=a player joined or left

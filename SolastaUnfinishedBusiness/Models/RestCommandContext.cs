@@ -42,22 +42,43 @@ internal static class RestCommandContext
         Handlers[verb] = handler;
     }
 
-    // runs the command on every computer and waits (as a coroutine step) until it has run on this one; the result
-    // says whether it did, so a caller can stop rather than carry on from a state the others don't have
-    internal static IEnumerator Send(RulesetCharacterHero hero, string verb, string argument, Action<bool> done)
+    // the outcome of a command on this computer
+    internal enum Outcome
+    {
+        // ran here, so it ran (or will run) on every computer at the same tick
+        Ran,
+
+        // not run here and not anywhere: never sent, or every computer skipped it alike (hero or command not found)
+        Failed,
+
+        // sent but not back after WaitSeconds: it may still run later on every computer, so a caller that started a
+        // change must send whatever undoes it (commands from one sender run in the order sent)
+        TimedOut
+    }
+
+    // runs the command on every computer and waits (as a coroutine step) until it has run on this one; the outcome
+    // tells the caller whether to carry on, stop, or stop and undo
+    internal static IEnumerator Send(RulesetCharacterHero hero, string verb, string argument, Action<Outcome> done)
     {
         if (!Handlers.TryGetValue(verb, out var handler))
         {
             Main.Error($"[RestCommand] unknown command {verb}");
-            done?.Invoke(false);
+            done?.Invoke(Outcome.Failed);
             yield break;
         }
 
-        if (!Global.IsMultiplayer ||
-            ServiceRepository.GetService<INetworkingService>() is not NetworkingManager { view: not null } networking)
+        if (!Global.IsMultiplayer)
         {
             handler(hero, argument ?? string.Empty);
-            done?.Invoke(true);
+            done?.Invoke(Outcome.Ran);
+            yield break;
+        }
+
+        // multiplayer without the game's networking: running it here alone is exactly the desync this avoids
+        if (ServiceRepository.GetService<INetworkingService>() is not NetworkingManager { view: not null } networking)
+        {
+            Main.Error($"[RestCommand] {verb} for {hero.Name} not sent: no network in a multiplayer game");
+            done?.Invoke(Outcome.Failed);
             yield break;
         }
 
@@ -75,14 +96,24 @@ internal static class RestCommandContext
             yield return null;
         }
 
-        var ran = Applied.TryGetValue(nonce, out var succeeded) && succeeded;
+        Outcome outcome;
 
-        if (!ran)
+        if (!Applied.TryGetValue(nonce, out var ran))
         {
-            Main.Error($"[RestCommand] {verb} for {hero.Name} didn't run here; not carrying on");
+            outcome = Outcome.TimedOut;
+            Main.Error($"[RestCommand] {verb} for {hero.Name} hasn't run here after {WaitSeconds} s; not carrying on");
+        }
+        else if (!ran)
+        {
+            outcome = Outcome.Failed;
+            Main.Error($"[RestCommand] {verb} for {hero.Name} couldn't run; not carrying on");
+        }
+        else
+        {
+            outcome = Outcome.Ran;
         }
 
-        done?.Invoke(ran);
+        done?.Invoke(outcome);
     }
 
     // AssignClassLevelAsync replacement for this command's marker (see MultiplayerPatcher)

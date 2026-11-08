@@ -780,6 +780,7 @@ Message/&MultiplayerTurnSpeedUpStarted={0}: ходы врагов ускорен
 Message/&MultiplayerTurnSpeedUpStopped={0}: ходы врагов снова идут с обычной скоростью
 Message/&MultiplayerTurnSpeedUpCancelled=Смена скорости ходов врагов отменена: {0}. Скорость не изменилась.
 Message/&MultiplayerBattlePlacementUnconfirmed=Не все игроки подтвердили стартовые позиции боя, заданные хостом. Позиции у игроков могут различаться; повторная синхронизация вернёт всех к игре хоста.
+Message/&MultiplayerBattlePlacementDetails=Их игра не приняла стартовые позиции боя хоста, поэтому персонажи могут стоять в разных местах.
 Message/&MultiplayerTurnSpeedUpAutomaticCancelled=Автоматическое ускорение ходов врагов отменено: {0}. Скорость не изменилась, и до следующей сессии ходы не будут ускоряться автоматически; кнопка по-прежнему работает.
 Message/&MultiplayerTurnSpeedUpCancelTimeout=игрок не дошёл до момента смены за 30 секунд
 Message/&MultiplayerTurnSpeedUpCancelRosterChanged=игрок вошёл или вышел

@@ -780,6 +780,7 @@ Message/&MultiplayerTurnSpeedUpStarted={0} hat die Gegnerzüge beschleunigt
 Message/&MultiplayerTurnSpeedUpStopped={0} hat die Gegnerzüge wieder auf normale Geschwindigkeit gesetzt
 Message/&MultiplayerTurnSpeedUpCancelled=Änderung der Gegnerzug-Geschwindigkeit abgebrochen: {0}. Die Geschwindigkeit hat sich nicht geändert.
 Message/&MultiplayerBattlePlacementUnconfirmed=Nicht alle Spieler haben die Startpositionen des Hosts für den Kampf bestätigt. Die Positionen können sich zwischen den Spielern unterscheiden; eine Resynchronisierung bringt alle auf den Spielstand des Hosts zurück.
+Message/&MultiplayerBattlePlacementDetails=Ihr Spiel hat die Startpositionen des Hosts für den Kampf nicht übernommen, daher können Figuren an anderen Stellen stehen.
 Message/&MultiplayerTurnSpeedUpAutomaticCancelled=Die automatische Beschleunigung der Gegnerzüge wurde abgebrochen: {0}. Die Geschwindigkeit hat sich nicht geändert, und bis zur nächsten Sitzung wird nicht mehr automatisch beschleunigt; die Schaltfläche funktioniert weiterhin.
 Message/&MultiplayerTurnSpeedUpCancelTimeout=ein Spieler hat die Änderung nicht innerhalb von 30 Sekunden erreicht
 Message/&MultiplayerTurnSpeedUpCancelRosterChanged=ein Spieler ist beigetreten oder gegangen

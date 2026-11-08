@@ -711,7 +711,8 @@ internal static class Level20Context
             }
             else
             {
-                Main.Error($"[RestCommand] {tag} for {hero.Name} ended without its start; prepared spells left as they are");
+                // an end sent to undo a begin that never ran anywhere comes here too, and has nothing to undo
+                Main.Info($"[RestCommand] {tag} for {hero.Name} ended without its start; prepared spells left as they are");
             }
 
             PreparedBefore.Remove((hero.Guid, tag));
@@ -740,11 +741,19 @@ internal static class Level20Context
                 yield break;
             }
 
-            var begun = false;
+            var outcome = RestCommandContext.Outcome.Failed;
 
-            yield return RestCommandContext.Send(hero, $"Begin{tag}", string.Empty, x => begun = x);
+            yield return RestCommandContext.Send(hero, $"Begin{tag}", string.Empty, x => outcome = x);
 
-            if (!begun)
+            if (outcome == RestCommandContext.Outcome.TimedOut)
+            {
+                // the begin may still run later on every computer, leaving the repertoire switched and the condition
+                // on with nobody to switch it back; an end sent after it runs after it everywhere (commands from one
+                // sender keep their order), and does nothing where the begin never ran
+                yield return RestCommandContext.Send(hero, $"End{tag}", string.Empty, null);
+            }
+
+            if (outcome != RestCommandContext.Outcome.Ran)
             {
                 yield break;
             }

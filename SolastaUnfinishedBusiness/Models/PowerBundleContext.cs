@@ -19,6 +19,41 @@ internal static class PowerBundleContext
         ServiceRepository.GetService<IFunctorService>()
             .RegisterFunctor(UseCustomRestPowerFunctorName, new FunctorUseCustomRestPower());
         RestCommandContext.Register(nameof(UseCustomRestPowerTravelling), UseCustomRestPowerTravelling);
+        RestCommandContext.Register(nameof(UseCustomRestPowerRetargeted), UseCustomRestPowerRetargeted);
+    }
+
+    // the action a self power from the rest screen runs as: used by the actor on itself, without animations
+    private static CharacterActionParams BuildRestPowerAction(
+        GameLocationCharacter actor, RulesetUsablePower usablePower)
+    {
+        return new CharacterActionParams(actor, ActionDefinitions.Id.PowerNoCost)
+        {
+            ActionModifiers = { new ActionModifier() },
+            RulesetEffect = ServiceRepository.GetService<IRulesetImplementationService>()
+                .InstantiateEffectPower(actor.RulesetCharacter, usablePower, true),
+            UsablePower = usablePower,
+            TargetCharacters = { actor },
+            SkipAnimationsAndVFX = true
+        };
+    }
+
+    // runs on every computer at the same tick (RestCommandContext): a rest power the hero owns but another character
+    // uses (IRetargetCustomRestPower, the Innovation Weapon's Steel Defender). The game's networked action can't carry
+    // it: it sends the power as an index into the acting character's own powers, and the power is the hero's, so the
+    // other computers would get none (Codex's review of PR #28). Instead every computer starts the same action itself,
+    // as the clicker alone used to.
+    private static void UseCustomRestPowerRetargeted(RulesetCharacterHero ruleChar, string powerName)
+    {
+        if (!TryGetCustomRestPower(powerName, out var power) ||
+            power.GetFirstSubFeatureOfType<IRetargetCustomRestPower>()?.GetTarget(ruleChar) is not { } actor)
+        {
+            Main.Error($"[RestCommand] {powerName} for {ruleChar.Name}: no character to use it");
+
+            return;
+        }
+
+        ServiceRepository.GetService<IGameLocationActionService>()
+            .ExecuteAction(BuildRestPowerAction(actor, PowerProvider.Get(power, ruleChar)), null, false);
     }
 
     private static bool TryGetCustomRestPower(string powerName, out FeatureDefinitionPower power)
@@ -70,35 +105,26 @@ internal static class PowerBundleContext
 
             if (power.EffectDescription.TargetType == TargetType.Self)
             {
-                GameLocationCharacter fromActor = null;
                 var retarget = power.GetFirstSubFeatureOfType<IRetargetCustomRestPower>();
-                if (retarget != null)
+
+                if (retarget?.GetTarget(ruleChar) != null)
                 {
-                    fromActor = retarget.GetTarget(ruleChar);
+                    yield return RestCommandContext.Send(
+                        ruleChar, nameof(UseCustomRestPowerRetargeted), power.Name, null);
+
+                    yield break;
                 }
 
-                fromActor ??= GameLocationCharacter.GetFromActor(ruleChar);
-
-                var implementationService = ServiceRepository.GetService<IRulesetImplementationService>();
+                var fromActor = GameLocationCharacter.GetFromActor(ruleChar);
 
                 if (fromActor != null)
                 {
                     functor._powerUsed = false;
 
-                    var actionParams = new CharacterActionParams(fromActor, ActionDefinitions.Id.PowerNoCost)
-                    {
-                        ActionModifiers = { new ActionModifier() },
-                        RulesetEffect = implementationService
-                            .InstantiateEffectPower(fromActor.RulesetCharacter, usablePower, true),
-                        UsablePower = usablePower,
-                        TargetCharacters = { fromActor },
-                        SkipAnimationsAndVFX = true
-                    };
-
                     // through the command service, as the game's own FunctorUsePower does, so the power is used on
                     // every computer; IGameLocationActionService.ExecuteAction (used before) runs it on this one only
                     ServiceRepository.GetService<ICommandService>()
-                        .ExecuteAction(actionParams, functor.ActionExecuted, false);
+                        .ExecuteAction(BuildRestPowerAction(fromActor, usablePower), functor.ActionExecuted, false);
 
                     while (!functor._powerUsed)
                     {
