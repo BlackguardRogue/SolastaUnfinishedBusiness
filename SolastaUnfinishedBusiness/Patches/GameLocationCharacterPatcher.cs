@@ -323,10 +323,11 @@ public static class GameLocationCharacterPatcher
             //while there already is callback for this event it doesn't have character or surprise flag arguments
             CharacterBattleListenersPatch.OnCharacterBattleStarted(__instance, surprise);
 
-            // characters sharing a cell at battle start (MULTIPLAYER) are separated by the host once every contender
-            // has started, and the other computers take its formation: see MultiplayerBattlePlacementContext. With
-            // that sync switched off, each computer separates them itself, as before it
-            MultiplayerBattlePlacementContext.OnContenderStartedBattle(__instance);
+            // Characters sharing a cell at battle start (MULTIPLAYER) are left to the game's own unstack at initiative
+            // (BattleState_Initiative.Begin), which reads only the grid and so gives the same cells on every computer.
+            // The mod used to move them to a "safe" cell here instead, which also asked each computer's own visibility
+            // service which cells enemies could see, so computers could disagree (desync issue 04; removed on the
+            // user's choice, 2026-11-09, PR #28).
         }
     }
 

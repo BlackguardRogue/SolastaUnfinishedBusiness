@@ -34,93 +34,10 @@ internal static class RestCommandContext
 
     private static long _sequence;
 
-    // Players who left the room, as recorded by the host's departure command at its tick on every computer. A command
-    // of theirs that runs after it (still queued when they left) is refused by the handlers that check HasDeparted, so
-    // nothing they started can take effect with nobody left to finish or undo it, and the listeners undo what was open
-    // (Codex's reviews of PR #28). The departure is a command so that it is ordered against theirs everywhere alike.
-    private const string DepartureVerb = "RestCommandPlayerLeft";
-
-    private static readonly HashSet<int> Departed = [];
-    private static readonly List<Action<int>> DepartureListeners = [];
-    private static bool _leaveWatcherAdded;
-
-    static RestCommandContext()
-    {
-        Handlers[DepartureVerb] = (_, argument) =>
-        {
-            if (!int.TryParse(argument, out var actor) || actor <= 0)
-            {
-                return false;
-            }
-
-            Departed.Add(actor);
-
-            foreach (var listener in DepartureListeners)
-            {
-                listener(actor);
-            }
-
-            return true;
-        };
-    }
-
-    // whether the player who made this transaction or session ID has left, as of this command's tick
-    internal static bool HasDeparted(string id)
-    {
-        return Departed.Contains(SenderOf(id));
-    }
-
-    // called at the departure's tick on every computer, with the player's actor number
-    internal static void OnDeparture(Action<int> listener)
-    {
-        DepartureListeners.Add(listener);
-
-        if (_leaveWatcherAdded)
-        {
-            return;
-        }
-
-        _leaveWatcherAdded = true;
-        PhotonNetwork.AddCallbackTarget(new LeaveWatcher());
-    }
-
-    // a new room numbers its players afresh
+    // a new room: waits from the last one can't end
     internal static void OnJoinedRoom()
     {
-        Departed.Clear();
         Waiting.Clear();
-    }
-
-    private sealed class LeaveWatcher : Photon.Realtime.IInRoomCallbacks
-    {
-        public void OnPlayerEnteredRoom(Photon.Realtime.Player newPlayer)
-        {
-        }
-
-        // only the host sends the departure, once
-        public void OnPlayerLeftRoom(Photon.Realtime.Player otherPlayer)
-        {
-            MultiplayerContext.Guarded("a player leaving", () =>
-            {
-                if (PhotonNetwork.IsMasterClient)
-                {
-                    Post(null, DepartureVerb, otherPlayer.ActorNumber.ToString());
-                }
-            });
-        }
-
-        public void OnRoomPropertiesUpdate(ExitGames.Client.Photon.Hashtable propertiesThatChanged)
-        {
-        }
-
-        public void OnPlayerPropertiesUpdate(
-            Photon.Realtime.Player targetPlayer, ExitGames.Client.Photon.Hashtable changedProps)
-        {
-        }
-
-        public void OnMasterClientSwitched(Photon.Realtime.Player newMasterClient)
-        {
-        }
     }
 
     // a handler gets the hero and the command's argument and says whether it did what was asked; it runs on every
@@ -129,48 +46,6 @@ internal static class RestCommandContext
     internal static void Register(string verb, Func<RulesetCharacterHero, string, bool> handler)
     {
         Handlers[verb] = handler;
-    }
-
-    // a fresh ID for something several commands belong to (a preparation started and ended), unique per sender
-    internal static string NewTransactionId()
-    {
-        return $"{PhotonNetwork.LocalPlayer?.ActorNumber ?? 0}-t{++_sequence}";
-    }
-
-    // the actor number of the player whose computer made a transaction ID (0 in single player)
-    internal static int SenderOf(string transactionId)
-    {
-        var dash = transactionId?.IndexOf('-') ?? -1;
-
-        return dash > 0 && int.TryParse(transactionId.Substring(0, dash), out var actor) ? actor : 0;
-    }
-
-    // sends a command without waiting for it: the host uses this to clean up after a player who left. With no hero,
-    // the handler gets null (a command about the game, not one hero)
-    internal static void Post(RulesetCharacterHero hero, string verb, string argument)
-    {
-        if (!Global.IsMultiplayer)
-        {
-            if (Handlers.TryGetValue(verb, out var handler))
-            {
-                handler(hero, argument ?? string.Empty);
-            }
-
-            return;
-        }
-
-        if (ServiceRepository.GetService<INetworkingService>() is not NetworkingManager { view: not null } networking)
-        {
-            Main.Error($"[RestCommand] {verb} for {hero?.Name} not sent: no network in a multiplayer game");
-
-            return;
-        }
-
-        var nonce = $"{PhotonNetwork.LocalPlayer?.ActorNumber ?? 0}-{++_sequence}";
-
-        networking.view.RPC(nameof(NetworkingManager.AssignClassLevelRPC), RpcTarget.AllViaServer,
-            networking.CommandTick, (long)(hero?.Guid ?? 0UL), $"{Marker}{nonce}:{verb}:{argument}", false);
-        PhotonNetwork.SendAllOutgoingCommands();
     }
 
     // the outcome of a command on this computer
@@ -182,13 +57,12 @@ internal static class RestCommandContext
         // not run here and not anywhere: never sent, or every computer skipped it alike (hero or command not found)
         Failed,
 
-        // sent but not back after WaitSeconds: it may still run later on every computer, so a caller that started a
-        // change must send whatever undoes it (commands from one sender run in the order sent)
+        // sent but not back after WaitSeconds; it may still run later, alike on every computer
         TimedOut
     }
 
     // runs the command on every computer and waits (as a coroutine step) until it has run on this one; the outcome
-    // tells the caller whether to carry on, stop, or stop and undo
+    // tells the caller whether to carry on
     internal static IEnumerator Send(RulesetCharacterHero hero, string verb, string argument, Action<Outcome> done)
     {
         if (!Handlers.TryGetValue(verb, out var handler))
@@ -281,11 +155,10 @@ internal static class RestCommandContext
     private static IEnumerator RunAsync(
         NetworkingManager networking, long heroGuid, string nonce, string verb, string argument)
     {
-        // hero ID 0: a command about the game, not one hero (Post with no hero)
-        var hero = heroGuid == 0 ? null : networking.GetEntityFromGuid<RulesetCharacterHero>(heroGuid, false);
+        var hero = networking.GetEntityFromGuid<RulesetCharacterHero>(heroGuid, false);
         var ran = false;
 
-        if ((hero != null || heroGuid == 0) && Handlers.TryGetValue(verb, out var handler))
+        if (hero != null && Handlers.TryGetValue(verb, out var handler))
         {
             try
             {

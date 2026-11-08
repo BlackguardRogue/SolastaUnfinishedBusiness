@@ -372,10 +372,7 @@ public static class MultiplayerPatcher
             MultiplayerContext.Guarded("joining a room", MultiplayerSessionContext.OnJoinedRoom);
             MultiplayerContext.Guarded("joining a room", MultiplayerApprovalContext.OnJoinedRoom);
             MultiplayerContext.Guarded("joining a room", MultiplayerTurnSpeedContext.OnJoinedRoom);
-            MultiplayerContext.Guarded("joining a room", MultiplayerBattlePlacementContext.OnJoinedRoom);
-            MultiplayerContext.Guarded("joining a room", Level20Context.OnJoinedRoom);
             MultiplayerContext.Guarded("joining a room", RestCommandContext.OnJoinedRoom);
-            MultiplayerContext.Guarded("joining a room", Tabletop2024Context.OnJoinedRoom);
             MultiplayerContext.Guarded("joining a room", MultiplayerPerfContext.OnJoinedRoom);
         }
     }
@@ -405,7 +402,6 @@ public static class MultiplayerPatcher
         {
             MultiplayerContext.Guarded("a host change",
                 () => MultiplayerSessionContext.OnMasterClientSwitched(newMasterClient));
-            MultiplayerContext.Guarded("a host change", MultiplayerBattlePlacementContext.OnMasterClientSwitched);
         }
     }
 
@@ -421,7 +417,6 @@ public static class MultiplayerPatcher
             MultiplayerContext.Guarded("leaving a room", MultiplayerSessionContext.OnLeftRoom);
             MultiplayerContext.Guarded("leaving a room", MultiplayerApprovalContext.Reset);
             MultiplayerContext.Guarded("leaving a room", MultiplayerTurnSpeedContext.OnLeftRoom);
-            MultiplayerContext.Guarded("leaving a room", MultiplayerBattlePlacementContext.OnLeftRoom);
             MultiplayerContext.Guarded("leaving a room", MultiplayerPerfContext.OnLeftRoom);
         }
     }

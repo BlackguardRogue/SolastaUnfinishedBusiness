@@ -60,8 +60,9 @@ public static class SpellRepertoirePanelPatcher
         }
     }
 
-    //PATCH: in Memorize Spell mode, Prepare sends the chosen spells and the swap record to every computer together
-    //(Tabletop2024Context.TryPrepareMemorizeSpell) instead of the game's PrepareSpells command
+    //PATCH: in Memorize Spell, Spell Mastery or Signature Spells mode, Prepare sends the choice to every computer in one
+    //mod command (Tabletop2024Context.TryPrepareMemorizeSpell, TaggedSpellPreparation.TryPrepare) instead of the game's
+    //PrepareSpells command
     [HarmonyPatch(typeof(SpellRepertoirePanel), nameof(SpellRepertoirePanel.DoValidate))]
     [SuppressMessage("Minor Code Smell", "S101:Types should be named in PascalCase", Justification = "Patch")]
     [UsedImplicitly]
@@ -70,7 +71,34 @@ public static class SpellRepertoirePanelPatcher
         [UsedImplicitly]
         public static bool Prefix(SpellRepertoirePanel __instance)
         {
-            return !Tabletop2024Context.TryPrepareMemorizeSpell(__instance);
+            return !Tabletop2024Context.TryPrepareMemorizeSpell(__instance) &&
+                   !TaggedSpellPreparation.TryPrepare(__instance);
+        }
+    }
+
+    //PATCH: in Spell Mastery or Signature Spells mode, the screen lists the current picks where the game lists the
+    //prepared spells, when it opens and on Revert (only on this computer's screen; nothing shared changes)
+    [HarmonyPatch(typeof(SpellRepertoirePanel), nameof(SpellRepertoirePanel.OnPrepareSpellsCb))]
+    [SuppressMessage("Minor Code Smell", "S101:Types should be named in PascalCase", Justification = "Patch")]
+    [UsedImplicitly]
+    public static class OnPrepareSpellsCb_Patch
+    {
+        [UsedImplicitly]
+        public static void Postfix(SpellRepertoirePanel __instance)
+        {
+            TaggedSpellPreparation.ShowPicks(__instance);
+        }
+    }
+
+    [HarmonyPatch(typeof(SpellRepertoirePanel), nameof(SpellRepertoirePanel.OnRevertPreparationCb))]
+    [SuppressMessage("Minor Code Smell", "S101:Types should be named in PascalCase", Justification = "Patch")]
+    [UsedImplicitly]
+    public static class OnRevertPreparationCb_Patch
+    {
+        [UsedImplicitly]
+        public static void Postfix(SpellRepertoirePanel __instance)
+        {
+            TaggedSpellPreparation.ShowPicks(__instance);
         }
     }
 

@@ -38,11 +38,6 @@ public static class GameManagerPatcher
             PowerBundle.ClearLiveEffects();
             MultiplayerDesyncContext.GameDestroyed();
             ActiveCharacterPanelPatcher.ForgetDestroyedPanels();
-
-            // after-rest bookkeeping holds heroes of the destroyed game; nothing in it carries over to another game
-            // (Memorize Spell press records, open Spell Mastery or Signature Spells preparations)
-            Tabletop2024Context.OnJoinedRoom();
-            Level20Context.OnJoinedRoom();
         }
     }
 

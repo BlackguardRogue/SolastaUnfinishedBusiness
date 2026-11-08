@@ -586,8 +586,6 @@ ModUi/&MultiplayerPingBasedTickBuffer=根据每位玩家的延迟设定行动延
 ModUi/&MultiplayerPingVisibleToHostOnly=只有主机能看到玩家的延迟和行动延迟 <i><color=#F0DAA0>[否则每位玩家都会在此标签页和玩家名牌上看到]</color></i>
 ModUi/&MultiplayerPlayersVersions=<color=white>此房间中的版本：</color>
 ModUi/&MultiplayerRequireApprovalForTimeConsumingActions=让每位玩家批准会经过游戏时间的行动：短休和长休、从卷轴学习或抄写法术、神祇标记、仪式，以及需要一分钟或更长时间的法术或能力 <i><color=#F0DAA0>[弹窗会说明要做什么以及需要多久；角色处于战斗或过场动画时不会询问任何人，发起的玩家会被告知是哪个角色]</color></i>
-ModUi/&MultiplayerResolveOverlapsOnBattleStart=战斗开始时，将共享格子的角色移到最近的安全格子 <i><color=#F0DAA0>[免费、无伤害，潜行时不会被敌人发现。没有敌人看到的格子里若只有一名潜行者则由其保留；否则由最先创建的角色保留]</color></i>
-ModUi/&MultiplayerSyncBattleStartPositions=与主机同步战斗起始位置 <i><color=#F0DAA0>[战斗开始时由主机安排所有人的位置，先攻会等待每位玩家都收到这些位置；关闭：每台电脑自行安排角色位置，可能导致各方游戏不一致]</color></i>
 ModUi/&MultiplayerSecondsBeforeLowerTickBuffer=<color=white>无需等待多少秒后降低延迟</color> <i><color=#F0DAA0>[游戏默认10]</color></i>
 ModUi/&MultiplayerShowFpsOverlay=多人游戏会话期间，在左上角显示一个小叠加层，列出你能看到的帧率和延迟
 ModUi/&MultiplayerSpreadOverlappedCharacters=将共享格子的角色稍微分开绘制，以便每个都能被指向 <i><color=#F0DAA0>[仅视觉效果：两个并排，三个呈三角形，更多则围成更大的环；移动时回到中心]</color></i>

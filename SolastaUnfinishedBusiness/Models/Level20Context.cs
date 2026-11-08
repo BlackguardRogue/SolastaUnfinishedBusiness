@@ -640,29 +640,31 @@ internal static class Level20Context
     // HELPERS
     //
 
-    // Spell Mastery and Signature Spells reuse the spell preparation screen to pick their spells. The repertoire is
-    // switched to the feature's current picks before the screen opens and back afterwards, with the picks kept in
-    // ExtraSpellsByTag. Those switches used to be made by the after-rest functor on the clicker's computer only, while
-    // the screen's choice reached everyone through the game's PrepareSpells command, so the other computers were left
-    // with the picks as their prepared spells and no picks at all (found reading the code for desync issue 04). Both
-    // switches now run on every computer at the same tick (RestCommandContext); the clicker waits for each.
-    // a new room or a destroyed game (GameManagerPatcher): forget open Spell Mastery or Signature Spells preparations
-    // and their heroes
-    internal static void OnJoinedRoom()
+    // Spell Mastery and Signature Spells reuse the spell preparation screen to pick their spells (kept in
+    // ExtraSpellsByTag). Upstream switched the hero's prepared spells to the picks before the screen opened and back
+    // after, on the clicker's computer only, while the screen's choice reached everyone through the game's PrepareSpells
+    // command, so the other computers were left with the picks as their prepared spells and no picks at all (found
+    // reading the code for desync issue 04).
+    //
+    // Now nothing shared changes until Prepare (user's choice, 2026-11-09, simplifying an earlier begin/end design):
+    // - the mode lives on the clicker's screen only (TaggedSpellPreparation.Mode): which hero and feature the screen is
+    //   picking for, what IsPreparation and IsInvalidSelectedSpell read, and what fills the screen's list with the
+    //   current picks (ShowPicks, after the game fills it from the prepared spells);
+    // - Prepare sends one command with the chosen spells (TryPrepare, from the DoValidate prefix); on every computer
+    //   at the same tick it makes them the picks and takes them out of the prepared spells, upstream's rule. The
+    //   screen closes, as the game's own does, once the command has run here; closing it without Prepare changes
+    //   nothing, as upstream's end did then.
+    // While the screen is open, the clicker's game also gives the repertoire the mode's limit of 2 spells
+    // (MaxPreparedSpell), as upstream did on that computer alone.
+    internal static class TaggedSpellPreparation
     {
-        TaggedSpellPreparation.OnJoinedRoom();
-    }
+        // the hero and feature the clicker's preparation screen is picking for, or null
+        internal static (ulong Hero, string Tag)? Mode { get; private set; }
 
-    private static class TaggedSpellPreparation
-    {
-        // Each switch is a transaction: Begin opens it with an ID made by the clicker, then End (the screen closed:
-        // its choice becomes the picks) or Cancel (undo exactly) closes it; either only acts on the transaction it
-        // names. The open transactions are written and read by the commands on every computer alike, so they are
-        // the same everywhere (not game objects, not saved). A save can't catch one open: the functor runs from
-        // Begin to End or Cancel, and the game refuses to save while functors run (GameSerializationManager.CanSave).
-        private static readonly Dictionary<(ulong, string), Transaction> Open = new();
-
-        private static bool _departureListenerAdded;
+        internal static bool IsMode(RulesetCharacter character, string tag)
+        {
+            return character != null && Mode is { } mode && mode.Hero == character.Guid && mode.Tag == tag;
+        }
 
         private static RulesetSpellRepertoire GetRepertoire(RulesetCharacterHero hero)
         {
@@ -672,139 +674,89 @@ internal static class Level20Context
 
         internal static void Register(string tag)
         {
-            RestCommandContext.Register($"Begin{tag}", (hero, id) => Begin(hero, tag, id));
-            RestCommandContext.Register($"End{tag}", (hero, id) => End(hero, tag, id));
-            RestCommandContext.Register($"Cancel{tag}", (hero, id) => Cancel(hero, tag, id));
+            RestCommandContext.Register($"Set{tag}", (hero, names) => SetPicks(hero, tag, names));
+        }
 
-            if (_departureListenerAdded)
+        // the screen's list in the mode: the auto-prepared spells and the current picks (upstream showed the
+        // auto-prepared spells the first time, the picks after)
+        internal static void ShowPicks(SpellRepertoirePanel panel)
+        {
+            var character = panel.GuiCharacter?.RulesetCharacter;
+
+            if (Mode is not { } mode || character == null || mode.Hero != character.Guid)
             {
                 return;
             }
 
-            _departureListenerAdded = true;
-            RestCommandContext.OnDeparture(OnDeparted);
+            var repertoire = panel.SpellRepertoire;
+
+            panel.preparedSpells.SetRange(repertoire.AutoPreparedSpells);
+
+            if (repertoire.ExtraSpellsByTag.TryGetValue(mode.Tag, out var picks))
+            {
+                panel.preparedSpells.AddRange(picks.Where(x => !panel.preparedSpells.Contains(x)));
+            }
+
+            panel.RefreshPreparation(false);
         }
 
-        // the repertoire shows the feature's picks as prepared, and the condition puts the screen in its mode
-        private static bool Begin(RulesetCharacterHero hero, string tag, string id)
+        // DoValidate prefix: in the mode, Prepare sends the chosen spells as the picks. False: not in the mode
+        internal static bool TryPrepare(SpellRepertoirePanel panel)
         {
-            var spellRepertoire = GetRepertoire(hero);
+            var character = panel.GuiCharacter?.RulesetCharacter;
 
-            // left over from an earlier game in this launch (another object for the same ID): it can't be closed now
-            if (Open.TryGetValue((hero.Guid, tag), out var stale) && stale.Hero != hero)
+            if (Mode is not { } mode || character is not RulesetCharacterHero hero || mode.Hero != hero.Guid)
             {
-                Open.Remove((hero.Guid, tag));
-            }
-
-            if (RestCommandContext.HasDeparted(id))
-            {
-                Main.Info($"[RestCommand] {tag} for {hero.Name} not started: its player has left");
-
                 return false;
             }
 
-            if (spellRepertoire == null || string.IsNullOrEmpty(id) || Open.ContainsKey((hero.Guid, tag)))
+            var names = string.Join(";", panel.preparedSpells.Select(x => x.Name));
+
+            panel.StartCoroutine(RestCommandContext.Send(hero, $"Set{mode.Tag}", names, outcome =>
             {
-                Main.Error($"[RestCommand] {tag} for {hero.Name} not started (no repertoire, or one already open)");
-
-                return false;
-            }
-
-            var hadPicks = spellRepertoire.ExtraSpellsByTag.TryGetValue(tag, out var picks);
-
-            Open[(hero.Guid, tag)] = new Transaction(
-                id, hero, spellRepertoire.PreparedSpells.ToArray(), hadPicks ? picks.ToArray() : null);
-
-            spellRepertoire.ExtraSpellsByTag.TryAdd(tag, [.. spellRepertoire.AutoPreparedSpells]);
-            spellRepertoire.PreparedSpells.SetRange(spellRepertoire.ExtraSpellsByTag[tag]);
-            spellRepertoire.ExtraSpellsByTag[tag] = [];
-
-            hero.InflictCondition(
-                $"Condition{tag}",
-                DurationType.Permanent,
-                0,
-                TurnOccurenceType.StartOfTurn,
-                AttributeDefinitions.TagEffect,
-                hero.guid,
-                hero.CurrentFaction.Name,
-                1,
-                $"Condition{tag}",
-                0,
-                0,
-                0);
+                if (outcome == RestCommandContext.Outcome.Ran && panel)
+                {
+                    panel.SpellPreparationValidated();
+                }
+            }));
 
             return true;
         }
 
-        private static bool TryClose(RulesetCharacterHero hero, string tag, string id, out Transaction transaction)
+        // runs on every computer at the same tick (RestCommandContext): the chosen spells, less the auto-prepared
+        // ones, become the picks and leave the prepared spells. Nothing changes unless every spell is found.
+        private static bool SetPicks(RulesetCharacterHero hero, string tag, string names)
         {
-            if (!Open.TryGetValue((hero.Guid, tag), out transaction) || transaction.Id != id)
-            {
-                transaction = null;
+            var repertoire = GetRepertoire(hero);
+            var database = DatabaseRepository.GetDatabase<SpellDefinition>();
+            var chosen = new List<SpellDefinition>();
 
+            if (repertoire == null)
+            {
                 return false;
             }
 
-            Open.Remove((hero.Guid, tag));
-
-            if (hero.TryGetConditionOfCategoryAndType(
-                    AttributeDefinitions.TagEffect, $"Condition{tag}", out var activeCondition))
+            foreach (var name in names.Split([';'], StringSplitOptions.RemoveEmptyEntries))
             {
-                hero.RemoveCondition(activeCondition);
+                if (!database.TryGetElement(name, out var spell))
+                {
+                    Main.Error($"[RestCommand] {tag} for {hero.Name}: no spell {name}; nothing changed");
+
+                    return false;
+                }
+
+                chosen.Add(spell);
             }
+
+            var picks = chosen.Except(repertoire.AutoPreparedSpells).ToList();
+
+            repertoire.ExtraSpellsByTag[tag] = picks;
+            repertoire.PreparedSpells.RemoveAll(x => picks.Contains(x));
 
             return true;
         }
 
-        // the screen closed: whatever is prepared now (its choice, or the old picks if it closed without one) becomes
-        // the feature's picks, and the prepared spells from before come back without them (upstream's rule)
-        private static bool End(RulesetCharacterHero hero, string tag, string id)
-        {
-            if (!TryClose(hero, tag, id, out var transaction))
-            {
-                Main.Info($"[RestCommand] {tag} end for {hero.Name}: no open preparation {id}");
-
-                return false;
-            }
-
-            var spellRepertoire = GetRepertoire(hero);
-            var picks = spellRepertoire.ExtraSpellsByTag[tag];
-
-            picks.SetRange(spellRepertoire.PreparedSpells.Except(spellRepertoire.AutoPreparedSpells));
-            spellRepertoire.PreparedSpells.SetRange(transaction.Prepared);
-            spellRepertoire.PreparedSpells.RemoveAll(x => picks.Contains(x));
-
-            return true;
-        }
-
-        // undo: the prepared spells and the picks exactly as they were before Begin
-        private static bool Cancel(RulesetCharacterHero hero, string tag, string id)
-        {
-            if (!TryClose(hero, tag, id, out var transaction))
-            {
-                // the begin never ran, or the preparation already ended
-                return false;
-            }
-
-            var spellRepertoire = GetRepertoire(hero);
-
-            spellRepertoire.PreparedSpells.SetRange(transaction.Prepared);
-
-            if (transaction.Picks == null)
-            {
-                spellRepertoire.ExtraSpellsByTag.Remove(tag);
-            }
-            else
-            {
-                spellRepertoire.ExtraSpellsByTag[tag] = [.. transaction.Picks];
-            }
-
-            Main.Info($"[RestCommand] {tag} for {hero.Name} cancelled; spells back as before");
-
-            return true;
-        }
-
-        // the after-rest functor on the clicker: switch on every computer, open the screen here, switch back
+        // the after-rest functor on the clicker: the screen in the feature's mode, here only
         internal static IEnumerator Execute(
             FunctorParametersDescription functorParameters, Functor.FunctorExecutionContext context, string tag)
         {
@@ -821,63 +773,23 @@ internal static class Level20Context
                 yield break;
             }
 
-            var id = RestCommandContext.NewTransactionId();
-            var outcome = RestCommandContext.Outcome.Failed;
+            Mode = (hero.Guid, tag);
 
-            yield return RestCommandContext.Send(hero, $"Begin{tag}", id, x => outcome = x);
-
-            if (outcome == RestCommandContext.Outcome.TimedOut)
+            try
             {
-                // the begin may still run later on every computer; a cancel sent after it runs after it everywhere
-                // (one sender's commands keep their order) and puts both spell lists back exactly
-                yield return RestCommandContext.Send(hero, $"Cancel{tag}", id, null);
-            }
+                partyStatusScreen.SetupDisplayPreferences(false, false, false);
+                inspectionScreen.ShowSpellPreparation(hero, Gui.GuiService.GetScreen<RestModal>(), spellRepertoire);
 
-            if (outcome != RestCommandContext.Outcome.Ran)
+                while (context.Async && inspectionScreen.Visible)
+                {
+                    yield return null;
+                }
+            }
+            finally
             {
-                yield break;
+                Mode = null;
+                partyStatusScreen.SetupDisplayPreferences(true, true, true);
             }
-
-            partyStatusScreen.SetupDisplayPreferences(false, false, false);
-
-            // the screen's choice is applied on every computer by the game's PrepareSpells command, which is sent
-            // before the end command below, so every computer has it when the end runs
-            inspectionScreen.ShowSpellPreparation(hero, Gui.GuiService.GetScreen<RestModal>(), spellRepertoire);
-
-            while (context.Async && inspectionScreen.Visible)
-            {
-                yield return null;
-            }
-
-            partyStatusScreen.SetupDisplayPreferences(true, true, true);
-
-            yield return RestCommandContext.Send(hero, $"End{tag}", id, null);
-        }
-
-        // at a player's departure (RestCommandContext, at its tick on every computer): cancel their open preparations;
-        // their later begins are refused in Begin
-        private static void OnDeparted(int actor)
-        {
-            foreach (var entry in Open.Where(x => RestCommandContext.SenderOf(x.Value.Id) == actor).ToList())
-            {
-                Main.Info($"[RestCommand] {entry.Key.Item2} for {entry.Value.Hero.Name}: its player left; cancelling");
-                Cancel(entry.Value.Hero, entry.Key.Item2, entry.Value.Id);
-            }
-        }
-
-        // a new room: open preparations from the last one can't be closed
-        internal static void OnJoinedRoom()
-        {
-            Open.Clear();
-        }
-
-        private sealed class Transaction(
-            string id, RulesetCharacterHero hero, SpellDefinition[] prepared, SpellDefinition[] picks)
-        {
-            internal readonly RulesetCharacterHero Hero = hero;
-            internal readonly string Id = id;
-            internal readonly SpellDefinition[] Picks = picks;
-            internal readonly SpellDefinition[] Prepared = prepared;
         }
     }
 
@@ -908,18 +820,14 @@ internal static class Level20Context
 
         internal static bool IsInvalidSelectedSpell(RulesetCharacter rulesetCharacter, SpellDefinition spell)
         {
-            return
-                rulesetCharacter.HasConditionOfCategoryAndType(
-                    AttributeDefinitions.TagEffect, $"Condition{Mastery}") &&
-                spell.SpellLevel is not (1 or 2);
+            return TaggedSpellPreparation.IsMode(rulesetCharacter, Mastery) && spell.SpellLevel is not (1 or 2);
         }
 
         internal static bool IsPreparation(RulesetCharacter rulesetCharacter, out int maxPreparedSpell)
         {
             maxPreparedSpell = 2;
 
-            return rulesetCharacter.HasConditionOfCategoryAndType(
-                AttributeDefinitions.TagEffect, $"Condition{Mastery}");
+            return TaggedSpellPreparation.IsMode(rulesetCharacter, Mastery);
         }
 
         internal static bool ShouldConsumeSlot(RulesetCharacter caster, RulesetEffectSpell activeSpell)
@@ -939,6 +847,7 @@ internal static class Level20Context
 
         internal static FeatureDefinition BuildWizardSpellMastery()
         {
+            // no longer used (the mode is the screen's, TaggedSpellPreparation); kept so a save holding one loads
             _ = ConditionDefinitionBuilder
                 .Create($"Condition{Mastery}")
                 .SetGuiPresentationNoContent(true)
@@ -1000,16 +909,12 @@ internal static class Level20Context
         {
             maxPreparedSpell = 2;
 
-            return rulesetCharacter.HasConditionOfCategoryAndType(
-                AttributeDefinitions.TagEffect, $"Condition{Signature}");
+            return TaggedSpellPreparation.IsMode(rulesetCharacter, Signature);
         }
 
         internal static bool IsInvalidSelectedSpell(RulesetCharacter rulesetCharacter, SpellDefinition spell)
         {
-            return
-                rulesetCharacter.HasConditionOfCategoryAndType(
-                    AttributeDefinitions.TagEffect, $"Condition{Signature}") &&
-                spell.SpellLevel is not 3;
+            return TaggedSpellPreparation.IsMode(rulesetCharacter, Signature) && spell.SpellLevel is not 3;
         }
 
         internal static bool ShouldConsumeSlot(RulesetCharacter caster, RulesetEffectSpell activeSpell)
@@ -1054,6 +959,7 @@ internal static class Level20Context
 
         internal static FeatureDefinition BuildWizardSignatureSpells()
         {
+            // no longer used (the mode is the screen's, TaggedSpellPreparation); kept so a save holding one loads
             _ = ConditionDefinitionBuilder
                 .Create($"Condition{Signature}")
                 .SetGuiPresentationNoContent(true)
