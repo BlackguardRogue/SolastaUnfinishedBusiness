@@ -36,16 +36,8 @@ internal static class SubraceGrayDwarfBuilder
             .SetModifier(AttributeModifierOperation.Additive, AttributeDefinitions.Strength, 1)
             .AddToDB();
 
-        var lightAffinityGrayDwarfLightSensitivity = FeatureDefinitionLightAffinityBuilder
-            .Create("LightAffinityGrayDwarfLightSensitivity")
-            .SetGuiPresentation(CustomConditionsContext.LightSensitivity.Name, Category.Condition)
-            .AddLightingEffectAndCondition(
-                new FeatureDefinitionLightAffinity.LightingEffectAndCondition
-                {
-                    lightingState = LocationDefinitions.LightingState.Bright,
-                    condition = CustomConditionsContext.LightSensitivity
-                })
-            .AddToDB();
+        var lightAffinityGrayDwarfLightSensitivity =
+            RacialSunlightSensitivity.Build("LightAffinityGrayDwarfLightSensitivity");
 
         var conditionAffinityGrayDwarfCharm = FeatureDefinitionConditionAffinityBuilder
             .Create(ConditionAffinityElfFeyAncestryCharm, "ConditionAffinityGrayDwarfCharm")

@@ -364,9 +364,10 @@ ModUi/&PickPocketNonHostiles=Also add pickpocketable loot to many non-hostile NP
 ModUi/&PortraitsOpenFolder=Open portraits folder
 ModUi/&PrimedItems=Primed Items
 ModUi/&QuickCastLightCantripOnWornItemsFirst=Enable quick cast <color=#D89555>Light Cantrip</color> to use head, neck or torso worn items first
-ModUi/&RaceLightSensitivityApplyOutdoorsOnly=Enable <color=#D89555>Light Sensitivity</color> on <color=#D89555>Darkelf</color>, <color=#D89555>Dark Kobold</color>, and <color=#D89555>Gray Dwarf</color> to only trigger outdoors\n<i><color=#F0DAA0>[indoor areas in outdoor locations accessible without a load screen are considered outdoor by the game engine]</color></i>
+ModUi/&RaceLightSensitivityApplyOutdoorsOnly=Enable <color=#D89555>Light Sensitivity</color> on <color=#D89555>Darkelf</color>, <color=#D89555>Dark Kobold</color>, and <color=#D89555>Gray Dwarf</color> to only trigger outdoors in daylight\n<i><color=#F0DAA0>[from 08:00 to 18:00; a torch at night doesn't trigger it, and magical darkness, Fog Cloud, smoke or another cloud that fully obscures the character stops it. Off: it triggers in any bright light, indoors or out. Indoor areas in outdoor locations accessible without a load screen are considered outdoor by the game engine]</color></i>
 ModUi/&Races=<color=#F0DAA0>Races</color>
 ModUi/&RecipeCost=<color=white>Recipe's cost</color>
+ModUi/&RefreshLightingWhenObscurementChanges=Update the lighting of creatures as soon as <color=#D89555>Darkness</color>, <color=#D89555>Fog Cloud</color>, smoke or another cloud that fully obscures them appears, moves or ends\n<i><color=#F0DAA0>[fixes the game keeping their old lighting, and light sensitivities such as Sunlight Sensitivity, until they move when no torch or lamp is nearby; on by default]</color></i>
 ModUi/&RefreshVoice=Refresh Voices List
 ModUi/&RelicForgeries=Relic Forgeries
 ModUi/&RemoveAttunementRequirements=Remove attunement requirements <b><i><color=#C04040E0>[Requires Restart]</color></i></b>

@@ -53,16 +53,8 @@ internal static class SubraceDarkelfBuilder
             .SetModifier(AttributeModifierOperation.Additive, AttributeDefinitions.Charisma, 1)
             .AddToDB();
 
-        var lightAffinityDarkelfLightSensitivity = FeatureDefinitionLightAffinityBuilder
-            .Create("LightAffinityDarkelfLightSensitivity")
-            .SetGuiPresentation(CustomConditionsContext.LightSensitivity.Name, Category.Condition)
-            .AddLightingEffectAndCondition(
-                new FeatureDefinitionLightAffinity.LightingEffectAndCondition
-                {
-                    lightingState = LocationDefinitions.LightingState.Bright,
-                    condition = CustomConditionsContext.LightSensitivity
-                })
-            .AddToDB();
+        var lightAffinityDarkelfLightSensitivity =
+            RacialSunlightSensitivity.Build("LightAffinityDarkelfLightSensitivity");
 
         var proficiencyDarkelfWeaponTraining = FeatureDefinitionProficiencyBuilder
             .Create("ProficiencyDarkelfWeaponTraining")

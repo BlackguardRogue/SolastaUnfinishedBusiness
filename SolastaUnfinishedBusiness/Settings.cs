@@ -135,6 +135,12 @@ public class Settings : UnityModManager.ModSettings
     [Tag(Type = TagType.T2014)] public bool UseOfficialLightingObscurementAndVisionRules { get; set; }
     [Tag(Type = TagType.T2014)] public bool EnableChanceToPerceiveCloseRange { get; set; }
     public bool SyncAiPerceptionChecks { get; set; } = true;
+
+    // Re-light the creatures in an area when Darkness, Fog Cloud, smoke or another heavily obscuring cloud appears,
+    // moves or ends (GameLocationVisibilityManagerPatcher.TolopologyChanged_Patch). On by default: it fixes a gap in the
+    // game, where a creature standing still with no light nearby kept its old lighting state (user direction,
+    // 2026-11-08: "Add a toggle for this light update fix").
+    public bool RefreshLightingWhenObscurementChanges { get; set; } = true;
     [Tag(Type = TagType.T2014)] public bool OfficialObscurementRulesInvisibleCreaturesCanBeTarget { get; set; }
     [Tag(Type = TagType.T2014)] public bool OfficialObscurementRulesCancelAdvDisPairs { get; set; }
     public bool OfficialObscurementRulesHeavilyObscuredAsProjectileBlocker { get; set; }

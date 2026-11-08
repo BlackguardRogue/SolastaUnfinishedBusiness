@@ -375,9 +375,10 @@ ModUi/&Pause=일시 정지
 ModUi/&PortraitsOpenFolder=초상화 폴더 열기
 ModUi/&PrimedItems=프라이밍된 아이템
 ModUi/&QuickCastLightCantripOnWornItemsFirst=머리, 목 또는 몸통에 착용한 아이템을 먼저 사용하려면 빠른 시전 <color=#D89555>Light Cantrip</color>을 활성화하세요.
-ModUi/&RaceLightSensitivityApplyOutdoorsOnly=<color=#D89555>다크엘프</color>, <color=#D89555>다크 코볼드</color>, <color=#D89555>그레이 드워프</color>에 <color=#D89555>조명 감도</color>를 활성화하면 야외에서만 작동합니다.\n<i><color=#F0DAA0>[로드 화면 없이 접근할 수 있는 야외 위치의 실내 공간은 게임 엔진에서 야외로 간주됨]</color></i>
+ModUi/&RaceLightSensitivityApplyOutdoorsOnly=<color=#D89555>다크엘프</color>, <color=#D89555>다크 코볼드</color>, <color=#D89555>그레이 드워프</color>에 <color=#D89555>조명 감도</color>를 활성화하면 낮 시간 야외에서만 작동합니다.\n<i><color=#F0DAA0>[08:00부터 18:00까지. 밤의 횃불로는 작동하지 않으며, 마법의 어둠, 안개 구름, 연기 등 캐릭터를 완전히 가리는 구름 안에서는 작동하지 않습니다. 끄면: 실내외를 가리지 않고 밝은 빛에서 작동합니다. 로드 화면 없이 접근할 수 있는 야외 위치의 실내 공간은 게임 엔진에서 야외로 간주됨]</color></i>
 ModUi/&Races=<color=#F0DAA0>종족</color>
 ModUi/&RecipeCost=<color=white>레시피 비용</color>
+ModUi/&RefreshLightingWhenObscurementChanges=<color=#D89555>암흑</color>, <color=#D89555>안개 구름</color>, 연기 등 크리처를 완전히 가리는 구름이 나타나거나 움직이거나 끝나면 즉시 크리처의 조명을 갱신합니다\n<i><color=#F0DAA0>[근처에 횃불이나 등불이 없으면 크리처가 움직일 때까지 게임이 이전 조명 상태와 햇빛 민감성 같은 빛 감도를 유지하는 문제를 수정합니다. 기본값: 켜짐]</color></i>
 ModUi/&RefreshVoice=음성 목록 새로 고침
 ModUi/&RelicForgeries=유물 위조
 ModUi/&RemoveAttunementRequirements=조율 요구 사항 제거 <b><i><color=#C04040E0>[재시작 필요]</color></i></b>

@@ -375,9 +375,10 @@ ModUi/&Pause=暂停
 ModUi/&PortraitsOpenFolder=打开肖像文件夹
 ModUi/&PrimedItems=制备好的物品
 ModUi/&QuickCastLightCantripOnWornItemsFirst=启用快速施放<color=#D89555>光亮术</color>以首先使用头部、颈部或躯干穿戴的物品
-ModUi/&RaceLightSensitivityApplyOutdoorsOnly=启用 <color=#D89555>Darkelf</color>、<color=#D89555>Dark Kobold</color> 和 <color=#D89555>Gray Dwarf</color> 上的 <color=#D89555>光敏感度</color>，以便仅在户外触发\n<i><color=#F0DAA0>[无需加载屏幕即可进入的户外位置的室内区域被游戏引擎视为户外区域]</color></i>
+ModUi/&RaceLightSensitivityApplyOutdoorsOnly=启用 <color=#D89555>Darkelf</color>、<color=#D89555>Dark Kobold</color> 和 <color=#D89555>Gray Dwarf</color> 上的 <color=#D89555>光敏感度</color>，以便仅在白天的户外触发\n<i><color=#F0DAA0>[08:00 至 18:00；夜间的火把不会触发，处于魔法黑暗、云雾术、烟雾或其他完全遮蔽角色的云中时不会生效。关闭时：在任何强光下触发，无论室内或户外。无需加载屏幕即可进入的户外位置的室内区域被游戏引擎视为户外区域]</color></i>
 ModUi/&Races=<color=#F0DAA0>种族</color>
 ModUi/&RecipeCost=<color=white>食谱成本</color>
+ModUi/&RefreshLightingWhenObscurementChanges=当<color=#D89555>黑暗术</color>、<color=#D89555>云雾术</color>、烟雾或其他完全遮蔽生物的云出现、移动或结束时，立即更新生物的光照\n<i><color=#F0DAA0>[修复附近没有火把或灯时，游戏在生物移动前一直保留其旧光照状态及日光敏感等光敏效果的问题；默认开启]</color></i>
 ModUi/&RefreshVoice=刷新语音列表
 ModUi/&RelicForgeries=文物伪造
 ModUi/&RemoveAttunementRequirements=删除同调要求<b><i><color=#C04040E0>[需要重启]</color></i></b>

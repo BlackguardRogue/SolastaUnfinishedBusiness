@@ -56,6 +56,68 @@ public static class GameLocationVisibilityManagerPatcher
         }
     }
 
+    //PATCH: re-light the creatures in an area whose sight-impaired cells changed (Darkness, Fog Cloud, smoke and other
+    //heavily obscuring clouds appearing, moving or ending)
+    // The game's handler (TolopologyChanged, raised by GameLocationEnvironmentManager.ApplyTopologyChangeOfGlobalEffects
+    // after it has set or cleared CellFlags.Runtime.DynamicSightImpaired) only marks the light sources near the impacted
+    // sectors dirty, plus line of sight. A creature's lighting is recomputed (ComputeIllumination, through UpdateLights)
+    // only when it moves, is placed, changes prone state, the hour changes the outdoor light, or a dirty light source is in
+    // range of it. So a creature standing still with no light source nearby (outdoors by day, no torch) kept its old
+    // lighting state when a cloud covered or uncovered it: its light affinities didn't change, and the daylight rule for
+    // Dark Kobolds, Dark Elves and Gray Dwarves (Races/RacialSunlightSensitivity) kept or withheld Sunlight Sensitivity
+    // until it moved (found by reading the game code, after Codex's review of PR #23; in game the tested hero had lamps
+    // nearby, which hid it).
+    // This queues every valid creature standing in an impacted sector for the game's normal light update, so the same
+    // update the game runs after a move runs now too. It covers all creatures, monsters with their own light affinities
+    // included, which is the game's own rule applied consistently. Over-queueing is harmless: the update recomputes the
+    // same state, and the mod's CheckLightingAffinityEffects patch only changes conditions that differ, so a creature
+    // whose light didn't change uses no object ID. Every computer sees the same area changes, so they queue the same
+    // creatures (the HashSet's order can still differ between computers, as with every other light update).
+    [HarmonyPatch(typeof(GameLocationVisibilityManager), "TolopologyChanged")]
+    [SuppressMessage("Minor Code Smell", "S101:Types should be named in PascalCase", Justification = "Patch")]
+    [UsedImplicitly]
+    public static class TolopologyChanged_Patch
+    {
+        [UsedImplicitly]
+        public static void Postfix(
+            GameLocationVisibilityManager __instance,
+            List<GameSector> impactedSectors,
+            List<TopologyForm.Type> impactedTopologyFlags)
+        {
+            // as in the game's handler: nothing before the location is ready, and only sight-impaired changes (a null
+            // list means all kinds). Sight blockers (walls, doors) already reach creatures through their light sources.
+            // the user can turn this fix off: Rules > "Update lighting ... when Darkness ... changes" (on by default)
+            if (!Main.Settings.RefreshLightingWhenObscurementChanges ||
+                !__instance.GameLocationService.LocationIsReady ||
+                impactedSectors == null ||
+                (impactedTopologyFlags != null && !impactedTopologyFlags.Contains(TopologyForm.Type.SightImpaired)))
+            {
+                return;
+            }
+
+            foreach (var character in __instance.gameLocationCharacterService.ValidCharacters)
+            {
+                // the game's light check samples every cell of the creature's perception box (GetAllPositionsToCheck),
+                // so a large creature whose origin is in one sector can stand partly in another; test the whole box
+                // (Codex's review of 1f44353a). Boxes are inclusive, built the same way as the game's own handler.
+                var characterBox = character.LocationPerceptionBoundingBox;
+
+                foreach (var sector in impactedSectors)
+                {
+                    if (sector == null ||
+                        !new BoxInt(sector.MinPosition, sector.MaxPosition).Intersects(characterBox))
+                    {
+                        continue;
+                    }
+
+                    __instance.dirtyIlluminables.Add(character);
+
+                    break;
+                }
+            }
+        }
+    }
+
     //PATCH: supports lighting and obscurement feature by allowing ranged targeting within obscured areas
     //this is mainly vanilla code except for the BEGIN/END patch block
     [HarmonyPatch(typeof(GameLocationVisibilityManager),

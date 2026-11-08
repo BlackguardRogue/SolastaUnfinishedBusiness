@@ -375,9 +375,10 @@ ModUi/&Pause=Pausar
 ModUi/&PortraitsOpenFolder=Abrir carpeta de retratos
 ModUi/&PrimedItems=Artículos preparados
 ModUi/&QuickCastLightCantripOnWornItemsFirst=Habilita el lanzamiento rápido de <color=#D89555>truco ligero</color> para usar primero los objetos que se usan en la cabeza, el cuello o el torso
-ModUi/&RaceLightSensitivityApplyOutdoorsOnly=Habilita la <color=#D89555>Sensibilidad a la luz</color> en <color=#D89555>Darkelf</color>, <color=#D89555>Dark Kobold</color> y <color=#D89555>Gray Dwarf</color> para que solo se activen en exteriores\n<i><color=#F0DAA0>[las áreas interiores en ubicaciones exteriores accesibles sin una pantalla de carga se consideran exteriores por el motor del juego]</color></i>
+ModUi/&RaceLightSensitivityApplyOutdoorsOnly=Habilita la <color=#D89555>Sensibilidad a la luz</color> en <color=#D89555>Darkelf</color>, <color=#D89555>Dark Kobold</color> y <color=#D89555>Gray Dwarf</color> para que solo se active en exteriores a la luz del día\n<i><color=#F0DAA0>[de 08:00 a 18:00; una antorcha de noche no la activa, y la oscuridad mágica, Nube de niebla, el humo u otra nube que oculte por completo al personaje la impide. Desactivado: se activa con cualquier luz brillante, dentro o fuera. Las áreas interiores en ubicaciones exteriores accesibles sin una pantalla de carga se consideran exteriores por el motor del juego]</color></i>
 ModUi/&Races=<color=#F0DAA0>Razas</color>
 ModUi/&RecipeCost=<color=white>Costo de la receta</color>
+ModUi/&RefreshLightingWhenObscurementChanges=Actualizar la iluminación de las criaturas en cuanto <color=#D89555>Oscuridad</color>, <color=#D89555>Nube de niebla</color>, el humo u otra nube que las oculte por completo aparezca, se mueva o termine\n<i><color=#F0DAA0>[corrige que el juego mantenga su iluminación anterior, y sensibilidades a la luz como Sensibilidad a la luz solar, hasta que se muevan si no hay ninguna antorcha o lámpara cerca; activado por defecto]</color></i>
 ModUi/&RefreshVoice=Actualizar lista de voces
 ModUi/&RelicForgeries=Falsificaciones de reliquias
 ModUi/&RemoveAttunementRequirements=Eliminar requisitos de sintonización <b><i><color=#C04040E0>[Requiere reinicio]</color></i></b>

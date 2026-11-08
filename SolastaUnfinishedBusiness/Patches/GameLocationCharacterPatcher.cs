@@ -14,6 +14,7 @@ using SolastaUnfinishedBusiness.Behaviors.Specific;
 using SolastaUnfinishedBusiness.CustomUI;
 using SolastaUnfinishedBusiness.Interfaces;
 using SolastaUnfinishedBusiness.Models;
+using SolastaUnfinishedBusiness.Races;
 using SolastaUnfinishedBusiness.Spells;
 using SolastaUnfinishedBusiness.Subclasses;
 using SolastaUnfinishedBusiness.Validators;
@@ -809,7 +810,21 @@ public static class GameLocationCharacterPatcher
 
             // read fully before changing anything: GetLightAffinityFeatures returns a list the game reuses for other
             // feature queries, which the handlers of a condition change could run
+            //BEGIN PATCH
+            // With "outdoors only" on, the Light Sensitivity of Dark Kobolds, Dark Elves and Gray Dwarves follows the
+            // daylight rule in RacialSunlightSensitivity (exterior sector during the game's bright hours, 08:00-18:00),
+            // which gives the condition in a category of its own. Their light affinity features are left out here, so
+            // this personal-light check neither adds the condition nor keeps an old copy: one left in the light category
+            // from a check made with the setting off is surplus and is removed below. With the setting off, the features
+            // count as usual: the condition follows the hero's own illumination (a torch counts, an outdoor night
+            // doesn't), as in the original mod. This replaced the earlier "outdoors only" test here, which kept the
+            // personal-light rule and only dropped the condition in interior sectors.
+            var daylightRuleOn = RacialSunlightSensitivity.Enabled;
+            //END PATCH
+
             foreach (var lightingEffectAndConditionList in rulesetCharacter.GetLightAffinityFeatures()
+                         .Where(featureDefinition =>
+                             !daylightRuleOn || !RacialSunlightSensitivity.IsRacialFeature(featureDefinition))
                          .Select(featureDefinition =>
                              (featureDefinition as ILightingAffinityProvider)?.LightingEffectAndConditionList)
                          .Where(lightingEffectAndConditionList => lightingEffectAndConditionList != null))
@@ -817,35 +832,6 @@ public static class GameLocationCharacterPatcher
                 foreach (var effectAndCondition in lightingEffectAndConditionList.Where(effectAndCondition =>
                              effectAndCondition.lightingState == __instance.lightingState))
                 {
-                    //BEGIN PATCH
-                    if (Main.Settings.RaceLightSensitivityApplyOutdoorsOnly &&
-                        __instance.lightingState == LocationDefinitions.LightingState.Bright)
-                    {
-                        var isExterior = false;
-
-                        if (__instance is IIlluminable illuminable)
-                        {
-                            var visibilityManager =
-                                ServiceRepository.GetService<IGameLocationVisibilityService>() as
-                                    GameLocationVisibilityManager;
-
-                            if (visibilityManager)
-                            {
-                                illuminable.GetAllPositionsToCheck(visibilityManager.positionCache);
-
-                                var gridAccessor = new GridAccessor(visibilityManager.positionCache[0]);
-
-                                isExterior = gridAccessor.sector.IsExterior;
-                            }
-                        }
-
-                        if (effectAndCondition.condition == CustomConditionsContext.LightSensitivity && !isExterior)
-                        {
-                            continue;
-                        }
-                    }
-                    //END PATCH
-
                     if (effectAndCondition.condition)
                     {
                         wantedConditions.Add(effectAndCondition.condition);
