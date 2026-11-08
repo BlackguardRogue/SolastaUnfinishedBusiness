@@ -716,9 +716,8 @@ internal static class Level20Context
                 return;
             }
 
-            panel.revertPreparationButton.interactable =
-                panel.preparedSpells.Count != _initialPicks.Count ||
-                panel.preparedSpells.Any(x => !_initialPicks.Contains(x));
+            // in order: Signature Spells charges its picks by their position in the list
+            panel.revertPreparationButton.interactable = !panel.preparedSpells.SequenceEqual(_initialPicks);
         }
 
         // DoValidate prefix: in the mode, Prepare sends the chosen spells as the picks. False: not in the mode
@@ -807,7 +806,7 @@ internal static class Level20Context
             try
             {
                 partyStatusScreen.SetupDisplayPreferences(false, false, false);
-                inspectionScreen.ShowSpellPreparation(hero, Gui.GuiService.GetScreen<RestModal>(), spellRepertoire);
+                SpellPreparationScreen.Show(inspectionScreen, hero, Gui.GuiService.GetScreen<RestModal>(), spellRepertoire);
 
                 while (context.Async && inspectionScreen.Visible)
                 {

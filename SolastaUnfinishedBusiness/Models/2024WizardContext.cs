@@ -345,8 +345,8 @@ public static partial class Tabletop2024Context
 
             // the screen's choice and the swap record reach every computer together: TryPrepareMemorizeSpell
             partyStatusScreen.SetupDisplayPreferences(false, false, false);
-            inspectionScreen.ShowSpellPreparation(
-                functorParameters.RestingHero, Gui.GuiService.GetScreen<RestModal>(), spellRepertoire);
+            SpellPreparationScreen.Show(
+                inspectionScreen, hero, Gui.GuiService.GetScreen<RestModal>(), spellRepertoire);
 
             while (context.Async && inspectionScreen.Visible)
             {

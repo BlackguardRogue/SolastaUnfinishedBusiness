@@ -120,6 +120,15 @@ internal static class MultiplayerDesyncContext
     // The game is going away: nothing here should keep it alive, or go on describing it, until the next one.
     internal static void GameDestroyed()
     {
+        // the turn-end check's numbering and records belong to the game that's gone
+        _turnGame = null;
+        _turnBattle = null;
+        _turnBattleNumber = 0;
+        TurnsInRound.Clear();
+        HostTurns.Clear();
+        ClientTurns.Clear();
+        TurnsReported.Clear();
+
         _reportedGame = null;
         ReportedByActor.Clear();
         _idDesyncReported = false;
