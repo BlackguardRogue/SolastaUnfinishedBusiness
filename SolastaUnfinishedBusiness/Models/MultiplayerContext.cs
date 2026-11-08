@@ -380,15 +380,15 @@ internal static class MultiplayerContext
                    x.RulesetCharacter is { IsDeadOrDyingOrUnconscious: false });
     }
 
-    // multiplayer only: when a battle starts with characters sharing a cell, every one except the cell keeper (see CellKeeper) steps
-    // to the closest safe cell: free, not dangerous, and not perceived by any enemy if the character is sneaking.
-    // This runs on every peer from the same game state at the same point of the simulation, which is how lockstep
-    // keeps it identical everywhere (the host's result and every client's result are the same by construction).
-    internal static void ResolveOverlapOnBattleStart(GameLocationCharacter character)
+    // multiplayer, at battle start: a character sharing a cell, unless it's the cell keeper (see CellKeeper), steps to
+    // the closest safe cell: free, not dangerous, and not perceived by any enemy if the character is sneaking.
+    // Only the host runs this (MultiplayerBattlePlacementContext), and the other computers take its result. It used to
+    // run on every computer, on the assumption that the same game state gave the same result everywhere, but "perceived
+    // by an enemy" comes from each computer's own visibility service, which isn't lockstep state, so computers could
+    // pick different cells (desync issue 04).
+    internal static void SeparateFromSharedCell(GameLocationCharacter character)
     {
-        if (!Global.IsMultiplayer ||
-            !Main.Settings.MultiplayerResolveOverlapsOnBattleStart ||
-            character?.RulesetCharacter is not { IsDeadOrUnconscious: false })
+        if (character?.RulesetCharacter is not { IsDeadOrUnconscious: false })
         {
             return;
         }

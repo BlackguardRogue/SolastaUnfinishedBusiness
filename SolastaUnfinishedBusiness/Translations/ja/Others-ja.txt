@@ -779,6 +779,7 @@ Message/&MultiplayerVersionWarningDescription=これらのプレイヤーはあ�
 Message/&MultiplayerTurnSpeedUpStarted={0}が敵のターンを加速しました
 Message/&MultiplayerTurnSpeedUpStopped={0}が敵のターンを通常の速度に戻しました
 Message/&MultiplayerTurnSpeedUpCancelled=敵のターンの速度変更は取り消されました：{0}。速度は変わっていません。
+Message/&MultiplayerBattlePlacementUnconfirmed=ホストが決めた戦闘開始位置を、全員が確認できませんでした。プレイヤー間で位置が異なる可能性があります。再同期すると全員がホストのゲームに戻ります。
 Message/&MultiplayerTurnSpeedUpAutomaticCancelled=敵のターンの自動加速は取り消されました：{0}。速度は変わっておらず、次のセッションまで自動では加速しません。ボタンは引き続き使えます。
 Message/&MultiplayerTurnSpeedUpCancelTimeout=30秒以内に変更地点に到達しなかったプレイヤーがいます
 Message/&MultiplayerTurnSpeedUpCancelRosterChanged=プレイヤーが参加または退出しました

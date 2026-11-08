@@ -779,6 +779,7 @@ Message/&MultiplayerVersionWarningDescription=Questi giocatori non usano la stes
 Message/&MultiplayerTurnSpeedUpStarted={0} ha velocizzato i turni nemici
 Message/&MultiplayerTurnSpeedUpStopped={0} ha riportato i turni nemici alla velocità normale
 Message/&MultiplayerTurnSpeedUpCancelled=Cambio di velocità dei turni nemici annullato: {0}. La velocità non è cambiata.
+Message/&MultiplayerBattlePlacementUnconfirmed=Non tutti i giocatori hanno confermato le posizioni iniziali di combattimento dell'host. Le posizioni potrebbero differire tra i giocatori; una risincronizzazione riporta tutti alla partita dell'host.
 Message/&MultiplayerTurnSpeedUpAutomaticCancelled=La velocizzazione automatica dei turni nemici è stata annullata: {0}. La velocità non è cambiata e non verrà più velocizzata automaticamente fino alla prossima sessione; il pulsante funziona ancora.
 Message/&MultiplayerTurnSpeedUpCancelTimeout=un giocatore non ha raggiunto il cambio entro 30 secondi
 Message/&MultiplayerTurnSpeedUpCancelRosterChanged=un giocatore è entrato o uscito

@@ -778,6 +778,7 @@ Message/&MultiplayerVersionWarningDescription=这些玩家使用的%ModName%版�
 Message/&MultiplayerTurnSpeedUpStarted={0}加快了敌人回合
 Message/&MultiplayerTurnSpeedUpStopped={0}将敌人回合恢复为正常速度
 Message/&MultiplayerTurnSpeedUpCancelled=敌人回合速度更改已取消：{0}。速度没有改变。
+Message/&MultiplayerBattlePlacementUnconfirmed=并非所有玩家都确认了主机设定的战斗起始位置。各玩家的位置可能不同；重新同步会让所有人回到主机的游戏状态。
 Message/&MultiplayerTurnSpeedUpAutomaticCancelled=敌人回合自动加速已取消：{0}。速度没有改变，并且在下一次游戏会话之前不会再自动加速；按钮仍然可用。
 Message/&MultiplayerTurnSpeedUpCancelTimeout=有玩家未在 30 秒内到达更改点
 Message/&MultiplayerTurnSpeedUpCancelRosterChanged=有玩家加入或离开

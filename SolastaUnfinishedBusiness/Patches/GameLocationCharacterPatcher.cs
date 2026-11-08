@@ -323,8 +323,8 @@ public static class GameLocationCharacterPatcher
             //while there already is callback for this event it doesn't have character or surprise flag arguments
             CharacterBattleListenersPatch.OnCharacterBattleStarted(__instance, surprise);
 
-            //PATCH: separates characters that were sharing a cell when the battle started (MULTIPLAYER)
-            MultiplayerContext.ResolveOverlapOnBattleStart(__instance);
+            // characters sharing a cell at battle start (MULTIPLAYER) are separated by the host once every contender
+            // has started, and the other computers take its formation: see MultiplayerBattlePlacementContext
         }
     }
 

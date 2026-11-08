@@ -1,4 +1,5 @@
 ﻿using System.Collections;
+using System.Collections.Generic;
 using System.Linq;
 using SolastaUnfinishedBusiness.Api.GameExtensions;
 using SolastaUnfinishedBusiness.Builders;
@@ -117,6 +118,12 @@ public static partial class Tabletop2024Context
         return TryGetMemorizeSpellCondition(character, out _);
     }
 
+    // The one swap Memorize Spell allows is chosen on the clicking player's preparation screen, so it's tracked on that
+    // computer only, by the condition's object ID: (whether a spell was unselected, the index of the spell last
+    // unselected or selected, -1 before either). A new condition (after the next rest) starts a new record. This used to
+    // be kept in the condition's Amount and SourceProficiencyBonus, which changed a shared game object on one computer.
+    private static readonly Dictionary<ulong, (int Amount, int SpellIndex)> MemorizeSwaps = new();
+
     internal static bool IsInvalidMemorizeSelectedSpell(
         SpellRepertoirePanel spellRepertoirePanel, RulesetCharacter rulesetCharacter, SpellDefinition spell)
     {
@@ -125,33 +132,59 @@ public static partial class Tabletop2024Context
             return false;
         }
 
+        if (!MemorizeSwaps.TryGetValue(activeCondition.Guid, out var swap))
+        {
+            // how many spells can be prepared starting at zero as need an unselect event first, and the index of the
+            // unselected spell starting at -1 to allow any spell to be unselected on first take
+            swap = (0, -1);
+        }
+
         var spellIndex = SpellsContext.Spells.IndexOf(spell);
         var isUncheck = spellRepertoirePanel.preparedSpells.Contains(spell);
 
         if (isUncheck)
         {
-            if (activeCondition.SourceProficiencyBonus != -1 &&
-                activeCondition.SourceProficiencyBonus != spellIndex)
+            if (swap.SpellIndex != -1 && swap.SpellIndex != spellIndex)
             {
                 return true;
             }
 
-            activeCondition.Amount = 1;
-            activeCondition.SourceProficiencyBonus = spellIndex;
+            MemorizeSwaps[activeCondition.Guid] = (1, spellIndex);
 
             return false;
         }
 
-        activeCondition.Amount = 0;
-        activeCondition.SourceProficiencyBonus = spellIndex;
+        MemorizeSwaps[activeCondition.Guid] = (0, spellIndex);
 
         return false;
+    }
+
+    // runs on every computer at the same tick (RestCommandContext): the condition that puts the hero's preparation
+    // screen in Memorize Spell mode until the next rest, so every game creates it, with the same object ID
+    private static void BeginMemorizeSpell(RulesetCharacterHero hero, string argument)
+    {
+        // make this until any rest to ensure users cannot cheat by reopening the prep screen
+        // as conditions on refresh won't update source amount nor source ability bonus used for tracking
+        hero.InflictCondition(
+            ConditionMemorizeSpell.Name,
+            DurationType.UntilAnyRest,
+            0,
+            TurnOccurenceType.EndOfTurn,
+            AttributeDefinitions.TagEffect,
+            hero.guid,
+            hero.CurrentFaction.Name,
+            1,
+            ConditionMemorizeSpell.Name,
+            0,
+            0,
+            -1);
     }
 
     private static void LoadWizardMemorizeSpell()
     {
         ServiceRepository.GetService<IFunctorService>()
             .RegisterFunctor(nameof(FunctorMemorizeSpell), new FunctorMemorizeSpell());
+        RestCommandContext.Register(nameof(BeginMemorizeSpell), BeginMemorizeSpell);
     }
 
     internal static void SwitchWizardMemorizeSpell()
@@ -186,24 +219,18 @@ public static partial class Tabletop2024Context
                 yield break;
             }
 
-            // make this until any rest to ensure users cannot cheat by reopening the prep screen
-            // as conditions on refresh won't update source amount nor source ability bonus used for tracking
-            hero.InflictCondition(
-                ConditionMemorizeSpell.Name,
-                DurationType.UntilAnyRest,
-                0,
-                TurnOccurenceType.EndOfTurn,
-                AttributeDefinitions.TagEffect,
-                hero.guid,
-                hero.CurrentFaction.Name,
-                1,
-                ConditionMemorizeSpell.Name,
-                // how many spells can be prepared starting at zero as need an unselect event first
-                0,
-                0,
-                // index to the unselected spell starting at -1 to allow any spell to be unselected on first take
-                -1);
+            // the condition is added on every computer (it used to be added on the clicker's only, a desync); the
+            // preparation screen only opens once this computer has it too
+            var begun = false;
 
+            yield return RestCommandContext.Send(hero, nameof(BeginMemorizeSpell), string.Empty, x => begun = x);
+
+            if (!begun)
+            {
+                yield break;
+            }
+
+            // the chosen spells reach every computer through the game's own PrepareSpells command
             partyStatusScreen.SetupDisplayPreferences(false, false, false);
             inspectionScreen.ShowSpellPreparation(
                 functorParameters.RestingHero, Gui.GuiService.GetScreen<RestModal>(), spellRepertoire);

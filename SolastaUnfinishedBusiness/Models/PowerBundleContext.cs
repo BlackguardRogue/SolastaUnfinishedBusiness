@@ -18,6 +18,36 @@ internal static class PowerBundleContext
     {
         ServiceRepository.GetService<IFunctorService>()
             .RegisterFunctor(UseCustomRestPowerFunctorName, new FunctorUseCustomRestPower());
+        RestCommandContext.Register(nameof(UseCustomRestPowerTravelling), UseCustomRestPowerTravelling);
+    }
+
+    private static bool TryGetCustomRestPower(string powerName, out FeatureDefinitionPower power)
+    {
+        power = PowerBundle.GetPower(powerName);
+
+        return power || DatabaseHelper.TryGetDefinition(powerName, out power);
+    }
+
+    // runs on every computer at the same tick (RestCommandContext): a self power used from the rest screen while the
+    // hero isn't on a map (travelling). It used to run on the clicker's computer only, so only that game spent the use.
+    private static void UseCustomRestPowerTravelling(RulesetCharacterHero ruleChar, string powerName)
+    {
+        if (!TryGetCustomRestPower(powerName, out var power))
+        {
+            return;
+        }
+
+        var usablePower = PowerProvider.Get(power, ruleChar);
+        var implementationService = ServiceRepository.GetService<IRulesetImplementationService>();
+        var formsParams = new RulesetImplementationDefinitions.ApplyFormsParams();
+
+        formsParams.FillSourceAndTarget(ruleChar, ruleChar);
+        formsParams.FillFromActiveEffect(implementationService
+            .InstantiateEffectPower(ruleChar, usablePower, false));
+        formsParams.effectSourceType = EffectSourceType.Power;
+
+        ruleChar.UsePower(usablePower);
+        ruleChar.LogCharacterUsedPower(power, $"Feedback/&{power.Name}UsedWhileTravellingFormat");
     }
 
     private sealed class FunctorUseCustomRestPower : Functor
@@ -30,9 +60,7 @@ internal static class PowerBundleContext
         {
             var functor = this;
             var powerName = functorParameters.StringParameter;
-            var power = PowerBundle.GetPower(powerName);
-
-            if (!power && !DatabaseHelper.TryGetDefinition(powerName, out power))
+            if (!TryGetCustomRestPower(powerName, out var power))
             {
                 yield break;
             }
@@ -51,7 +79,6 @@ internal static class PowerBundleContext
 
                 fromActor ??= GameLocationCharacter.GetFromActor(ruleChar);
 
-                var actionService = ServiceRepository.GetService<IGameLocationActionService>();
                 var implementationService = ServiceRepository.GetService<IRulesetImplementationService>();
 
                 if (fromActor != null)
@@ -68,7 +95,10 @@ internal static class PowerBundleContext
                         SkipAnimationsAndVFX = true
                     };
 
-                    actionService.ExecuteAction(actionParams, functor.ActionExecuted, false);
+                    // through the command service, as the game's own FunctorUsePower does, so the power is used on
+                    // every computer; IGameLocationActionService.ExecuteAction (used before) runs it on this one only
+                    ServiceRepository.GetService<ICommandService>()
+                        .ExecuteAction(actionParams, functor.ActionExecuted, false);
 
                     while (!functor._powerUsed)
                     {
@@ -77,15 +107,8 @@ internal static class PowerBundleContext
                 }
                 else
                 {
-                    var formsParams = new RulesetImplementationDefinitions.ApplyFormsParams();
-
-                    formsParams.FillSourceAndTarget(ruleChar, ruleChar);
-                    formsParams.FillFromActiveEffect(implementationService
-                        .InstantiateEffectPower(ruleChar, usablePower, false));
-                    formsParams.effectSourceType = EffectSourceType.Power;
-
-                    ruleChar.UsePower(usablePower);
-                    ruleChar.LogCharacterUsedPower(power, $"Feedback/&{power.Name}UsedWhileTravellingFormat");
+                    yield return RestCommandContext.Send(
+                        ruleChar, nameof(UseCustomRestPowerTravelling), power.Name, null);
                 }
             }
 
