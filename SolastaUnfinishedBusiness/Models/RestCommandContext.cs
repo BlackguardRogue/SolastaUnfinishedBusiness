@@ -35,6 +35,94 @@ internal static class RestCommandContext
 
     private static long _sequence;
 
+    // Players who left the room, as recorded by the host's departure command at its tick on every computer. A command
+    // of theirs that runs after it (still queued when they left) is refused by the handlers that check HasDeparted, so
+    // nothing they started can take effect with nobody left to finish or undo it, and the listeners undo what was open
+    // (Codex's reviews of PR #28). The departure is a command so that it is ordered against theirs everywhere alike.
+    private const string DepartureVerb = "RestCommandPlayerLeft";
+
+    private static readonly HashSet<int> Departed = [];
+    private static readonly List<Action<int>> DepartureListeners = [];
+    private static bool _leaveWatcherAdded;
+
+    static RestCommandContext()
+    {
+        Handlers[DepartureVerb] = (_, argument) =>
+        {
+            if (!int.TryParse(argument, out var actor) || actor <= 0)
+            {
+                return false;
+            }
+
+            Departed.Add(actor);
+
+            foreach (var listener in DepartureListeners)
+            {
+                listener(actor);
+            }
+
+            return true;
+        };
+    }
+
+    // whether the player who made this transaction or session ID has left, as of this command's tick
+    internal static bool HasDeparted(string id)
+    {
+        return Departed.Contains(SenderOf(id));
+    }
+
+    // called at the departure's tick on every computer, with the player's actor number
+    internal static void OnDeparture(Action<int> listener)
+    {
+        DepartureListeners.Add(listener);
+
+        if (_leaveWatcherAdded)
+        {
+            return;
+        }
+
+        _leaveWatcherAdded = true;
+        PhotonNetwork.AddCallbackTarget(new LeaveWatcher());
+    }
+
+    // a new room numbers its players afresh
+    internal static void OnJoinedRoom()
+    {
+        Departed.Clear();
+    }
+
+    private sealed class LeaveWatcher : Photon.Realtime.IInRoomCallbacks
+    {
+        public void OnPlayerEnteredRoom(Photon.Realtime.Player newPlayer)
+        {
+        }
+
+        // only the host sends the departure, once
+        public void OnPlayerLeftRoom(Photon.Realtime.Player otherPlayer)
+        {
+            MultiplayerContext.Guarded("a player leaving", () =>
+            {
+                if (PhotonNetwork.IsMasterClient)
+                {
+                    Post(null, DepartureVerb, otherPlayer.ActorNumber.ToString());
+                }
+            });
+        }
+
+        public void OnRoomPropertiesUpdate(ExitGames.Client.Photon.Hashtable propertiesThatChanged)
+        {
+        }
+
+        public void OnPlayerPropertiesUpdate(
+            Photon.Realtime.Player targetPlayer, ExitGames.Client.Photon.Hashtable changedProps)
+        {
+        }
+
+        public void OnMasterClientSwitched(Photon.Realtime.Player newMasterClient)
+        {
+        }
+    }
+
     // a handler gets the hero and the command's argument and says whether it did what was asked; it runs on every
     // computer at the command's tick, so it must only use game state (never this computer's screens or input), and
     // every computer gets the same answer

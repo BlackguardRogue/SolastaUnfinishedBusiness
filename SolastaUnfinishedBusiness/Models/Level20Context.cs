@@ -6,7 +6,6 @@ using System.Reflection;
 using System.Reflection.Emit;
 using HarmonyLib;
 using JetBrains.Annotations;
-using Photon.Pun;
 using SolastaUnfinishedBusiness.Api;
 using SolastaUnfinishedBusiness.Api.GameExtensions;
 using SolastaUnfinishedBusiness.Api.Helpers;
@@ -647,7 +646,7 @@ internal static class Level20Context
     // the screen's choice reached everyone through the game's PrepareSpells command, so the other computers were left
     // with the picks as their prepared spells and no picks at all (found reading the code for desync issue 04). Both
     // switches now run on every computer at the same tick (RestCommandContext); the clicker waits for each.
-    // a new room: forget departures and open Spell Mastery or Signature Spells preparations from the last one
+    // a new room: forget open Spell Mastery or Signature Spells preparations from the last one
     internal static void OnJoinedRoom()
     {
         TaggedSpellPreparation.OnJoinedRoom();
@@ -662,14 +661,7 @@ internal static class Level20Context
         // Begin to End or Cancel, and the game refuses to save while functors run (GameSerializationManager.CanSave).
         private static readonly Dictionary<(ulong, string), Transaction> Open = new();
 
-        // players who left the room, as recorded by the host's departure command at its tick on every computer: their
-        // open preparations were cancelled then, and a begin of theirs that runs later is refused, so a begin still
-        // queued when they left can't leave a hero switched with nobody to end it (Codex's review of PR #28)
-        private static readonly HashSet<int> Departed = [];
-
-        private const string DepartedVerb = "RestPreparationsPlayerLeft";
-
-        private static bool _leaveWatcherAdded;
+        private static bool _departureListenerAdded;
 
         private static RulesetSpellRepertoire GetRepertoire(RulesetCharacterHero hero)
         {
@@ -682,15 +674,14 @@ internal static class Level20Context
             RestCommandContext.Register($"Begin{tag}", (hero, id) => Begin(hero, tag, id));
             RestCommandContext.Register($"End{tag}", (hero, id) => End(hero, tag, id));
             RestCommandContext.Register($"Cancel{tag}", (hero, id) => Cancel(hero, tag, id));
-            RestCommandContext.Register(DepartedVerb, (_, actor) => OnDeparted(actor));
 
-            if (_leaveWatcherAdded)
+            if (_departureListenerAdded)
             {
                 return;
             }
 
-            _leaveWatcherAdded = true;
-            PhotonNetwork.AddCallbackTarget(new LeaveWatcher());
+            _departureListenerAdded = true;
+            RestCommandContext.OnDeparture(OnDeparted);
         }
 
         // the repertoire shows the feature's picks as prepared, and the condition puts the screen in its mode
@@ -704,7 +695,7 @@ internal static class Level20Context
                 Open.Remove((hero.Guid, tag));
             }
 
-            if (Departed.Contains(RestCommandContext.SenderOf(id)))
+            if (RestCommandContext.HasDeparted(id))
             {
                 Main.Info($"[RestCommand] {tag} for {hero.Name} not started: its player has left");
 
@@ -862,39 +853,20 @@ internal static class Level20Context
             yield return RestCommandContext.Send(hero, $"End{tag}", id, null);
         }
 
-        // the host tells every computer, as a command, that a player left: the departure then has a tick, ordered
-        // against that player's begins everywhere alike, whether they had already run or were still queued
-        private static void OnPlayerLeft(int actor)
+        // at a player's departure (RestCommandContext, at its tick on every computer): cancel their open preparations;
+        // their later begins are refused in Begin
+        private static void OnDeparted(int actor)
         {
-            if (PhotonNetwork.IsMasterClient)
-            {
-                RestCommandContext.Post(null, DepartedVerb, actor.ToString());
-            }
-        }
-
-        // runs on every computer at the departure's tick: cancel the player's open preparations, refuse later begins
-        private static bool OnDeparted(string argument)
-        {
-            if (!int.TryParse(argument, out var actor) || actor <= 0)
-            {
-                return false;
-            }
-
-            Departed.Add(actor);
-
             foreach (var entry in Open.Where(x => RestCommandContext.SenderOf(x.Value.Id) == actor).ToList())
             {
                 Main.Info($"[RestCommand] {entry.Key.Item2} for {entry.Value.Hero.Name}: its player left; cancelling");
                 Cancel(entry.Value.Hero, entry.Key.Item2, entry.Value.Id);
             }
-
-            return true;
         }
 
-        // a new room numbers its players afresh
+        // a new room: open preparations from the last one can't be closed
         internal static void OnJoinedRoom()
         {
-            Departed.Clear();
             Open.Clear();
         }
 
@@ -905,30 +877,6 @@ internal static class Level20Context
             internal readonly string Id = id;
             internal readonly SpellDefinition[] Picks = picks;
             internal readonly SpellDefinition[] Prepared = prepared;
-        }
-
-        private sealed class LeaveWatcher : Photon.Realtime.IInRoomCallbacks
-        {
-            public void OnPlayerEnteredRoom(Photon.Realtime.Player newPlayer)
-            {
-            }
-
-            public void OnPlayerLeftRoom(Photon.Realtime.Player otherPlayer)
-            {
-                MultiplayerContext.Guarded("a player leaving", () => OnPlayerLeft(otherPlayer.ActorNumber));
-            }
-
-            public void OnRoomPropertiesUpdate(ExitGames.Client.Photon.Hashtable propertiesThatChanged)
-            {
-            }
-
-            public void OnPlayerPropertiesUpdate(Photon.Realtime.Player targetPlayer, ExitGames.Client.Photon.Hashtable changedProps)
-            {
-            }
-
-            public void OnMasterClientSwitched(Photon.Realtime.Player newMasterClient)
-            {
-            }
         }
     }
 
