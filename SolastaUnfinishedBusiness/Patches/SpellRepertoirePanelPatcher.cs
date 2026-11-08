@@ -60,6 +60,20 @@ public static class SpellRepertoirePanelPatcher
         }
     }
 
+    //PATCH: in Memorize Spell mode, Prepare sends the chosen spells and the swap record to every computer together
+    //(Tabletop2024Context.TryPrepareMemorizeSpell) instead of the game's PrepareSpells command
+    [HarmonyPatch(typeof(SpellRepertoirePanel), nameof(SpellRepertoirePanel.DoValidate))]
+    [SuppressMessage("Minor Code Smell", "S101:Types should be named in PascalCase", Justification = "Patch")]
+    [UsedImplicitly]
+    public static class DoValidate_Patch
+    {
+        [UsedImplicitly]
+        public static bool Prefix(SpellRepertoirePanel __instance)
+        {
+            return !Tabletop2024Context.TryPrepareMemorizeSpell(__instance);
+        }
+    }
+
     //PATCH: Supports Wizard Mastery and Signature spell features
     [HarmonyPatch(typeof(SpellRepertoirePanel), nameof(SpellRepertoirePanel.RefreshPreparation))]
     [SuppressMessage("Minor Code Smell", "S101:Types should be named in PascalCase", Justification = "Patch")]

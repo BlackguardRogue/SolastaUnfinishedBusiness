@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using ExitGames.Client.Photon;
@@ -20,26 +21,32 @@ namespace SolastaUnfinishedBusiness.Models;
 // part in the WizardTower desync is plausible, not proven).
 //
 // How:
-// 1. Every computer: when a battle starts (GameLocationBattleManager.TriggerBattleStart), a pending placement opens,
-//    numbered by the battles started since joining the room or loading the map, with the contenders' IDs.
-// 2. The host separates the characters, then sends the whole formation: the map, every contender's ID, cell and
-//    facing, moved or not, and a signature of the grid cells every contender occupies (OccupancySignature), which
-//    covers large creatures' whole footprints and any cell still shared because no safe cell was found.
-// 3. A client never separates anyone itself. It takes only a formation for the same map, battle number and
-//    contenders, applies it through the game's positioning service, checks every contender's cell and facing and the
-//    occupancy signature, and reports to the host whether all match. A formation for anything else is kept (if it may
-//    be for a battle this computer hasn't started yet) or ignored; one for a battle already released is ignored.
+// 1. Every computer: when a battle starts (GameLocationBattleManager.TriggerBattleStart), a pending placement opens
+//    with the contenders' IDs.
+// 2. The host separates the characters, then runs the game's own unstack (the one BattleState_Initiative.Begin would
+//    run) for anyone still stacked and moves them to its cells, so nothing is left stacked for each computer's
+//    initiative to resolve from its own surroundings (Codex's re-review: the native unstack searches cells beyond the
+//    contenders, which a signature of their own cells doesn't cover). It names the battle with a random ID and sends
+//    the whole formation: the ID, the map, every contender's ID, cell and facing (moved or not), and a signature of the
+//    grid cells every contender occupies with everyone registered in them (OccupancySignature).
+// 3. A client never separates anyone itself. It takes a formation for its pending battle when the map and contenders
+//    match, applies it through the game's positioning service, checks every contender's cell and facing and the
+//    signature, and reports to the host, under the host's ID, whether all match. A formation that comes before this
+//    computer's battle start is kept until then; once the host has released that battle it is never applied, so a
+//    late formation can't move characters in a battle under way. One for other
+//    contenders doesn't use up the placement: after MismatchGraceSeconds without the right one, the client reports the
+//    mismatch, and the right one is still applied if it comes. Stale formations from before a map change can't arrive
+//    afterwards: Photon delivers each sender's reliable messages in order, and the host's map change comes after them.
 // 4. Every computer holds the battle's initiative state (BattleState_Initiative, which the intro state requests a
 //    frame or more after the battle starts) before its Begin and before the roll, until the host releases it: when
-//    every player in the room has reported, or after HostWaitSeconds. Initiative's Begin moves characters still
-//    stacked apart with the game's own unstack, which reads only the grid, so equal boards give equal results.
-//    A client that hears nothing releases itself after ClientWaitSeconds.
+//    every player in the room has reported, or after HostWaitSeconds. A client that hears nothing releases itself after
+//    ClientWaitSeconds.
 // 5. The release says whether every player matched. If not (a failed check, a mismatch, no answer), nobody falls back
 //    to a local placement: the log says why, every player gets an alert that positions may differ, and the host gets
 //    the Resync offer (MultiplayerDesyncContext), which reloads every computer from the host's game. A host change or
 //    leaving the room ends the hold the same way, without the offer.
 // 6. When each battle's first turn begins, every computer logs the occupancy signature again ("first turn"), so
-//    players' logs can be compared after the game's own unstack and initiative.
+//    players' logs can be compared after initiative.
 // Single player is unchanged: the separation never ran there.
 internal static class MultiplayerBattlePlacementContext
 {
@@ -49,17 +56,19 @@ internal static class MultiplayerBattlePlacementContext
     private const float HostWaitSeconds = 10f;
     private const float ClientWaitSeconds = 20f;
     private const float MismatchGraceSeconds = 2f;
+    private const int RememberedBattles = 8;
 
     private static bool _eventHandlerRegistered;
 
-    // battles started since joining the room or loading the map; counted on every computer, so it names the battle
-    private static int _battleCount;
-
     private static Pending _pending;
 
-    // formations that arrived before this computer started their battle (the host's message can outrun the start
-    // here), with the time they arrived; older than ClientWaitSeconds they're dropped
-    private static readonly Dictionary<int, (object[] Data, float Received)> EarlyFormations = new();
+    // client: formations that came before this computer started their battle, by the host's battle ID, with the time
+    // they arrived; dropped when the host releases that battle or after ClientWaitSeconds
+    private static readonly Dictionary<string, (object[] Data, float Received)> EarlyFormations = new();
+
+    // client: the host's releases for battles this computer hadn't placed, so a late start doesn't wait for one again
+    private static readonly Dictionary<string, bool> ReleasedBattles = new();
+    private static readonly Queue<string> ReleasedOrder = new();
 
     // the initiative state's Begin is held while placing, then run once released
     private static BattleState_Initiative _heldInitiative;
@@ -79,6 +88,11 @@ internal static class MultiplayerBattlePlacementContext
     private static void Log(string message)
     {
         Main.Info($"[BattlePlacement] {message}");
+    }
+
+    private static string Short(string id)
+    {
+        return string.IsNullOrEmpty(id) ? "?" : id.Substring(0, Math.Min(8, id.Length));
     }
 
     #region Lifecycle
@@ -123,13 +137,14 @@ internal static class MultiplayerBattlePlacementContext
     {
         if (_pending is { Released: false })
         {
-            Log($"battle {_pending.Number} placement dropped: {why}");
+            Log($"battle {Short(_pending.HostBattleId)} placement dropped: {why}");
         }
 
         // a held initiative state still in play runs its Begin at its next Update, as nothing holds it now
-        _battleCount = 0;
         _pending = null;
         EarlyFormations.Clear();
+        ReleasedBattles.Clear();
+        ReleasedOrder.Clear();
     }
 
     #endregion
@@ -144,7 +159,7 @@ internal static class MultiplayerBattlePlacementContext
             return;
         }
 
-        _pending = new Pending(++_battleCount, Time.realtimeSinceStartup);
+        _pending = new Pending(Time.realtimeSinceStartup);
     }
 
     // TriggerBattleStart postfix: every contender has started; the host places, a client waits for the host
@@ -161,7 +176,6 @@ internal static class MultiplayerBattlePlacementContext
         {
             // no battle came of it
             _pending = null;
-            _battleCount--;
 
             return;
         }
@@ -177,16 +191,25 @@ internal static class MultiplayerBattlePlacementContext
             return;
         }
 
-        if (!EarlyFormations.TryGetValue(_pending.Number, out var early))
+        // a formation that came first: the freshest one for this map and these contenders
+        var now = Time.realtimeSinceStartup;
+
+        foreach (var stale in EarlyFormations.Where(x => now - x.Value.Received > ClientWaitSeconds).ToList())
         {
-            return;
+            EarlyFormations.Remove(stale.Key);
         }
 
-        EarlyFormations.Remove(_pending.Number);
+        var early = EarlyFormations.Values
+            .Where(x => x.Data[2] is string location && location == LocationName &&
+                        x.Data[3] is long[] guids && guids.OrderBy(g => g).SequenceEqual(_pending.Guids))
+            .OrderByDescending(x => x.Received)
+            .Select(x => x.Data)
+            .FirstOrDefault();
 
-        if (Time.realtimeSinceStartup - early.Received <= ClientWaitSeconds)
+        if (early != null)
         {
-            ApplyFormation(early.Data);
+            EarlyFormations.Remove((string)early[1]);
+            ApplyFormation(early);
         }
     }
 
@@ -203,6 +226,8 @@ internal static class MultiplayerBattlePlacementContext
             MultiplayerContext.SeparateFromSharedCell(contender);
         }
 
+        UnstackAsHost(battle);
+
         var contenders = Contenders(battle);
         var guids = contenders.Select(x => (long)x.Guid).ToArray();
         var cells = contenders
@@ -213,27 +238,57 @@ internal static class MultiplayerBattlePlacementContext
 
         if (shared.Count > 0)
         {
-            // no safe cell for them: the game's own unstack moves them at initiative, alike on every equal board
-            Log($"battle {_pending.Number}: still sharing cells after separation: {string.Join("; ", shared)}");
+            // not even the game's unstack found cells for them; they stay alike on every computer that matches
+            Log($"still sharing cells after separation and unstack: {string.Join("; ", shared)}");
         }
 
+        _pending.HostBattleId = Guid.NewGuid().ToString("N");
         _pending.Roster = PhotonNetwork.PlayerList.Select(x => x.ActorNumber).ToArray();
         _pending.Reported.Add(PhotonNetwork.LocalPlayer.ActorNumber);
 
-        Log($"battle {_pending.Number}: sending the formation of {guids.Length} contenders " +
+        Log($"battle {Short(_pending.HostBattleId)}: sending the formation of {guids.Length} contenders " +
             $"(occupancy {signature:X16}) to {_pending.Roster.Length - 1} players");
 
-        Send(new object[] { FormationKind, _pending.Number, LocationName, guids, cells, facings, signature },
-            ReceiverGroup.Others);
+        Send(new object[]
+        {
+            FormationKind, _pending.HostBattleId, LocationName, guids, cells, facings, signature
+        }, ReceiverGroup.Others);
         PumpHost();
     }
 
+    // host: the game's own unstack, which BattleState_Initiative.Begin runs on every computer from that computer's
+    // grid, run here once, its cells applied, so the formation sent leaves nothing for it to do anywhere
+    private static void UnstackAsHost(GameLocationBattle battle)
+    {
+        var positioningService = ServiceRepository.GetService<IGameLocationPositioningService>();
+
+        if (positioningService == null)
+        {
+            return;
+        }
+
+        var found = new Dictionary<GameLocationCharacter, int3>();
+
+        positioningService.ComputeUnstackedPlacementPositions(
+            battle.AllContenders.Where(x => x != null).ToList(), found, false);
+
+        foreach (var pair in found.OrderBy(x => x.Key.Guid))
+        {
+            if (pair.Key.LocationPosition == pair.Value)
+            {
+                continue;
+            }
+
+            Log($"unstacking {pair.Key.Name} from {pair.Key.LocationPosition} to {pair.Value} (the game's own rule)");
+            positioningService.TeleportCharacter(pair.Key, pair.Value, pair.Key.Orientation);
+        }
+    }
+
     // client: the host's formation for the pending battle, kept for a battle this computer hasn't started yet, or
-    // ignored. It must name the same map, battle number and contenders: a formation for anything else must neither
-    // move characters nor use up this battle's placement.
+    // ignored
     private static void ApplyFormation(object[] data)
     {
-        if (data.Length != 7 || data[1] is not int number || data[2] is not string location ||
+        if (data.Length != 7 || data[1] is not string id || data[2] is not string location ||
             data[3] is not long[] guids || data[4] is not int[] cells || data[5] is not int[] facings ||
             data[6] is not long signature || cells.Length != guids.Length * 3 || facings.Length != guids.Length)
         {
@@ -244,56 +299,52 @@ internal static class MultiplayerBattlePlacementContext
 
         if (location != LocationName)
         {
-            Log($"ignored the formation of battle {number}: it's for {location}, not {LocationName}");
+            Log($"ignored the formation of battle {Short(id)}: it's for {location}, not {LocationName}");
 
             return;
         }
 
-        if (_pending?.Guids == null || number > _pending.Number)
+        if (_pending?.HostBattleId == id || ReleasedBattles.ContainsKey(id))
         {
-            // this computer hasn't started that battle yet
-            EarlyFormations[number] = (data, Time.realtimeSinceStartup);
-
-            foreach (var old in EarlyFormations.Keys.Where(x => x < number - 4).ToList())
-            {
-                EarlyFormations.Remove(old);
-            }
-
+            // a duplicate, or a battle the host already released
             return;
         }
 
-        if (number < _pending.Number || _pending.Released || _pending.Applied)
+        if (_pending is not { Guids: not null, Released: false, Applied: false })
         {
-            // an older battle's, one already released here, or a duplicate: placing now would move characters in a
-            // battle that has moved on
-            Log($"ignored the formation of battle {number}: battle {_pending.Number} is " +
-                (_pending.Released ? "already under way" : "already placed"));
+            // no battle here waiting for one: it may be for a battle this computer hasn't started yet
+            EarlyFormations[id] = (data, Time.realtimeSinceStartup);
 
             return;
         }
 
         if (!guids.OrderBy(x => x).SequenceEqual(_pending.Guids))
         {
-            // same number but other contenders: a delayed formation from before a reload, or boards that already
-            // differ. It doesn't use up this battle's placement: the right formation may still come, and if none has
-            // after MismatchGraceSeconds, Pump reports the failure to the host
-            _pending.Mismatch ??= $"the host's contenders ({string.Join(",", guids.OrderBy(x => x))}) aren't " +
-                                  $"this battle's ({string.Join(",", _pending.Guids)})";
-            _pending.MismatchSeen = Time.realtimeSinceStartup;
-            Log($"battle {number}: {_pending.Mismatch}");
+            // other contenders: boards that already differ, or a battle that starts later here. It doesn't use up
+            // this battle's placement; Pump reports the mismatch if nothing better comes
+            if (_pending.MismatchId == null)
+            {
+                _pending.MismatchId = id;
+                _pending.MismatchSeen = Time.realtimeSinceStartup;
+                Log($"battle {Short(id)}: the host's contenders ({string.Join(",", guids.OrderBy(x => x))}) " +
+                    $"aren't this battle's ({string.Join(",", _pending.Guids)})");
+            }
+
+            EarlyFormations[id] = (data, Time.realtimeSinceStartup);
 
             return;
         }
 
         _pending.Applied = true;
+        _pending.HostBattleId = id;
 
         var ok = Apply(guids, cells, facings, signature, out var problem);
 
         Log(ok
-            ? $"battle {number}: formation applied and checked (occupancy {signature:X16})"
-            : $"battle {number}: formation not applied as sent: {problem}");
+            ? $"battle {Short(id)}: formation applied and checked (occupancy {signature:X16})"
+            : $"battle {Short(id)}: formation not applied as sent: {problem}");
 
-        Send(new object[] { ReportKind, number, ok }, ReceiverGroup.MasterClient);
+        Send(new object[] { ReportKind, id, ok }, ReceiverGroup.MasterClient);
     }
 
     private static bool Apply(long[] guids, int[] cells, int[] facings, long signature, out string problem)
@@ -422,7 +473,7 @@ internal static class MultiplayerBattlePlacementContext
     private static void OnEvent(EventData photonEvent)
     {
         if (photonEvent.Code != EventCode || photonEvent.CustomData is not object[] { Length: >= 2 } data ||
-            data[0] is not byte kind || data[1] is not int number || !IsOnlineRoom)
+            data[0] is not byte kind || data[1] is not string id || !IsOnlineRoom)
         {
             return;
         }
@@ -439,27 +490,60 @@ internal static class MultiplayerBattlePlacementContext
 
                 case ReportKind when PhotonNetwork.IsMasterClient && data.Length == 3 && data[2] is bool ok &&
                                      _pending is { Released: false, Roster: not null } &&
-                                     _pending.Number == number:
+                                     _pending.HostBattleId == id:
                     _pending.Reported.Add(photonEvent.Sender);
 
-                    if (!ok)
+                    // a later report replaces an earlier one (a mismatch, then the right formation applied)
+                    if (ok)
+                    {
+                        _pending.Failed.Remove(photonEvent.Sender);
+                    }
+                    else
                     {
                         _pending.Failed.Add(photonEvent.Sender);
-                        Log($"battle {number}: {PlayerName(photonEvent.Sender)} couldn't apply the formation");
+                        Log($"battle {Short(id)}: {PlayerName(photonEvent.Sender)} couldn't apply the formation");
                     }
 
                     PumpHost();
                     break;
 
-                case ReleaseKind when photonEvent.Sender == host && data.Length == 3 && data[2] is bool matched &&
-                                      _pending?.Number == number:
-                    Release(matched && _pending.Applied,
-                        !_pending.Applied ? "released by the host before its formation arrived"
-                        : matched ? null
-                        : "the host found that not every player has its formation");
+                case ReleaseKind when photonEvent.Sender == host && data.Length == 3 && data[2] is bool matched:
+                    OnRelease(id, matched);
                     break;
             }
         });
+    }
+
+    // client: the host released a battle
+    private static void OnRelease(string id, bool matched)
+    {
+        EarlyFormations.Remove(id);
+
+        if (_pending is { Released: false, Applied: true } && _pending.HostBattleId == id)
+        {
+            Release(matched, matched ? null : "the host found that not every player has its formation");
+
+            return;
+        }
+
+        if (_pending is { Released: false, Applied: false } && _pending.MismatchId == id)
+        {
+            Release(false, "the host's formation was for other contenders");
+
+            return;
+        }
+
+        // not placed here: its formation, if it comes again or was kept, is never applied. A battle that starts here
+        // only after the host gave up waiting (HostWaitSeconds) can't tell its own released formation from an older
+        // battle's, so it gets none and releases itself after ClientWaitSeconds with the alert; the host has already
+        // offered the Resync for it
+        ReleasedBattles[id] = matched;
+        ReleasedOrder.Enqueue(id);
+
+        while (ReleasedOrder.Count > RememberedBattles)
+        {
+            ReleasedBattles.Remove(ReleasedOrder.Dequeue());
+        }
     }
 
     private static string PlayerName(int actor)
@@ -485,10 +569,10 @@ internal static class MultiplayerBattlePlacementContext
             return;
         }
 
-        var differing = missing.Concat(_pending.Failed).Distinct().ToList();
+        var differing = missing.Concat(_pending.Failed.Where(present.Contains)).Distinct().ToList();
         var matched = differing.Count == 0;
 
-        Send(new object[] { ReleaseKind, _pending.Number, matched }, ReceiverGroup.Others);
+        Send(new object[] { ReleaseKind, _pending.HostBattleId, matched }, ReceiverGroup.Others);
 
         var problems = new List<string>();
 
@@ -519,20 +603,14 @@ internal static class MultiplayerBattlePlacementContext
 
         _pending.Released = true;
 
-        // formations for this battle or older ones can't be used any more
-        foreach (var old in EarlyFormations.Keys.Where(x => x <= _pending.Number).ToList())
-        {
-            EarlyFormations.Remove(old);
-        }
-
         if (matched)
         {
-            Log($"battle {_pending.Number}: every player has the formation; starting initiative");
+            Log($"battle {Short(_pending.HostBattleId)}: every player has the formation; starting initiative");
 
             return;
         }
 
-        Log($"battle {_pending.Number}: starting initiative with positions that may differ: {problem}");
+        Log($"battle {Short(_pending.HostBattleId)}: starting initiative with positions that may differ: {problem}");
         Gui.GuiService?.ShowAlert(
             Gui.Localize("Message/&MultiplayerBattlePlacementUnconfirmed"), Gui.ColorFailure, 8f);
     }
@@ -568,12 +646,15 @@ internal static class MultiplayerBattlePlacementContext
             return;
         }
 
-        if (!_pending.Applied && _pending.Mismatch != null &&
+        // a formation for other contenders and nothing better since: tell the host, without giving up on the right
+        // one (a report for it later replaces this one)
+        if (!_pending.Applied && !_pending.ReportedMismatch && _pending.MismatchId != null &&
             Time.realtimeSinceStartup - _pending.MismatchSeen >= MismatchGraceSeconds)
         {
-            _pending.Applied = true;
-            Log($"battle {_pending.Number}: no formation for this battle's contenders came; reporting the mismatch");
-            Send(new object[] { ReportKind, _pending.Number, false }, ReceiverGroup.MasterClient);
+            _pending.ReportedMismatch = true;
+            Log($"battle {Short(_pending.MismatchId)}: no formation for this battle's contenders came; " +
+                "reporting the mismatch");
+            Send(new object[] { ReportKind, _pending.MismatchId, false }, ReceiverGroup.MasterClient);
         }
 
         if (Time.realtimeSinceStartup - _pending.Started >= ClientWaitSeconds)
@@ -600,7 +681,7 @@ internal static class MultiplayerBattlePlacementContext
 
         _heldInitiative = state;
         _heldParameters = parameters;
-        Log($"battle {_pending.Number}: initiative held until every player has the formation");
+        Log("initiative held until every player has the host's formation");
 
         return false;
     }
@@ -650,24 +731,31 @@ internal static class MultiplayerBattlePlacementContext
         _firstTurnLogged = battle;
 
         var signature = OccupancySignature(Contenders(battle), out var shared);
+        var id = _pending?.Battle == battle ? Short(_pending.HostBattleId) : "?";
 
-        Log($"battle {_battleCount} first turn: occupancy {signature:X16}" +
+        Log($"battle {id} first turn: occupancy {signature:X16}" +
             (shared.Count > 0 ? $", sharing: {string.Join("; ", shared)}" : string.Empty));
     }
 
     #endregion
 
-    private sealed class Pending(int number, float started)
+    private sealed class Pending(float started)
     {
         internal readonly HashSet<int> Failed = [];
-        internal readonly int Number = number;
         internal readonly HashSet<int> Reported = [];
         internal readonly float Started = started;
         internal bool Applied;
         internal GameLocationBattle Battle;
-        internal string Mismatch;
-        internal float MismatchSeen;
         internal long[] Guids;
+
+        // the host's ID for this battle: the host's own, or (client) the one of the formation applied
+        internal string HostBattleId;
+
+        // client: the first formation for other contenders, and whether its mismatch was reported
+        internal string MismatchId;
+        internal float MismatchSeen;
+        internal bool ReportedMismatch;
+
         internal bool Released;
         internal int[] Roster;
     }

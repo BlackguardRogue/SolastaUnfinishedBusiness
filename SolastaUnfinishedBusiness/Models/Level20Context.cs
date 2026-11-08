@@ -6,6 +6,7 @@ using System.Reflection;
 using System.Reflection.Emit;
 using HarmonyLib;
 using JetBrains.Annotations;
+using Photon.Pun;
 using SolastaUnfinishedBusiness.Api;
 using SolastaUnfinishedBusiness.Api.GameExtensions;
 using SolastaUnfinishedBusiness.Api.Helpers;
@@ -648,9 +649,14 @@ internal static class Level20Context
     // switches now run on every computer at the same tick (RestCommandContext); the clicker waits for each.
     private static class TaggedSpellPreparation
     {
-        // the prepared spells from before the switch, per hero and feature; written and read by the commands on every
-        // computer alike, so it is the same everywhere (it isn't a game object and isn't saved)
-        private static readonly Dictionary<(ulong, string), SpellDefinition[]> PreparedBefore = new();
+        // Each switch is a transaction: Begin opens it with an ID made by the clicker, then End (the screen closed:
+        // its choice becomes the picks) or Cancel (undo exactly) closes it; either only acts on the transaction it
+        // names. The open transactions are written and read by the commands on every computer alike, so they are
+        // the same everywhere (not game objects, not saved). A save can't catch one open: the functor runs from
+        // Begin to End or Cancel, and the game refuses to save while functors run (GameSerializationManager.CanSave).
+        private static readonly Dictionary<(ulong, string), Transaction> Open = new();
+
+        private static bool _leaveWatcherAdded;
 
         private static RulesetSpellRepertoire GetRepertoire(RulesetCharacterHero hero)
         {
@@ -660,21 +666,41 @@ internal static class Level20Context
 
         internal static void Register(string tag)
         {
-            RestCommandContext.Register($"Begin{tag}", (hero, _) => Begin(hero, tag));
-            RestCommandContext.Register($"End{tag}", (hero, _) => End(hero, tag));
-        }
+            RestCommandContext.Register($"Begin{tag}", (hero, id) => Begin(hero, tag, id));
+            RestCommandContext.Register($"End{tag}", (hero, id) => End(hero, tag, id));
+            RestCommandContext.Register($"Cancel{tag}", (hero, id) => Cancel(hero, tag, id));
 
-        // the repertoire shows the feature's picks as prepared, and the condition puts the screen in its mode
-        private static void Begin(RulesetCharacterHero hero, string tag)
-        {
-            var spellRepertoire = GetRepertoire(hero);
-
-            if (spellRepertoire == null)
+            if (_leaveWatcherAdded)
             {
                 return;
             }
 
-            PreparedBefore[(hero.Guid, tag)] = spellRepertoire.PreparedSpells.ToArray();
+            _leaveWatcherAdded = true;
+            PhotonNetwork.AddCallbackTarget(new LeaveWatcher());
+        }
+
+        // the repertoire shows the feature's picks as prepared, and the condition puts the screen in its mode
+        private static bool Begin(RulesetCharacterHero hero, string tag, string id)
+        {
+            var spellRepertoire = GetRepertoire(hero);
+
+            // left over from an earlier game in this launch (another object for the same ID): it can't be closed now
+            if (Open.TryGetValue((hero.Guid, tag), out var stale) && stale.Hero != hero)
+            {
+                Open.Remove((hero.Guid, tag));
+            }
+
+            if (spellRepertoire == null || string.IsNullOrEmpty(id) || Open.ContainsKey((hero.Guid, tag)))
+            {
+                Main.Error($"[RestCommand] {tag} for {hero.Name} not started (no repertoire, or one already open)");
+
+                return false;
+            }
+
+            var hadPicks = spellRepertoire.ExtraSpellsByTag.TryGetValue(tag, out var picks);
+
+            Open[(hero.Guid, tag)] = new Transaction(
+                id, hero, spellRepertoire.PreparedSpells.ToArray(), hadPicks ? picks.ToArray() : null);
 
             spellRepertoire.ExtraSpellsByTag.TryAdd(tag, [.. spellRepertoire.AutoPreparedSpells]);
             spellRepertoire.PreparedSpells.SetRange(spellRepertoire.ExtraSpellsByTag[tag]);
@@ -693,35 +719,76 @@ internal static class Level20Context
                 0,
                 0,
                 0);
+
+            return true;
         }
 
-        // whatever is prepared now (the screen's choice, or the old picks if it was closed without one) becomes the
-        // feature's picks, and the prepared spells from before come back without them
-        private static void End(RulesetCharacterHero hero, string tag)
+        private static bool TryClose(RulesetCharacterHero hero, string tag, string id, out Transaction transaction)
         {
-            var spellRepertoire = GetRepertoire(hero);
+            if (!Open.TryGetValue((hero.Guid, tag), out transaction) || transaction.Id != id)
+            {
+                transaction = null;
 
-            if (spellRepertoire != null &&
-                spellRepertoire.ExtraSpellsByTag.TryGetValue(tag, out var picks) &&
-                PreparedBefore.TryGetValue((hero.Guid, tag), out var preparedBefore))
-            {
-                picks.SetRange(spellRepertoire.PreparedSpells.Except(spellRepertoire.AutoPreparedSpells));
-                spellRepertoire.PreparedSpells.SetRange(preparedBefore);
-                spellRepertoire.PreparedSpells.RemoveAll(x => picks.Contains(x));
-            }
-            else
-            {
-                // an end sent to undo a begin that never ran anywhere comes here too, and has nothing to undo
-                Main.Info($"[RestCommand] {tag} for {hero.Name} ended without its start; prepared spells left as they are");
+                return false;
             }
 
-            PreparedBefore.Remove((hero.Guid, tag));
+            Open.Remove((hero.Guid, tag));
 
             if (hero.TryGetConditionOfCategoryAndType(
                     AttributeDefinitions.TagEffect, $"Condition{tag}", out var activeCondition))
             {
                 hero.RemoveCondition(activeCondition);
             }
+
+            return true;
+        }
+
+        // the screen closed: whatever is prepared now (its choice, or the old picks if it closed without one) becomes
+        // the feature's picks, and the prepared spells from before come back without them (upstream's rule)
+        private static bool End(RulesetCharacterHero hero, string tag, string id)
+        {
+            if (!TryClose(hero, tag, id, out var transaction))
+            {
+                Main.Info($"[RestCommand] {tag} end for {hero.Name}: no open preparation {id}");
+
+                return false;
+            }
+
+            var spellRepertoire = GetRepertoire(hero);
+            var picks = spellRepertoire.ExtraSpellsByTag[tag];
+
+            picks.SetRange(spellRepertoire.PreparedSpells.Except(spellRepertoire.AutoPreparedSpells));
+            spellRepertoire.PreparedSpells.SetRange(transaction.Prepared);
+            spellRepertoire.PreparedSpells.RemoveAll(x => picks.Contains(x));
+
+            return true;
+        }
+
+        // undo: the prepared spells and the picks exactly as they were before Begin
+        private static bool Cancel(RulesetCharacterHero hero, string tag, string id)
+        {
+            if (!TryClose(hero, tag, id, out var transaction))
+            {
+                // the begin never ran, or the preparation already ended
+                return false;
+            }
+
+            var spellRepertoire = GetRepertoire(hero);
+
+            spellRepertoire.PreparedSpells.SetRange(transaction.Prepared);
+
+            if (transaction.Picks == null)
+            {
+                spellRepertoire.ExtraSpellsByTag.Remove(tag);
+            }
+            else
+            {
+                spellRepertoire.ExtraSpellsByTag[tag] = [.. transaction.Picks];
+            }
+
+            Main.Info($"[RestCommand] {tag} for {hero.Name} cancelled; spells back as before");
+
+            return true;
         }
 
         // the after-rest functor on the clicker: switch on every computer, open the screen here, switch back
@@ -741,16 +808,16 @@ internal static class Level20Context
                 yield break;
             }
 
+            var id = RestCommandContext.NewTransactionId();
             var outcome = RestCommandContext.Outcome.Failed;
 
-            yield return RestCommandContext.Send(hero, $"Begin{tag}", string.Empty, x => outcome = x);
+            yield return RestCommandContext.Send(hero, $"Begin{tag}", id, x => outcome = x);
 
             if (outcome == RestCommandContext.Outcome.TimedOut)
             {
-                // the begin may still run later on every computer, leaving the repertoire switched and the condition
-                // on with nobody to switch it back; an end sent after it runs after it everywhere (commands from one
-                // sender keep their order), and does nothing where the begin never ran
-                yield return RestCommandContext.Send(hero, $"End{tag}", string.Empty, null);
+                // the begin may still run later on every computer; a cancel sent after it runs after it everywhere
+                // (one sender's commands keep their order) and puts both spell lists back exactly
+                yield return RestCommandContext.Send(hero, $"Cancel{tag}", id, null);
             }
 
             if (outcome != RestCommandContext.Outcome.Ran)
@@ -771,7 +838,56 @@ internal static class Level20Context
 
             partyStatusScreen.SetupDisplayPreferences(true, true, true);
 
-            yield return RestCommandContext.Send(hero, $"End{tag}", string.Empty, null);
+            yield return RestCommandContext.Send(hero, $"End{tag}", id, null);
+        }
+
+        // the host cancels the open preparations of a player who left mid-way, whose end will never come; sent as a
+        // command, so every computer that's left cancels at the same tick
+        private static void OnPlayerLeft(int actor)
+        {
+            if (!PhotonNetwork.IsMasterClient)
+            {
+                return;
+            }
+
+            foreach (var entry in Open.Where(x => RestCommandContext.SenderOf(x.Value.Id) == actor).ToList())
+            {
+                Main.Info($"[RestCommand] {entry.Key.Item2} for {entry.Value.Hero.Name}: its player left; cancelling");
+                RestCommandContext.Post(entry.Value.Hero, $"Cancel{entry.Key.Item2}", entry.Value.Id);
+            }
+        }
+
+        private sealed class Transaction(
+            string id, RulesetCharacterHero hero, SpellDefinition[] prepared, SpellDefinition[] picks)
+        {
+            internal readonly RulesetCharacterHero Hero = hero;
+            internal readonly string Id = id;
+            internal readonly SpellDefinition[] Picks = picks;
+            internal readonly SpellDefinition[] Prepared = prepared;
+        }
+
+        private sealed class LeaveWatcher : Photon.Realtime.IInRoomCallbacks
+        {
+            public void OnPlayerEnteredRoom(Photon.Realtime.Player newPlayer)
+            {
+            }
+
+            public void OnPlayerLeftRoom(Photon.Realtime.Player otherPlayer)
+            {
+                MultiplayerContext.Guarded("a player leaving", () => OnPlayerLeft(otherPlayer.ActorNumber));
+            }
+
+            public void OnRoomPropertiesUpdate(ExitGames.Client.Photon.Hashtable propertiesThatChanged)
+            {
+            }
+
+            public void OnPlayerPropertiesUpdate(Photon.Realtime.Player targetPlayer, ExitGames.Client.Photon.Hashtable changedProps)
+            {
+            }
+
+            public void OnMasterClientSwitched(Photon.Realtime.Player newMasterClient)
+            {
+            }
         }
     }
 

@@ -31,15 +31,57 @@ internal static class RestCommandContext
     private static readonly Dictionary<string, bool> Applied = new();
     private const int AppliedLimit = 64;
 
-    private static readonly Dictionary<string, Action<RulesetCharacterHero, string>> Handlers = new();
+    private static readonly Dictionary<string, Func<RulesetCharacterHero, string, bool>> Handlers = new();
 
     private static long _sequence;
 
-    // a handler gets the hero and the command's argument; it runs on every computer at the command's tick, so it
-    // must only use game state (never this computer's screens or input)
-    internal static void Register(string verb, Action<RulesetCharacterHero, string> handler)
+    // a handler gets the hero and the command's argument and says whether it did what was asked; it runs on every
+    // computer at the command's tick, so it must only use game state (never this computer's screens or input), and
+    // every computer gets the same answer
+    internal static void Register(string verb, Func<RulesetCharacterHero, string, bool> handler)
     {
         Handlers[verb] = handler;
+    }
+
+    // a fresh ID for something several commands belong to (a preparation started and ended), unique per sender
+    internal static string NewTransactionId()
+    {
+        return $"{PhotonNetwork.LocalPlayer?.ActorNumber ?? 0}-t{++_sequence}";
+    }
+
+    // the actor number of the player whose computer made a transaction ID (0 in single player)
+    internal static int SenderOf(string transactionId)
+    {
+        var dash = transactionId?.IndexOf('-') ?? -1;
+
+        return dash > 0 && int.TryParse(transactionId.Substring(0, dash), out var actor) ? actor : 0;
+    }
+
+    // sends a command without waiting for it: the host uses this to clean up after a player who left
+    internal static void Post(RulesetCharacterHero hero, string verb, string argument)
+    {
+        if (!Global.IsMultiplayer)
+        {
+            if (Handlers.TryGetValue(verb, out var handler))
+            {
+                handler(hero, argument ?? string.Empty);
+            }
+
+            return;
+        }
+
+        if (ServiceRepository.GetService<INetworkingService>() is not NetworkingManager { view: not null } networking)
+        {
+            Main.Error($"[RestCommand] {verb} for {hero.Name} not sent: no network in a multiplayer game");
+
+            return;
+        }
+
+        var nonce = $"{PhotonNetwork.LocalPlayer?.ActorNumber ?? 0}-{++_sequence}";
+
+        networking.view.RPC(nameof(NetworkingManager.AssignClassLevelRPC), RpcTarget.AllViaServer,
+            networking.CommandTick, (long)hero.Guid, $"{Marker}{nonce}:{verb}:{argument}", false);
+        PhotonNetwork.SendAllOutgoingCommands();
     }
 
     // the outcome of a command on this computer
@@ -69,8 +111,7 @@ internal static class RestCommandContext
 
         if (!Global.IsMultiplayer)
         {
-            handler(hero, argument ?? string.Empty);
-            done?.Invoke(Outcome.Ran);
+            done?.Invoke(handler(hero, argument ?? string.Empty) ? Outcome.Ran : Outcome.Failed);
             yield break;
         }
 
@@ -125,7 +166,7 @@ internal static class RestCommandContext
             return false;
         }
 
-        // nonce:verb:argument, where the argument (a power name) may itself contain colons
+        // nonce:verb:argument, where the argument may itself contain colons
         var parts = classDefinitionName.Substring(Marker.Length).Split([':'], 3);
 
         if (parts.Length != 3)
@@ -148,8 +189,7 @@ internal static class RestCommandContext
         {
             try
             {
-                handler(hero, argument);
-                ran = true;
+                ran = handler(hero, argument);
             }
             catch (Exception ex)
             {
@@ -161,7 +201,7 @@ internal static class RestCommandContext
             Main.Error($"[RestCommand] {verb} for hero {heroGuid} not run: hero or command not found");
         }
 
-        // recorded even when it couldn't run, so the sender stops waiting; every computer skipped it alike
+        // recorded even when it didn't run, so the sender stops waiting; every computer got the same answer
         Applied[nonce] = ran;
         AppliedOrder.Enqueue(nonce);
 
