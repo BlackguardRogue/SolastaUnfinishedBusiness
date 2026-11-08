@@ -110,6 +110,10 @@ internal static class MultiplayerDesyncContext
         _reportedGame = game;
         ReportedByActor.Clear();
         _idDesyncReported = false;
+        _turnDesyncReported = false;
+        TurnsReported.Clear();
+        HostTurns.Clear();
+        ClientTurns.Clear();
         _reofferWhenPossible = false;
     }
 
@@ -119,6 +123,10 @@ internal static class MultiplayerDesyncContext
         _reportedGame = null;
         ReportedByActor.Clear();
         _idDesyncReported = false;
+        _turnDesyncReported = false;
+        TurnsReported.Clear();
+        HostTurns.Clear();
+        ClientTurns.Clear();
         _reofferWhenPossible = false;
     }
 
@@ -246,6 +254,10 @@ internal static class MultiplayerDesyncContext
             case FingerprintKind when Main.Settings.MultiplayerEnableDesyncDetection &&
                                       Main.Settings.MultiplayerEnableStateFingerprint:
                 OnFingerprint(Fingerprint.FromEvent(data), sender);
+                break;
+            case TurnKind when Main.Settings.MultiplayerEnableDesyncDetection &&
+                               Main.Settings.MultiplayerEnableStateFingerprint:
+                OnTurnEvent(data, sender);
                 break;
             case ResyncKind when sender is { IsMasterClient: true }:
                 Gui.GuiService.ShowAlert("Message/&MultiplayerDesyncHostResyncing", Gui.ColorAlert, 10f);
@@ -623,6 +635,185 @@ internal static class MultiplayerDesyncContext
     }
     #endregion
 
+    #region Turn-end check
+
+    // At the end of every combatant's turn in a multiplayer battle (user, 2026-11-09), each player's game sends the host
+    // that character's values (the same as the regular check: hit points, cell, conditions, spell slots, power uses),
+    // its facing and the dice position. The host compares them with its own at the same turn end and, if they differ,
+    // gives the usual desync report and Resync offer, naming the character and round. The regular check only compares
+    // when nothing moves or acts, which in a busy fight can be turns later and can't say which turn caused it; a turn end
+    // is a fixed point every computer passes in the same order. The dice position is only compared when nothing else
+    // was acting on either computer, as in the regular check. One message per turn per player; nothing waits.
+    private const byte TurnKind = 7;
+
+    // how long a turn's record is kept for the other side's to arrive
+    private const float TurnRecordSeconds = 60f;
+
+    private static readonly Dictionary<string, TurnPrint> HostTurns = new();
+    private static readonly Dictionary<(int Actor, string Key), TurnPrint> ClientTurns = new();
+    private static readonly HashSet<(int Actor, string Key)> TurnsReported = [];
+
+    // a turn-end difference was reported, so the Resync button has something to fix
+    private static bool _turnDesyncReported;
+
+    private sealed class TurnPrint
+    {
+        internal CharacterPrint Character;
+        internal long Dice;
+        internal int Facing;
+        internal string Key;
+        internal bool Quiet;
+        internal float Received;
+        internal int Round;
+    }
+
+    // GameLocationCharacter.EndBattleTurn postfix, on every computer
+    internal static void OnTurnEnded(GameLocationCharacter character)
+    {
+        if (!Main.Settings.MultiplayerEnableDesyncDetection ||
+            !Main.Settings.MultiplayerEnableStateFingerprint ||
+            !Global.IsMultiplayer ||
+            !PhotonNetwork.InRoom ||
+            PhotonNetwork.OfflineMode ||
+            character?.RulesetCharacter == null ||
+            Gui.Battle is not { } battle)
+        {
+            return;
+        }
+
+        RegisterEventHandler();
+
+        var actions = ServiceRepository.GetService<IGameLocationActionService>();
+        var characters = ServiceRepository.GetService<IGameLocationCharacterService>()?.ValidCharacters ?? [];
+        var print = new TurnPrint
+        {
+            Character = Fingerprint.PrintOf(character),
+            Dice = Hash(CaptureRandomState()),
+            Facing = (int)character.Orientation,
+            Key = $"{battle.CurrentRound}:{character.Guid}",
+            Quiet = characters.All(x => x == character || (!x.MoveInProgress && actions?.IsCharacterActing(x) != true)),
+            Received = Time.realtimeSinceStartup,
+            Round = battle.CurrentRound
+        };
+
+        if (!PhotonNetwork.IsMasterClient)
+        {
+            var values = new int[ValuesPerCharacter];
+
+            Fingerprint.WriteValues(print.Character, values, 0);
+            PhotonNetwork.RaiseEvent(EventCode,
+                new object[]
+                {
+                    TurnKind, print.Round, (long)character.Guid, values, print.Facing, print.Dice, print.Quiet
+                },
+                new RaiseEventOptions { Receivers = ReceiverGroup.MasterClient }, SendOptions.SendReliable);
+
+            return;
+        }
+
+        ForgetOldTurns();
+        HostTurns[print.Key] = print;
+
+        foreach (var pending in ClientTurns.Where(x => x.Key.Key == print.Key).ToList())
+        {
+            ClientTurns.Remove(pending.Key);
+            CompareTurn(print, pending.Value, pending.Key.Actor);
+        }
+    }
+
+    // host: a player's record of a turn end
+    private static void OnTurnEvent(object[] data, Player sender)
+    {
+        if (!PhotonNetwork.IsMasterClient || sender == null || data.Length != 7 || data[1] is not int round ||
+            data[2] is not long guid || data[3] is not int[] { Length: ValuesPerCharacter } values ||
+            data[4] is not int facing || data[5] is not long dice || data[6] is not bool quiet)
+        {
+            return;
+        }
+
+        var print = new TurnPrint
+        {
+            Character = Fingerprint.ReadValues((ulong)guid, values, 0),
+            Dice = dice,
+            Facing = facing,
+            Key = $"{round}:{(ulong)guid}",
+            Quiet = quiet,
+            Received = Time.realtimeSinceStartup,
+            Round = round
+        };
+
+        ForgetOldTurns();
+
+        if (HostTurns.TryGetValue(print.Key, out var hostPrint))
+        {
+            CompareTurn(hostPrint, print, sender.ActorNumber);
+        }
+        else
+        {
+            ClientTurns[(sender.ActorNumber, print.Key)] = print;
+        }
+    }
+
+    private static void ForgetOldTurns()
+    {
+        var before = Time.realtimeSinceStartup - TurnRecordSeconds;
+
+        foreach (var key in HostTurns.Where(x => x.Value.Received < before).Select(x => x.Key).ToList())
+        {
+            HostTurns.Remove(key);
+        }
+
+        foreach (var key in ClientTurns.Where(x => x.Value.Received < before).Select(x => x.Key).ToList())
+        {
+            ClientTurns.Remove(key);
+        }
+    }
+
+    // host: one character at one turn end; a difference is reported at once (a turn end is a settled point, so there's
+    // no need to see it twice), once per player and turn
+    private static void CompareTurn(TurnPrint host, TurnPrint other, int otherActor)
+    {
+        var hostPrint = new Fingerprint { Dice = host.Quiet && other.Quiet ? host.Dice : 0 };
+        var otherPrint = new Fingerprint { Dice = host.Quiet && other.Quiet ? other.Dice : 0 };
+
+        hostPrint.Add(host.Character);
+        otherPrint.Add(other.Character);
+
+        var name = CharacterName(host.Character.Guid);
+        var differences = Differences(hostPrint, otherPrint).Where(x => x.Type == DifferenceType.State)
+            .Select(x => x.Description).ToList();
+
+        if (host.Facing != other.Facing)
+        {
+            differences.Add(Gui.Format("Message/&MultiplayerDesyncField", name,
+                Gui.Localize("Message/&MultiplayerDesyncFacing"),
+                ((LocationDefinitions.Orientation)host.Facing).ToString(),
+                ((LocationDefinitions.Orientation)other.Facing).ToString()));
+        }
+
+        if (differences.Count == 0 || !TurnsReported.Add((otherActor, host.Key)))
+        {
+            return;
+        }
+
+        ForgetIfNewGame();
+        _turnDesyncReported = true;
+
+        var playerName = PhotonNetwork.CurrentRoom?.GetPlayer(otherActor)?.NickName ?? "?";
+        var details = Gui.Format("Message/&MultiplayerDesyncTurnEnd", name, host.Round.ToString()) + "\n" +
+                      string.Join("\n", differences.Take(6));
+
+        Main.Error($"Multiplayer desync with {playerName} at the end of {name}'s turn, round {host.Round}:\n{details}");
+        // TEMPORARY: each computer saves its recent object-ID records for comparison
+        ObjectIdDiagnosticsContext.DesyncDetected("turn-desync",
+            ServiceRepository.GetService<INetworkingService>() is NetworkingManager networking
+                ? networking.tick.LocalTick
+                : 0UL);
+        OfferResync(playerName, details);
+    }
+
+    #endregion
+
     #region Resync
 
     // Host only: a message with Resync and Later, and a line in the game log with a Resync button. Choosing Later, or a moment
@@ -757,7 +948,7 @@ internal static class MultiplayerDesyncContext
         ForgetDepartedPlayers();
 
         // lines also stay after a check finds the game matching, or the player who differed leaves
-        if (ReportedByActor.Count == 0 && !_idDesyncReported)
+        if (ReportedByActor.Count == 0 && !_idDesyncReported && !_turnDesyncReported)
         {
             Gui.GuiService.ShowAlert("Message/&MultiplayerDesyncResyncNotNeeded", Gui.ColorAlmostWhite, 6f);
 
@@ -914,10 +1105,53 @@ internal static class MultiplayerDesyncContext
             return _byGuid.TryGetValue(guid, out character);
         }
 
-        private void Add(CharacterPrint character)
+        internal void Add(CharacterPrint character)
         {
             Characters.Add(character);
             _byGuid[character.Guid] = character;
+        }
+
+        // one character's values, as the regular check and the turn-end check compare them
+        internal static CharacterPrint PrintOf(GameLocationCharacter character)
+        {
+            var ruleset = character.RulesetCharacter;
+
+            return new CharacterPrint
+            {
+                Guid = character.Guid,
+                HitPoints = ruleset.CurrentHitPoints,
+                TemporaryHitPoints = ruleset.TemporaryHitPoints,
+                Position = character.LocationPosition,
+                Conditions = Hash(ruleset.ConditionsByCategory
+                    .OrderBy(x => x.Key)
+                    .SelectMany(x => x.Value)
+                    .Select(x => $"{x.ConditionDefinition?.Name}:{x.RemainingRounds}")
+                    .OrderBy(x => x)
+                    .SelectMany(TextValues)),
+                // apart from Conditions, so it can be told from a real difference in what a character has
+                ConditionIds = Hash(ruleset.ConditionsByCategory
+                    .SelectMany(x => x.Value)
+                    .Select(x => $"{x.ConditionDefinition?.Name}:{x.Guid}:{x.SourceGuid}")
+                    .OrderBy(x => x, StringComparer.Ordinal)
+                    .SelectMany(TextValues)),
+                // Rounds tied to their source, which Conditions sorts apart, so it can't see two sources' rounds swapped.
+                // Sources go by their order and not their IDs, so a plain numbering gap, which keeps that order, doesn't
+                // change this and can't hide a real difference. IDs swapped between computers would change it.
+                ConditionRounds = Hash(ruleset.ConditionsByCategory
+                    .SelectMany(x => x.Value)
+                    .OrderBy(x => x.SourceGuid)
+                    .ThenBy(x => x.ConditionDefinition?.Name, StringComparer.Ordinal)
+                    .ThenBy(x => x.RemainingRounds)
+                    .Select(x => $"{x.ConditionDefinition?.Name}:{x.RemainingRounds}")
+                    .SelectMany(TextValues)),
+                SpellSlots = Hash(SpellSlotEntries(character)
+                    .SelectMany(x => new[] { x.repertoire, x.level, x.used })),
+                PowerUses = Hash(ruleset.UsablePowers
+                    .Where(x => x?.PowerDefinition != null)
+                    .Select(x => $"{x.PowerDefinition.Name}:{x.RemainingUses}")
+                    .OrderBy(x => x, StringComparer.Ordinal)
+                    .SelectMany(TextValues))
+            };
         }
 
         internal static Fingerprint Capture(ulong tick)
@@ -936,44 +1170,7 @@ internal static class MultiplayerDesyncContext
 
             foreach (var character in characters.Where(x => x.RulesetCharacter != null).OrderBy(x => x.Guid))
             {
-                var ruleset = character.RulesetCharacter;
-
-                fingerprint.Add(new CharacterPrint
-                {
-                    Guid = character.Guid,
-                    HitPoints = ruleset.CurrentHitPoints,
-                    TemporaryHitPoints = ruleset.TemporaryHitPoints,
-                    Position = character.LocationPosition,
-                    Conditions = Hash(ruleset.ConditionsByCategory
-                        .OrderBy(x => x.Key)
-                        .SelectMany(x => x.Value)
-                        .Select(x => $"{x.ConditionDefinition?.Name}:{x.RemainingRounds}")
-                        .OrderBy(x => x)
-                        .SelectMany(TextValues)),
-                    // apart from Conditions, so it can be told from a real difference in what a character has
-                    ConditionIds = Hash(ruleset.ConditionsByCategory
-                        .SelectMany(x => x.Value)
-                        .Select(x => $"{x.ConditionDefinition?.Name}:{x.Guid}:{x.SourceGuid}")
-                        .OrderBy(x => x, StringComparer.Ordinal)
-                        .SelectMany(TextValues)),
-                    // Rounds tied to their source, which Conditions sorts apart, so it can't see two sources' rounds swapped.
-                    // Sources go by their order and not their IDs, so a plain numbering gap, which keeps that order, doesn't
-                    // change this and can't hide a real difference. IDs swapped between computers would change it.
-                    ConditionRounds = Hash(ruleset.ConditionsByCategory
-                        .SelectMany(x => x.Value)
-                        .OrderBy(x => x.SourceGuid)
-                        .ThenBy(x => x.ConditionDefinition?.Name, StringComparer.Ordinal)
-                        .ThenBy(x => x.RemainingRounds)
-                        .Select(x => $"{x.ConditionDefinition?.Name}:{x.RemainingRounds}")
-                        .SelectMany(TextValues)),
-                    SpellSlots = Hash(SpellSlotEntries(character)
-                        .SelectMany(x => new[] { x.repertoire, x.level, x.used })),
-                    PowerUses = Hash(ruleset.UsablePowers
-                        .Where(x => x?.PowerDefinition != null)
-                        .Select(x => $"{x.PowerDefinition.Name}:{x.RemainingUses}")
-                        .OrderBy(x => x, StringComparer.Ordinal)
-                        .SelectMany(TextValues))
-                });
+                fingerprint.Add(PrintOf(character));
             }
 
             return fingerprint;
@@ -985,24 +1182,7 @@ internal static class MultiplayerDesyncContext
 
             for (var i = 0; i < Characters.Count; i++)
             {
-                var c = Characters[i];
-                var o = i * ValuesPerCharacter;
-
-                values[o] = c.HitPoints;
-                values[o + 1] = c.TemporaryHitPoints;
-                values[o + 2] = c.Position.x;
-                values[o + 3] = c.Position.y;
-                values[o + 4] = c.Position.z;
-                values[o + 5] = (int)(c.Conditions >> 32);
-                values[o + 6] = (int)c.Conditions;
-                values[o + 7] = (int)(c.SpellSlots >> 32);
-                values[o + 8] = (int)c.SpellSlots;
-                values[o + 9] = (int)(c.ConditionIds >> 32);
-                values[o + 10] = (int)c.ConditionIds;
-                values[o + 11] = (int)(c.ConditionRounds >> 32);
-                values[o + 12] = (int)c.ConditionRounds;
-                values[o + 13] = (int)(c.PowerUses >> 32);
-                values[o + 14] = (int)c.PowerUses;
+                WriteValues(Characters[i], values, i * ValuesPerCharacter);
             }
 
             return
@@ -1010,6 +1190,25 @@ internal static class MultiplayerDesyncContext
                 FingerprintKind, (long)Tick, Dice, Quiet,
                 Characters.Select(x => (long)x.Guid).ToArray(), values, Perception
             ];
+        }
+
+        internal static void WriteValues(CharacterPrint c, int[] values, int o)
+        {
+            values[o] = c.HitPoints;
+            values[o + 1] = c.TemporaryHitPoints;
+            values[o + 2] = c.Position.x;
+            values[o + 3] = c.Position.y;
+            values[o + 4] = c.Position.z;
+            values[o + 5] = (int)(c.Conditions >> 32);
+            values[o + 6] = (int)c.Conditions;
+            values[o + 7] = (int)(c.SpellSlots >> 32);
+            values[o + 8] = (int)c.SpellSlots;
+            values[o + 9] = (int)(c.ConditionIds >> 32);
+            values[o + 10] = (int)c.ConditionIds;
+            values[o + 11] = (int)(c.ConditionRounds >> 32);
+            values[o + 12] = (int)c.ConditionRounds;
+            values[o + 13] = (int)(c.PowerUses >> 32);
+            values[o + 14] = (int)c.PowerUses;
         }
 
         internal static Fingerprint FromEvent(object[] data)
@@ -1027,23 +1226,26 @@ internal static class MultiplayerDesyncContext
 
             for (var i = 0; i < guids.Length; i++)
             {
-                var o = i * ValuesPerCharacter;
-
-                fingerprint.Add(new CharacterPrint
-                {
-                    Guid = (ulong)guids[i],
-                    HitPoints = values[o],
-                    TemporaryHitPoints = values[o + 1],
-                    Position = new int3(values[o + 2], values[o + 3], values[o + 4]),
-                    Conditions = ((long)values[o + 5] << 32) | (uint)values[o + 6],
-                    SpellSlots = ((long)values[o + 7] << 32) | (uint)values[o + 8],
-                    ConditionIds = ((long)values[o + 9] << 32) | (uint)values[o + 10],
-                    ConditionRounds = ((long)values[o + 11] << 32) | (uint)values[o + 12],
-                    PowerUses = ((long)values[o + 13] << 32) | (uint)values[o + 14]
-                });
+                fingerprint.Add(ReadValues((ulong)guids[i], values, i * ValuesPerCharacter));
             }
 
             return fingerprint;
+        }
+
+        internal static CharacterPrint ReadValues(ulong guid, int[] values, int o)
+        {
+            return new CharacterPrint
+            {
+                Guid = guid,
+                HitPoints = values[o],
+                TemporaryHitPoints = values[o + 1],
+                Position = new int3(values[o + 2], values[o + 3], values[o + 4]),
+                Conditions = ((long)values[o + 5] << 32) | (uint)values[o + 6],
+                SpellSlots = ((long)values[o + 7] << 32) | (uint)values[o + 8],
+                ConditionIds = ((long)values[o + 9] << 32) | (uint)values[o + 10],
+                ConditionRounds = ((long)values[o + 11] << 32) | (uint)values[o + 12],
+                PowerUses = ((long)values[o + 13] << 32) | (uint)values[o + 14]
+            };
         }
     }
 

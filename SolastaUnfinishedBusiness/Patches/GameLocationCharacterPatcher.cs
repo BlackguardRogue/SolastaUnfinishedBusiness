@@ -309,6 +309,13 @@ public static class GameLocationCharacterPatcher
             //PATCH: acts as a callback for the character's combat turn ended event
             CharacterBattleListenersPatch.OnCharacterTurnEnded(__instance);
         }
+
+        [UsedImplicitly]
+        public static void Postfix(GameLocationCharacter __instance)
+        {
+            //PATCH: compares this character with the host's at the end of its turn (MULTIPLAYER)
+            MultiplayerContext.Guarded("checking a turn end", () => MultiplayerDesyncContext.OnTurnEnded(__instance));
+        }
     }
 
     [HarmonyPatch(typeof(GameLocationCharacter), nameof(GameLocationCharacter.StartBattle))]

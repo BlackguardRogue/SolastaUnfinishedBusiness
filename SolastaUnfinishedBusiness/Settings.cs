@@ -189,6 +189,7 @@ public class Settings : UnityModManager.ModSettings
     public bool LogObjectIdRecords { get; set; } = true;
     public bool LogStaleEffectChecks { get; set; } = true;
     public bool LogPerception { get; set; } = true;
+    public bool LogAiMoves { get; set; } = true;
     public bool LogEncounterPopup { get; set; } = true;
 
     // Gameplay - Multiplayer
