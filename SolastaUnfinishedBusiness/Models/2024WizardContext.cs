@@ -248,9 +248,29 @@ public static partial class Tabletop2024Context
         return true;
     }
 
-    // the latest press applied to each Memorize Spell condition, by the condition's ID; written by the commands only,
-    // so the same on every computer
-    private static readonly Dictionary<ulong, string> LatestMemorizePress = new();
+    // the latest press applied to each Memorize Spell condition, by the condition's ID, with its hero; written and
+    // pruned by the commands only (entries whose condition has gone, after a rest), so the same on every computer.
+    // A press that ran before its player left stays applied: it ran alike everywhere and was the player's choice
+    // (commit on apply); only one still queued at the departure is refused.
+    private static readonly Dictionary<ulong, (RulesetCharacterHero Hero, string Session)> LatestMemorizePress = new();
+
+    private static void PruneMemorizePresses()
+    {
+        foreach (var gone in LatestMemorizePress
+                     .Where(x => !TryGetMemorizeSpellCondition(x.Value.Hero, out var condition) ||
+                                 condition.Guid != x.Key)
+                     .Select(x => x.Key)
+                     .ToList())
+        {
+            LatestMemorizePress.Remove(gone);
+        }
+    }
+
+    // a new room: presses from the last one can't be reverted
+    internal static void OnJoinedRoom()
+    {
+        LatestMemorizePress.Clear();
+    }
 
     // runs on every computer at the same tick (RestCommandContext): the screen's chosen spells, and the swap made on it
     // as the record. Nothing changes unless every part is found, alike everywhere.
@@ -270,7 +290,8 @@ public static partial class Tabletop2024Context
             return false;
         }
 
-        LatestMemorizePress[conditionGuid] = sessionId;
+        PruneMemorizePresses();
+        LatestMemorizePress[conditionGuid] = (hero, sessionId);
 
         return true;
     }
@@ -282,7 +303,7 @@ public static partial class Tabletop2024Context
         var parts = argument.Split('|');
 
         if (parts.Length < 2 || !ulong.TryParse(parts[1], out var conditionGuid) ||
-            !LatestMemorizePress.TryGetValue(conditionGuid, out var latest) || latest != parts[0])
+            !LatestMemorizePress.TryGetValue(conditionGuid, out var latest) || latest.Session != parts[0])
         {
             // the press never ran, was refused, or a newer one has replaced it: nothing to undo
             return false;

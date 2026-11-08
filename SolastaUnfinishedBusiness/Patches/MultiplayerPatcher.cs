@@ -375,6 +375,7 @@ public static class MultiplayerPatcher
             MultiplayerContext.Guarded("joining a room", MultiplayerBattlePlacementContext.OnJoinedRoom);
             MultiplayerContext.Guarded("joining a room", Level20Context.OnJoinedRoom);
             MultiplayerContext.Guarded("joining a room", RestCommandContext.OnJoinedRoom);
+            MultiplayerContext.Guarded("joining a room", Tabletop2024Context.OnJoinedRoom);
             MultiplayerContext.Guarded("joining a room", MultiplayerPerfContext.OnJoinedRoom);
         }
     }
