@@ -50,6 +50,7 @@ internal static class SpellPreparationScreen
     // alike on every computer.
     private static float _pendingUntil = -1f;
     private static SpellRepertoirePanel _pendingPanel;
+    private static int _pendingSession;
 
     // counts preparations started and cancelled on any panel, so a late answer only closes the preparation it came
     // from: one cancelled and another opened on the same panel meanwhile must be left alone (Codex's review of 8e6b4bbd)
@@ -64,10 +65,12 @@ internal static class SpellPreparationScreen
     // whether a Prepare press is on its way
     internal static bool IsPending => Time.realtimeSinceStartup < _pendingUntil;
 
-    // whether this panel sent the press on its way, so its spells and buttons are off
+    // whether this panel's current preparation sent the press on its way, so its spells and buttons are off. The
+    // session, not only the panel: a preparation opened on the same panel after a cancel is a new session and isn't
+    // locked, so nothing has to turn its controls back on when the old answer arrives (Codex's review of 1518501c)
     internal static bool IsPendingOn(SpellRepertoirePanel panel)
     {
-        return IsPending && panel && panel == _pendingPanel;
+        return IsPending && panel && panel == _pendingPanel && _session == _pendingSession;
     }
 
     // RefreshPreparation postfix: the panel's selection buttons off while its press is out (Cancel stays, so the
@@ -100,6 +103,7 @@ internal static class SpellPreparationScreen
         // a little longer than the command's own wait, in case its coroutine stopped
         _pendingUntil = Time.realtimeSinceStartup + 35f;
         _pendingPanel = panel;
+        _pendingSession = _session;
 
         var session = _session;
         var repertoire = panel.SpellRepertoire;
