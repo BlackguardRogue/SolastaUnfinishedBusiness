@@ -157,7 +157,9 @@ public static partial class Tabletop2024Context
     // position in SpellsContext.Spells, which is sorted by translated title, so a host in another language loading the
     // save, or taking over the hero, read it as another spell (Codex's review of 44ff1ad9). This is an FNV-1a hash of
     // the spell's internal name, always at least 2^30, so a position saved by an older build (a few hundred at most)
-    // never equals one: such a record reads as a swap of an unknown spell, which only allows that swap back.
+    // never equals one. Such a record, still active in a save from before this build, blocks unselecting any spell,
+    // the swapped one included, until the next rest ends it (Codex's review of 69e7a8eb). It isn't translated: it's a
+    // position in a list sorted in the language that saved it, which isn't known here.
     private static int SpellKey(SpellDefinition spell)
     {
         var hash = 2166136261u;
