@@ -111,6 +111,8 @@ internal static class MultiplayerDesyncContext
         ReportedByActor.Clear();
         _idDesyncReported = false;
         _turnDesyncReported = false;
+        _resyncLaterTold = false;
+        TurnMismatchPlayers.Clear();
         TurnsReported.Clear();
         HostTurns.Clear();
         ClientTurns.Clear();
@@ -133,6 +135,8 @@ internal static class MultiplayerDesyncContext
         ReportedByActor.Clear();
         _idDesyncReported = false;
         _turnDesyncReported = false;
+        _resyncLaterTold = false;
+        TurnMismatchPlayers.Clear();
         TurnsReported.Clear();
         HostTurns.Clear();
         ClientTurns.Clear();
@@ -222,6 +226,23 @@ internal static class MultiplayerDesyncContext
             PreviousDifferencesByActor.Remove(actor);
             ConditionIdsReported.Remove(actor);
             ConditionRoundsReported.Remove(actor);
+        }
+
+        // A player whose game differed at a turn end has left: the host is told once, by name, that this report alone
+        // doesn't mean the rest of the party needs a reload, and it no longer keeps Resync on offer by itself.
+        foreach (var departed in TurnMismatchPlayers.Where(x => PhotonNetwork.CurrentRoom.GetPlayer(x.Key) == null)
+                     .ToList())
+        {
+            TurnMismatchPlayers.Remove(departed.Key);
+            TurnsReported.RemoveWhere(x => x.Actor == departed.Key);
+            Main.Info($"Multiplayer: {departed.Value}, reported at a turn end, has left");
+            Gui.GuiService?.ShowAlert(
+                Gui.Format("Message/&MultiplayerDesyncTurnPlayerLeft", departed.Value), Gui.ColorAlert, 10f);
+
+            if (TurnMismatchPlayers.Count == 0)
+            {
+                _turnDesyncReported = false;
+            }
         }
     }
 
@@ -674,6 +695,13 @@ internal static class MultiplayerDesyncContext
     // a turn-end difference was reported, so the Resync button has something to fix
     private static bool _turnDesyncReported;
 
+    // host: the players a turn-end difference was reported with, by actor, with their names, so the host can be told
+    // when one of them leaves (Codex's recommendation, user: "Add the warnings")
+    private static readonly Dictionary<int, string> TurnMismatchPlayers = new();
+
+    // a controller host was told once that Resync must wait for a save (see StartResync); a new report tells it again
+    private static bool _resyncLaterTold;
+
     private sealed class TurnPrint
     {
         // host: the players already compared against this turn
@@ -848,8 +876,11 @@ internal static class MultiplayerDesyncContext
 
         ForgetIfNewGame();
         _turnDesyncReported = true;
+        _resyncLaterTold = false;
 
         var playerName = PhotonNetwork.CurrentRoom?.GetPlayer(otherActor)?.NickName ?? "?";
+
+        TurnMismatchPlayers[otherActor] = playerName;
         var details = Gui.Format("Message/&MultiplayerDesyncTurnEnd", name, host.Round.ToString()) + "\n" +
                       string.Join("\n", differences.Take(6));
 
@@ -1010,7 +1041,19 @@ internal static class MultiplayerDesyncContext
         if (!CanSaveAndLoad(serialization))
         {
             Main.Info("Multiplayer resync not started: the game can't save or load right now");
-            Gui.GuiService.ShowAlert("Message/&MultiplayerDesyncResyncNotNow", Gui.ColorFailure, 10f);
+
+            // A controller host can't use the log's Resync button, and only the regular check offers Resync again by
+            // itself; with only a turn-end or numbering report, nothing would. So it's told once what to do instead
+            // (Codex's recommendation, user: "Add the warnings"). Nothing about Resync, saving or loading changes.
+            if (Gui.GamepadActive && ReportedByActor.Count == 0 && !_resyncLaterTold)
+            {
+                _resyncLaterTold = true;
+                Gui.GuiService.ShowAlert("Message/&MultiplayerDesyncResyncSaveLater", Gui.ColorFailure, 12f);
+            }
+            else
+            {
+                Gui.GuiService.ShowAlert("Message/&MultiplayerDesyncResyncNotNow", Gui.ColorFailure, 10f);
+            }
 
             ReofferIfOnlyABadMoment(serialization);
 
