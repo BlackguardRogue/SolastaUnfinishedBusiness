@@ -128,7 +128,7 @@ public static partial class Tabletop2024Context
     }
 
     // The one swap Memorize Spell allows is recorded in the condition, as upstream did: Amount (1 once a spell was
-    // unselected) and SourceProficiencyBonus (the index of the spell last unselected or selected, -1 before either).
+    // unselected) and SourceProficiencyBonus (the spell last unselected or selected, by SpellKey; -1 before either).
     // The condition lasts until the next rest and is saved with the game, so reopening Memorize Spell or loading a
     // save can't grant a second swap. Upstream changed those fields on every click on the clicker's computer only; now
     // a click changes only this computer's screen session below, and the record is written on every computer together
@@ -153,6 +153,23 @@ public static partial class Tabletop2024Context
         return _memorizeSession;
     }
 
+    // The spell in the swap record, the same on every computer and in every language. Upstream stored the spell's
+    // position in SpellsContext.Spells, which is sorted by translated title, so a host in another language loading the
+    // save, or taking over the hero, read it as another spell (Codex's review of 44ff1ad9). This is an FNV-1a hash of
+    // the spell's internal name, always at least 2^30, so a position saved by an older build (a few hundred at most)
+    // never equals one: such a record reads as a swap of an unknown spell, which only allows that swap back.
+    private static int SpellKey(SpellDefinition spell)
+    {
+        var hash = 2166136261u;
+
+        foreach (var c in spell.Name)
+        {
+            hash = (hash ^ c) * 16777619u;
+        }
+
+        return (int)((hash & 0x3FFFFFFFu) | 0x40000000u);
+    }
+
     internal static bool IsInvalidMemorizeSelectedSpell(
         SpellRepertoirePanel spellRepertoirePanel, RulesetCharacter rulesetCharacter, SpellDefinition spell)
     {
@@ -163,7 +180,7 @@ public static partial class Tabletop2024Context
         }
 
         var session = GetMemorizeSession(activeCondition);
-        var spellIndex = SpellsContext.Spells.IndexOf(spell);
+        var spellIndex = SpellKey(spell);
         var isUncheck = spellRepertoirePanel.preparedSpells.Contains(spell);
 
         if (isUncheck)
