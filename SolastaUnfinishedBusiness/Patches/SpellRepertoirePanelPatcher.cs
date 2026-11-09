@@ -119,10 +119,14 @@ public static class SpellRepertoirePanelPatcher
     [UsedImplicitly]
     public static class OnClearPreparationCb_Patch
     {
+        // Clear never runs in Memorize Spell mode either: it empties the list without the one-swap check, and the
+        // controller's Clear button is shown there (Codex's review of 2d285453)
         [UsedImplicitly]
         public static bool Prefix(SpellRepertoirePanel __instance)
         {
-            return !SpellPreparationScreen.IsPendingOn(__instance);
+            return !SpellPreparationScreen.IsPendingOn(__instance) &&
+                   !Tabletop2024Context.IsMemorizeSpellPreparation(__instance.GuiCharacter?.RulesetCharacter,
+                       __instance.SpellRepertoire);
         }
     }
 

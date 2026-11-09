@@ -269,6 +269,16 @@ public static partial class Tabletop2024Context
             spells.Add(spell);
         }
 
+        // one swap at most, checked here too so no screen path can store more (a controller's Clear emptied the list
+        // without the swap check; Codex's review of 2d285453): at most one spell out of the prepared spells and one in.
+        // Alike on every computer, as the prepared spells are the same everywhere at this tick
+        if (repertoire.PreparedSpells.Except(spells).Count() > 1 || spells.Except(repertoire.PreparedSpells).Count() > 1)
+        {
+            Main.Error($"[RestCommand] Memorize Spell preparation for {hero.Name} changes more than one spell; not applied");
+
+            return false;
+        }
+
         repertoire.PreparedSpells.SetRange(spells);
         condition.Amount = amount;
         condition.SourceProficiencyBonus = spellIndex;
