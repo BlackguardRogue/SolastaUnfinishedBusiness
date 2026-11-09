@@ -51,6 +51,16 @@ internal static class SpellPreparationScreen
     private static float _pendingUntil = -1f;
     private static SpellRepertoirePanel _pendingPanel;
 
+    // counts preparations started and cancelled on any panel, so a late answer only closes the preparation it came
+    // from: one cancelled and another opened on the same panel meanwhile must be left alone (Codex's review of 8e6b4bbd)
+    private static int _session;
+
+    // OnPrepareSpellsCb and OnCancelPreparationCb postfixes
+    internal static void NewSession()
+    {
+        _session++;
+    }
+
     // whether a Prepare press is on its way
     internal static bool IsPending => Time.realtimeSinceStartup < _pendingUntil;
 
@@ -61,7 +71,9 @@ internal static class SpellPreparationScreen
     }
 
     // RefreshPreparation postfix: the panel's selection buttons off while its press is out (Cancel stays, so the
-    // screen can still be closed)
+    // screen can still be closed). Only the buttons the game's own refresh turns back on: the gamepad Clear and Auto
+    // buttons only have their visibility set there, so turning them off would leave them off; their actions are
+    // blocked by the Prepare hooks instead (Codex's review of 8e6b4bbd)
     internal static void RefreshButtons(SpellRepertoirePanel panel)
     {
         if (!IsPendingOn(panel))
@@ -72,8 +84,7 @@ internal static class SpellPreparationScreen
         foreach (var button in new[]
                  {
                      panel.validatePreparationButton, panel.revertPreparationButton, panel.clearPreparationButton,
-                     panel.clearPreparationButtonGamepad, panel.automatePreparationButton,
-                     panel.automatePreparationButtonGamepad
+                     panel.automatePreparationButton
                  })
         {
             if (button)
@@ -89,6 +100,9 @@ internal static class SpellPreparationScreen
         // a little longer than the command's own wait, in case its coroutine stopped
         _pendingUntil = Time.realtimeSinceStartup + 35f;
         _pendingPanel = panel;
+
+        var session = _session;
+        var repertoire = panel.SpellRepertoire;
         panel.RefreshPreparation(false);
 
         MonoBehaviour runner = ServiceRepository.GetService<INetworkingService>() as NetworkingManager;
@@ -106,7 +120,7 @@ internal static class SpellPreparationScreen
             if (outcome != RestCommandContext.Outcome.Ran)
             {
                 // the spells and buttons come back, with the choice still on screen
-                if (panel && panel.isActiveAndEnabled)
+                if (panel && panel.isActiveAndEnabled && _session == session)
                 {
                     panel.RefreshPreparation(false);
                 }
@@ -116,8 +130,8 @@ internal static class SpellPreparationScreen
 
             ran?.Invoke();
 
-            // as the game's own Prepare closes the screen, if it's still open
-            if (panel && panel.isActiveAndEnabled)
+            // as the game's own Prepare closes the screen, if that preparation is still the one on screen
+            if (panel && panel.isActiveAndEnabled && _session == session && panel.SpellRepertoire == repertoire)
             {
                 panel.SpellPreparationValidated();
             }

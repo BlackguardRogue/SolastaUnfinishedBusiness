@@ -136,7 +136,22 @@ public static class SpellRepertoirePanelPatcher
         [UsedImplicitly]
         public static void Postfix(SpellRepertoirePanel __instance)
         {
+            SpellPreparationScreen.NewSession();
             TaggedSpellPreparation.ShowPicks(__instance);
+        }
+    }
+
+    //PATCH: a cancelled preparation ends its session, so a late Prepare answer won't close another one
+    //(SpellPreparationScreen)
+    [HarmonyPatch(typeof(SpellRepertoirePanel), nameof(SpellRepertoirePanel.OnCancelPreparationCb))]
+    [SuppressMessage("Minor Code Smell", "S101:Types should be named in PascalCase", Justification = "Patch")]
+    [UsedImplicitly]
+    public static class OnCancelPreparationCb_Patch
+    {
+        [UsedImplicitly]
+        public static void Postfix()
+        {
+            SpellPreparationScreen.NewSession();
         }
     }
 
