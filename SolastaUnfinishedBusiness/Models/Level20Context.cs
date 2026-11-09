@@ -640,6 +640,227 @@ internal static class Level20Context
     // HELPERS
     //
 
+    // Spell Mastery and Signature Spells reuse the spell preparation screen to pick their spells (kept in
+    // ExtraSpellsByTag). Upstream switched the hero's prepared spells to the picks before the screen opened and back
+    // after, on the clicker's computer only, while the screen's choice reached everyone through the game's PrepareSpells
+    // command, so the other computers were left with the picks as their prepared spells and no picks at all (found
+    // reading the code for desync issue 04).
+    //
+    // Now nothing shared changes until Prepare (user's choice, 2026-11-09, simplifying an earlier begin/end design):
+    // - the mode lives on the clicker's screen only (TaggedSpellPreparation.Mode): which hero and feature the screen is
+    //   picking for, what IsPreparation and IsInvalidSelectedSpell read, and what fills the screen's list with the
+    //   current picks (ShowPicks, after the game fills it from the prepared spells);
+    // - Prepare sends one command with the chosen spells (TryPrepare, from the DoValidate prefix); on every computer
+    //   at the same tick it makes them the picks and takes them out of the prepared spells, upstream's rule. The
+    //   screen closes, as the game's own does, once the command has run here; closing it without Prepare changes
+    //   nothing, as upstream's end did then.
+    // While the screen is open, the clicker's game also gives the repertoire the mode's limit of 2 spells
+    // (MaxPreparedSpell), as upstream did on that computer alone.
+    internal static class TaggedSpellPreparation
+    {
+        // the wizard repertoire and feature the clicker's preparation screen is picking for, or null. It's the
+        // repertoire, not the hero, so a multiclass hero's other prepared repertoire (a Cleric's) keeps its own limit,
+        // filter and title while the screen is open
+        private static (RulesetSpellRepertoire Repertoire, string Tag)? Mode { get; set; }
+
+        // the screen's list when it opened in the mode (auto-prepared spells and picks), which Revert goes back to and
+        // compares with
+        private static List<SpellDefinition> _initialPicks = [];
+
+        // the feature's stored picks when the screen opened, as sent with Prepare (see SetPicks)
+        private static string _openedWithPicks = string.Empty;
+
+        // the stored picks as text: their names in order, or "-" when the feature has none yet
+        private static string StoredPicks(RulesetSpellRepertoire repertoire, string tag)
+        {
+            return repertoire.ExtraSpellsByTag.TryGetValue(tag, out var picks)
+                ? string.Join(";", picks.Select(x => x.Name))
+                : "-";
+        }
+
+        // whether this panel is the screen in either feature's mode
+        internal static bool IsInMode(SpellRepertoirePanel panel)
+        {
+            return Mode is { } mode && panel && panel.SpellRepertoire == mode.Repertoire;
+        }
+
+        internal static bool IsMode(RulesetSpellRepertoire repertoire, string tag)
+        {
+            return repertoire != null && Mode is { } mode && mode.Repertoire == repertoire && mode.Tag == tag;
+        }
+
+        // the hero's Wizard repertoire: the features are the Wizard's, and a multiclass hero can have another prepared
+        // repertoire listed first (upstream took the first prepared one)
+        private static RulesetSpellRepertoire GetRepertoire(RulesetCharacterHero hero)
+        {
+            return hero.SpellRepertoires.FirstOrDefault(x =>
+                x.SpellCastingClass == Wizard && x.SpellCastingFeature.SpellReadyness == SpellReadyness.Prepared);
+        }
+
+        internal static void Register(string tag)
+        {
+            RestCommandContext.Register($"Set{tag}", (hero, argument) => SetPicks(hero, tag, argument));
+        }
+
+        // the screen's list in the mode: the auto-prepared spells and the current picks (upstream showed the
+        // auto-prepared spells the first time, the picks after)
+        internal static void ShowPicks(SpellRepertoirePanel panel)
+        {
+            if (Mode is not { } mode || panel.SpellRepertoire != mode.Repertoire)
+            {
+                return;
+            }
+
+            var repertoire = panel.SpellRepertoire;
+
+            panel.preparedSpells.SetRange(repertoire.AutoPreparedSpells);
+
+            if (repertoire.ExtraSpellsByTag.TryGetValue(mode.Tag, out var picks))
+            {
+                panel.preparedSpells.AddRange(picks.Where(x => !panel.preparedSpells.Contains(x)));
+            }
+
+            _initialPicks = [.. panel.preparedSpells];
+            _openedWithPicks = StoredPicks(repertoire, mode.Tag);
+            panel.RefreshPreparation(false);
+        }
+
+        // RefreshPreparation postfix: the game enables Revert when the list differs from the prepared spells; in the
+        // mode it's enabled when the list differs from the picks the screen opened with, and disabled once back to them
+        internal static void RefreshRevert(SpellRepertoirePanel panel)
+        {
+            if (Mode is not { } mode || panel.SpellRepertoire != mode.Repertoire || !panel.revertPreparationButton)
+            {
+                return;
+            }
+
+            // in order: Signature Spells charges its picks by their position in the list
+            panel.revertPreparationButton.interactable = !panel.preparedSpells.SequenceEqual(_initialPicks);
+        }
+
+        // DoValidate prefix: in the mode, Prepare sends the chosen spells as the picks. False: not in the mode
+        internal static bool TryPrepare(SpellRepertoirePanel panel)
+        {
+            var character = panel.GuiCharacter?.RulesetCharacter;
+
+            if (Mode is not { } mode || character is not RulesetCharacterHero hero ||
+                panel.SpellRepertoire != mode.Repertoire)
+            {
+                return false;
+            }
+
+            // the repertoire by its spellcasting feature, so every computer changes the same one
+            var argument = mode.Repertoire.SpellCastingFeature.Name + "|" + _openedWithPicks + "|" +
+                           string.Join(";", panel.preparedSpells.Select(x => x.Name));
+
+            // the after-rest button stays off until this has come back (SpellPreparationScreen)
+            SpellPreparationScreen.Submit(panel, hero, $"Set{mode.Tag}", argument, null);
+
+            return true;
+        }
+
+        // runs on every computer at the same tick (RestCommandContext): the chosen spells, less the auto-prepared
+        // ones, become the picks and leave the prepared spells. Nothing changes unless the repertoire named is the
+        // hero's Wizard repertoire, the stored picks are still the ones the screen opened with, and every spell is
+        // found. The second check stops a second Prepare pressed before the first came back: each press takes its
+        // picks out of the prepared spells, so the first press's picks would stay out even if the second didn't keep
+        // them (Codex's review of 3d896da5). Only the first press of a screen can apply, alike on every computer.
+        // spellcasting feature|stored picks when the screen opened|spell;spell...
+        private static bool SetPicks(RulesetCharacterHero hero, string tag, string argument)
+        {
+            var parts = argument.Split(['|'], 3);
+            var repertoire = GetRepertoire(hero);
+            var database = DatabaseRepository.GetDatabase<SpellDefinition>();
+            var chosen = new List<SpellDefinition>();
+
+            if (parts.Length != 3 || repertoire == null || repertoire.SpellCastingFeature.Name != parts[0])
+            {
+                Main.Error($"[RestCommand] {tag} for {hero.Name}: not the Wizard repertoire ({argument}); nothing changed");
+
+                return false;
+            }
+
+            if (StoredPicks(repertoire, tag) != parts[1])
+            {
+                Main.Info($"[RestCommand] {tag} for {hero.Name}: the picks changed since that screen opened; not applied");
+
+                return false;
+            }
+
+            foreach (var name in parts[2].Split([';'], StringSplitOptions.RemoveEmptyEntries))
+            {
+                if (!database.TryGetElement(name, out var spell))
+                {
+                    Main.Error($"[RestCommand] {tag} for {hero.Name}: no spell {name}; nothing changed");
+
+                    return false;
+                }
+
+                chosen.Add(spell);
+            }
+
+            var picks = chosen.Except(repertoire.AutoPreparedSpells).ToList();
+
+            // the feature's own limits, checked here too, so no screen path can store picks the screen wouldn't allow
+            // (a controller's Auto button reached the game's usual preparation; Codex's review of 06f6adbe): at most 2,
+            // Spell Mastery levels 1 and 2, Signature Spells level 3. Alike on every computer
+            if (picks.Count > 2 || picks.Any(x => tag == "SignatureSpells" ? x.SpellLevel != 3 : x.SpellLevel is not (1 or 2)))
+            {
+                Main.Error($"[RestCommand] {tag} for {hero.Name}: picks outside the feature's limits; nothing changed");
+
+                return false;
+            }
+
+            repertoire.ExtraSpellsByTag[tag] = picks;
+            repertoire.PreparedSpells.RemoveAll(x => picks.Contains(x));
+
+            return true;
+        }
+
+        // the after-rest functor on the clicker: the screen in the feature's mode, here only
+        internal static IEnumerator Execute(
+            FunctorParametersDescription functorParameters, Functor.FunctorExecutionContext context, string tag)
+        {
+            var inspectionScreen = Gui.GuiService.GetScreen<CharacterInspectionScreen>();
+            var partyStatusScreen = Gui.GuiService.GetScreen<GamePartyStatusScreen>();
+            var hero = functorParameters.RestingHero;
+
+            Gui.GuiService.GetScreen<RestModal>().KeepCurrentState = true;
+
+            var spellRepertoire = GetRepertoire(hero);
+
+            if (spellRepertoire == null)
+            {
+                yield break;
+            }
+
+            Mode = (spellRepertoire, tag);
+
+            try
+            {
+                partyStatusScreen.SetupDisplayPreferences(false, false, false);
+                SpellPreparationScreen.Show(inspectionScreen, hero, Gui.GuiService.GetScreen<RestModal>(), spellRepertoire);
+
+                while (context.Async && inspectionScreen.Visible)
+                {
+                    yield return null;
+                }
+
+                // a Prepare press still on its way keeps this feature running, and so its after-rest button off
+                while (SpellPreparationScreen.IsPending)
+                {
+                    yield return null;
+                }
+            }
+            finally
+            {
+                Mode = null;
+                _initialPicks = [];
+                partyStatusScreen.SetupDisplayPreferences(true, true, true);
+            }
+        }
+    }
+
     internal static class WizardSpellMastery
     {
         private const string Mastery = "SpellMastery";
@@ -665,20 +886,16 @@ internal static class Level20Context
             return activity != RestActivitySpellMastery || hero.GetClassLevel(Wizard) >= 18;
         }
 
-        internal static bool IsInvalidSelectedSpell(RulesetCharacter rulesetCharacter, SpellDefinition spell)
+        internal static bool IsInvalidSelectedSpell(RulesetSpellRepertoire repertoire, SpellDefinition spell)
         {
-            return
-                rulesetCharacter.HasConditionOfCategoryAndType(
-                    AttributeDefinitions.TagEffect, $"Condition{Mastery}") &&
-                spell.SpellLevel is not (1 or 2);
+            return TaggedSpellPreparation.IsMode(repertoire, Mastery) && spell.SpellLevel is not (1 or 2);
         }
 
-        internal static bool IsPreparation(RulesetCharacter rulesetCharacter, out int maxPreparedSpell)
+        internal static bool IsPreparation(RulesetSpellRepertoire repertoire, out int maxPreparedSpell)
         {
             maxPreparedSpell = 2;
 
-            return rulesetCharacter.HasConditionOfCategoryAndType(
-                AttributeDefinitions.TagEffect, $"Condition{Mastery}");
+            return TaggedSpellPreparation.IsMode(repertoire, Mastery);
         }
 
         internal static bool ShouldConsumeSlot(RulesetCharacter caster, RulesetEffectSpell activeSpell)
@@ -698,6 +915,7 @@ internal static class Level20Context
 
         internal static FeatureDefinition BuildWizardSpellMastery()
         {
+            // no longer used (the mode is the screen's, TaggedSpellPreparation); kept so a save holding one loads
             _ = ConditionDefinitionBuilder
                 .Create($"Condition{Mastery}")
                 .SetGuiPresentationNoContent(true)
@@ -706,6 +924,7 @@ internal static class Level20Context
 
             ServiceRepository.GetService<IFunctorService>()
                 .RegisterFunctor(nameof(FunctorSpellMastery), new FunctorSpellMastery());
+            TaggedSpellPreparation.Register(Mastery);
 
             return FeatureSpellMastery;
         }
@@ -716,56 +935,7 @@ internal static class Level20Context
                 FunctorParametersDescription functorParameters,
                 FunctorExecutionContext context)
             {
-                var inspectionScreen = Gui.GuiService.GetScreen<CharacterInspectionScreen>();
-                var partyStatusScreen = Gui.GuiService.GetScreen<GamePartyStatusScreen>();
-                var hero = functorParameters.RestingHero;
-
-                Gui.GuiService.GetScreen<RestModal>().KeepCurrentState = true;
-
-                var spellRepertoire = hero.SpellRepertoires.FirstOrDefault(x =>
-                    x.SpellCastingFeature.SpellReadyness == SpellReadyness.Prepared);
-
-                if (spellRepertoire == null)
-                {
-                    yield break;
-                }
-
-                var preparedSpellsClone = spellRepertoire.PreparedSpells.ToArray();
-
-                spellRepertoire.ExtraSpellsByTag.TryAdd(Mastery, [.. spellRepertoire.AutoPreparedSpells]);
-                spellRepertoire.PreparedSpells.SetRange(spellRepertoire.ExtraSpellsByTag[Mastery]);
-                spellRepertoire.ExtraSpellsByTag[Mastery] = [];
-
-                var activeCondition = hero.InflictCondition(
-                    $"Condition{Mastery}",
-                    DurationType.Permanent,
-                    0,
-                    TurnOccurenceType.StartOfTurn,
-                    AttributeDefinitions.TagEffect,
-                    hero.guid,
-                    hero.CurrentFaction.Name,
-                    1,
-                    $"Condition{Mastery}",
-                    0,
-                    0,
-                    0);
-
-                partyStatusScreen.SetupDisplayPreferences(false, false, false);
-
-                inspectionScreen.ShowSpellPreparation(
-                    functorParameters.RestingHero, Gui.GuiService.GetScreen<RestModal>(), spellRepertoire);
-
-                while (context.Async && inspectionScreen.Visible)
-                {
-                    yield return null;
-                }
-
-                spellRepertoire.ExtraSpellsByTag[Mastery]
-                    .SetRange(spellRepertoire.PreparedSpells.Except(spellRepertoire.AutoPreparedSpells));
-                spellRepertoire.PreparedSpells.SetRange(preparedSpellsClone);
-                spellRepertoire.PreparedSpells.RemoveAll(x => spellRepertoire.ExtraSpellsByTag[Mastery].Contains(x));
-                partyStatusScreen.SetupDisplayPreferences(true, true, true);
-                hero.RemoveCondition(activeCondition);
+                return TaggedSpellPreparation.Execute(functorParameters, context, Mastery);
             }
         }
     }
@@ -803,20 +973,16 @@ internal static class Level20Context
                       spells.Count == 0)));
         }
 
-        internal static bool IsPreparation(RulesetCharacter rulesetCharacter, out int maxPreparedSpell)
+        internal static bool IsPreparation(RulesetSpellRepertoire repertoire, out int maxPreparedSpell)
         {
             maxPreparedSpell = 2;
 
-            return rulesetCharacter.HasConditionOfCategoryAndType(
-                AttributeDefinitions.TagEffect, $"Condition{Signature}");
+            return TaggedSpellPreparation.IsMode(repertoire, Signature);
         }
 
-        internal static bool IsInvalidSelectedSpell(RulesetCharacter rulesetCharacter, SpellDefinition spell)
+        internal static bool IsInvalidSelectedSpell(RulesetSpellRepertoire repertoire, SpellDefinition spell)
         {
-            return
-                rulesetCharacter.HasConditionOfCategoryAndType(
-                    AttributeDefinitions.TagEffect, $"Condition{Signature}") &&
-                spell.SpellLevel is not 3;
+            return TaggedSpellPreparation.IsMode(repertoire, Signature) && spell.SpellLevel is not 3;
         }
 
         internal static bool ShouldConsumeSlot(RulesetCharacter caster, RulesetEffectSpell activeSpell)
@@ -861,6 +1027,7 @@ internal static class Level20Context
 
         internal static FeatureDefinition BuildWizardSignatureSpells()
         {
+            // no longer used (the mode is the screen's, TaggedSpellPreparation); kept so a save holding one loads
             _ = ConditionDefinitionBuilder
                 .Create($"Condition{Signature}")
                 .SetGuiPresentationNoContent(true)
@@ -869,6 +1036,7 @@ internal static class Level20Context
 
             ServiceRepository.GetService<IFunctorService>()
                 .RegisterFunctor(nameof(FunctorSignatureSpells), new FunctorSignatureSpells());
+            TaggedSpellPreparation.Register(Signature);
 
             return PowerSignatureSpells;
         }
@@ -879,56 +1047,7 @@ internal static class Level20Context
                 FunctorParametersDescription functorParameters,
                 FunctorExecutionContext context)
             {
-                var inspectionScreen = Gui.GuiService.GetScreen<CharacterInspectionScreen>();
-                var partyStatusScreen = Gui.GuiService.GetScreen<GamePartyStatusScreen>();
-                var hero = functorParameters.RestingHero;
-
-                Gui.GuiService.GetScreen<RestModal>().KeepCurrentState = true;
-
-                var spellRepertoire = hero.SpellRepertoires.FirstOrDefault(x =>
-                    x.SpellCastingFeature.SpellReadyness == SpellReadyness.Prepared);
-
-                if (spellRepertoire == null)
-                {
-                    yield break;
-                }
-
-                var preparedSpellsClone = spellRepertoire.PreparedSpells.ToArray();
-
-                spellRepertoire.ExtraSpellsByTag.TryAdd(Signature, [.. spellRepertoire.AutoPreparedSpells]);
-                spellRepertoire.PreparedSpells.SetRange(spellRepertoire.ExtraSpellsByTag[Signature]);
-                spellRepertoire.ExtraSpellsByTag[Signature] = [];
-
-                var activeCondition = hero.InflictCondition(
-                    $"Condition{Signature}",
-                    DurationType.Permanent,
-                    0,
-                    TurnOccurenceType.StartOfTurn,
-                    AttributeDefinitions.TagEffect,
-                    hero.guid,
-                    hero.CurrentFaction.Name,
-                    1,
-                    $"Condition{Signature}",
-                    0,
-                    0,
-                    0);
-
-                partyStatusScreen.SetupDisplayPreferences(false, false, false);
-
-                inspectionScreen.ShowSpellPreparation(
-                    functorParameters.RestingHero, Gui.GuiService.GetScreen<RestModal>(), spellRepertoire);
-
-                while (context.Async && inspectionScreen.Visible)
-                {
-                    yield return null;
-                }
-
-                spellRepertoire.ExtraSpellsByTag[Signature]
-                    .SetRange(spellRepertoire.PreparedSpells.Except(spellRepertoire.AutoPreparedSpells));
-                spellRepertoire.PreparedSpells.SetRange(preparedSpellsClone);
-                spellRepertoire.PreparedSpells.RemoveAll(x => spellRepertoire.ExtraSpellsByTag[Signature].Contains(x));
-                partyStatusScreen.SetupDisplayPreferences(true, true, true);
-                hero.RemoveCondition(activeCondition);
+                return TaggedSpellPreparation.Execute(functorParameters, context, Signature);
             }
         }
     }

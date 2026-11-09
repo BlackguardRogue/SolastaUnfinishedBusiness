@@ -309,6 +309,28 @@ public static class GameLocationCharacterPatcher
             //PATCH: acts as a callback for the character's combat turn ended event
             CharacterBattleListenersPatch.OnCharacterTurnEnded(__instance);
         }
+
+        [UsedImplicitly]
+        public static void Postfix(GameLocationCharacter __instance, int roundNumber)
+        {
+            //PATCH: compares this character with the host's at the end of its turn (MULTIPLAYER)
+            MultiplayerContext.Guarded("checking a turn end",
+                () => MultiplayerDesyncContext.OnTurnEnded(__instance, roundNumber, false));
+        }
+    }
+
+    //PATCH: a legendary turn ends here instead of EndBattleTurn; compared the same way (MULTIPLAYER)
+    [HarmonyPatch(typeof(GameLocationCharacter), nameof(GameLocationCharacter.EndLegendaryTurn))]
+    [SuppressMessage("Minor Code Smell", "S101:Types should be named in PascalCase", Justification = "Patch")]
+    [UsedImplicitly]
+    public static class EndLegendaryTurn_Patch
+    {
+        [UsedImplicitly]
+        public static void Postfix(GameLocationCharacter __instance)
+        {
+            MultiplayerContext.Guarded("checking a legendary turn end",
+                () => MultiplayerDesyncContext.OnTurnEnded(__instance, Gui.Battle?.CurrentRound ?? 0, true));
+        }
     }
 
     [HarmonyPatch(typeof(GameLocationCharacter), nameof(GameLocationCharacter.StartBattle))]
@@ -323,8 +345,11 @@ public static class GameLocationCharacterPatcher
             //while there already is callback for this event it doesn't have character or surprise flag arguments
             CharacterBattleListenersPatch.OnCharacterBattleStarted(__instance, surprise);
 
-            //PATCH: separates characters that were sharing a cell when the battle started (MULTIPLAYER)
-            MultiplayerContext.ResolveOverlapOnBattleStart(__instance);
+            // Characters sharing a cell at battle start (MULTIPLAYER) are left to the game's own unstack at initiative
+            // (BattleState_Initiative.Begin), which reads only the grid and so gives the same cells on every computer.
+            // The mod used to move them to a "safe" cell here instead, which also asked each computer's own visibility
+            // service which cells enemies could see, so computers could disagree (desync issue 04; removed on the
+            // user's choice, 2026-11-09, PR #28).
         }
     }
 

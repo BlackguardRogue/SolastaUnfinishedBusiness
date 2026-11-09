@@ -189,6 +189,7 @@ public class Settings : UnityModManager.ModSettings
     public bool LogObjectIdRecords { get; set; } = true;
     public bool LogStaleEffectChecks { get; set; } = true;
     public bool LogPerception { get; set; } = true;
+    public bool LogAiMoves { get; set; } = true;
     public bool LogEncounterPopup { get; set; } = true;
 
     // Gameplay - Multiplayer
@@ -212,7 +213,6 @@ public class Settings : UnityModManager.ModSettings
     public int MultiplayerSecondsBeforeLowerTickBuffer { get; set; } =
         MultiplayerContext.DefaultSecondsBeforeLowerTickBuffer;
     public bool MultiplayerAllowCharactersToOverlapOutOfCombat { get; set; } = true;
-    public bool MultiplayerResolveOverlapsOnBattleStart { get; set; } = true;
     public bool MultiplayerAllowAlliesToPassThroughInCombat { get; set; } = true;
     public bool MultiplayerSpreadOverlappedCharacters { get; set; } = true;
     public bool MultiplayerRequireApprovalForTimeConsumingActions { get; set; } = true;

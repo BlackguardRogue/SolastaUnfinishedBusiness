@@ -572,6 +572,7 @@ ModUi/&EnableAdditionalLogging=追加ログを有効にする
 ModUi/&LogObjectIdRecords=オブジェクトIDの記録 <i><color=#F0DAA0>[新しいゲームオブジェクト、光の状態の変化、パワーや呪文の結果をファイルに保存し、コンピューター間で比較できるようにします]</color></i>
 ModUi/&LogStaleEffectChecks=古くなったパワーと呪文の効果 <i><color=#F0DAA0>[有効な効果が現在の状況と一致しなくなったときにログに記録します。有効な効果を再確認するため、パフォーマンスにわずかに影響します]</color></i>
 ModUi/&LogPerception=知覚 <i><color=#F0DAA0>[知覚の要求と判定をログに記録します]</color></i>
+ModUi/&LogAiMoves=AIの移動 <i><color=#F0DAA0>[マルチプレイ：AI操作のキャラクターの移動先や対象マスと、選んだ停止マス。1戦闘あたり最大200行]</color></i>
 ModUi/&LogEncounterPopup=移動中の遭遇ウィンドウ <i><color=#F0DAA0>[開閉とクリック、および表示中のロード・終了・切断]</color></i>
 ModUi/&MultiplayerMenu=マルチプレイ
 ModUi/&MultiplayerMinimumTickBuffer=<color=white>最小の行動遅延（ティック）</color> <i><color=#F0DAA0>[ゲームの既定値4、全員のpingが許す場合のみ使用]</color></i>
@@ -586,7 +587,6 @@ ModUi/&MultiplayerPingBasedTickBuffer=各プレイヤーのpingから行動遅�
 ModUi/&MultiplayerPingVisibleToHostOnly=プレイヤーのpingと行動遅延はホストだけが見られる <i><color=#F0DAA0>[オフなら全プレイヤーがこのタブとプレイヤープレートで見られる]</color></i>
 ModUi/&MultiplayerPlayersVersions=<color=white>このルームのビルド：</color>
 ModUi/&MultiplayerRequireApprovalForTimeConsumingActions=ゲーム内時間が経過する行動は全プレイヤーに承認を求める：小休憩と大休憩、巻物からの呪文の習得や筆写、神の聖印、儀式、1分以上かかる呪文や能力 <i><color=#F0DAA0>[ポップアップで何をどれだけの時間行うかを表示。キャラクターが戦闘中やカットシーン中は誰にも尋ねず、求めたプレイヤーにどのキャラクターかを伝える]</color></i>
-ModUi/&MultiplayerResolveOverlapsOnBattleStart=戦闘開始時、同じマスにいるキャラクターを最寄りの安全なマスへ移動する <i><color=#F0DAA0>[無償・無害で、忍び足中なら敵に気づかれない。どの敵からも見えないマスに忍び足のキャラクターが1人だけならそのマスに残り、それ以外は最初に作られたキャラクターが残る]</color></i>
 ModUi/&MultiplayerSecondsBeforeLowerTickBuffer=<color=white>遅延を下げるまでの待ちのない秒数</color> <i><color=#F0DAA0>[ゲームの既定値10]</color></i>
 ModUi/&MultiplayerShowFpsOverlay=マルチプレイ中、左上に見られるフレームレートとpingを表示する小さなオーバーレイを出す
 ModUi/&MultiplayerSpreadOverlappedCharacters=同じマスにいるキャラクターを少し離して描き、それぞれを指せるようにする <i><color=#F0DAA0>[見た目のみ：2人は横並び、3人は三角形、それ以上はより広い輪。移動すると中央に戻る]</color></i>

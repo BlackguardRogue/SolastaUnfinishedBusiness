@@ -46,6 +46,13 @@ internal static class LoggingDisplay
             Main.Settings.LogPerception = toggle;
         }
 
+        // what AI characters do with cells in a multiplayer battle, for comparing logs (AiMoveLogContext)
+        toggle = Main.Settings.LogAiMoves;
+        if (UI.Toggle(Gui.Localize("ModUi/&LogAiMoves"), ref toggle, UI.AutoWidth()))
+        {
+            Main.Settings.LogAiMoves = toggle;
+        }
+
         // the travel encounter popup and what ends a game while it's up (issue 11, EncounterPopupContext)
         toggle = Main.Settings.LogEncounterPopup;
         if (UI.Toggle(Gui.Localize("ModUi/&LogEncounterPopup"), ref toggle, UI.AutoWidth()))

@@ -166,7 +166,8 @@ public static class MultiplayerPatcher
         }
     }
 
-    //PATCH: runs a level down sent through the class level command at the same tick on every computer
+    //PATCH: runs a level down (and the other mod commands sent the same way: ending an infusion, perception, after-rest
+    //changes) sent through the class level command at the same tick on every computer
     [HarmonyPatch(typeof(NetworkingManager), nameof(NetworkingManager.AssignClassLevelAsync))]
     [SuppressMessage("Minor Code Smell", "S101:Types should be named in PascalCase", Justification = "Patch")]
     [UsedImplicitly]
@@ -179,7 +180,8 @@ public static class MultiplayerPatcher
             return !LevelDownContext.TryHandleLevelDownCommand(__instance, heroGuid, classDefinitionName, ref __result) &&
                    !InfusionTrackingContext.TryHandleEndInfusionCommand(
                        __instance, heroGuid, classDefinitionName, ref __result) &&
-                   !PerceptionContext.TryHandleCommand(classDefinitionName, ref __result);
+                   !PerceptionContext.TryHandleCommand(classDefinitionName, ref __result) &&
+                   !RestCommandContext.TryHandleCommand(__instance, heroGuid, classDefinitionName, ref __result);
         }
     }
 
@@ -370,6 +372,7 @@ public static class MultiplayerPatcher
             MultiplayerContext.Guarded("joining a room", MultiplayerSessionContext.OnJoinedRoom);
             MultiplayerContext.Guarded("joining a room", MultiplayerApprovalContext.OnJoinedRoom);
             MultiplayerContext.Guarded("joining a room", MultiplayerTurnSpeedContext.OnJoinedRoom);
+            MultiplayerContext.Guarded("joining a room", RestCommandContext.OnJoinedRoom);
             MultiplayerContext.Guarded("joining a room", MultiplayerPerfContext.OnJoinedRoom);
         }
     }

@@ -572,6 +572,7 @@ ModUi/&EnableAdditionalLogging=추가 로그 사용
 ModUi/&LogObjectIdRecords=오브젝트 ID 기록 <i><color=#F0DAA0>[새 게임 오브젝트, 빛 상태 변화, 파워 또는 주문의 결과를 파일에 저장하여 컴퓨터 간에 비교합니다]</color></i>
 ModUi/&LogStaleEffectChecks=오래된 파워 및 주문 효과 <i><color=#F0DAA0>[활성 효과가 현재 상황과 더 이상 맞지 않으면 로그에 기록합니다. 활성 효과를 다시 확인하므로 성능에 약간 영향을 줍니다]</color></i>
 ModUi/&LogPerception=지각 <i><color=#F0DAA0>[지각 요청과 굴림을 로그에 기록합니다]</color></i>
+ModUi/&LogAiMoves=AI 이동 <i><color=#F0DAA0>[멀티플레이: AI가 조종하는 캐릭터가 이동하거나 노리는 칸과 선택한 정지 칸. 전투당 최대 200줄]</color></i>
 ModUi/&LogEncounterPopup=이동 중 조우 창 <i><color=#F0DAA0>[열림, 닫힘, 클릭, 그리고 열려 있는 동안의 불러오기, 종료, 연결 끊김]</color></i>
 ModUi/&MultiplayerMenu=멀티플레이
 ModUi/&MultiplayerMinimumTickBuffer=<color=white>최소 행동 지연(틱)</color> <i><color=#F0DAA0>[게임 기본값 4, 모두의 핑이 허용할 때만 사용]</color></i>
@@ -586,7 +587,6 @@ ModUi/&MultiplayerPingBasedTickBuffer=각 플레이어의 핑에 맞춰 행동 �
 ModUi/&MultiplayerPingVisibleToHostOnly=플레이어의 핑과 행동 지연은 호스트만 봄 <i><color=#F0DAA0>[끄면 모든 플레이어가 이 탭과 플레이어 명패에서 봄]</color></i>
 ModUi/&MultiplayerPlayersVersions=<color=white>이 방의 빌드:</color>
 ModUi/&MultiplayerRequireApprovalForTimeConsumingActions=게임 내 시간이 흐르는 행동은 모든 플레이어의 승인을 받음: 짧은 휴식과 긴 휴식, 두루마리에서 주문 습득이나 작성, 신 문양 새기기, 의식, 1분 이상 걸리는 주문이나 능력 <i><color=#F0DAA0>[창에 무엇을 얼마 동안 하는지 표시. 캐릭터가 전투나 컷신 중이면 아무에게도 묻지 않고, 요청한 플레이어에게 어느 캐릭터인지 알려 줌]</color></i>
-ModUi/&MultiplayerResolveOverlapsOnBattleStart=전투가 시작되면 같은 칸을 쓰는 캐릭터를 가장 가까운 안전한 칸으로 옮김 <i><color=#F0DAA0>[무료이며 해가 없고, 은신 중이면 적에게 들키지 않음. 어떤 적도 보지 못하는 칸에 은신자가 혼자 있으면 그 칸에 남고, 아니면 먼저 만들어진 캐릭터가 남음]</color></i>
 ModUi/&MultiplayerSecondsBeforeLowerTickBuffer=<color=white>지연을 낮추기 전 대기 없이 지나야 하는 초</color> <i><color=#F0DAA0>[게임 기본값 10]</color></i>
 ModUi/&MultiplayerShowFpsOverlay=멀티플레이 세션 중 왼쪽 위에 볼 수 있는 프레임 속도와 핑을 표시하는 작은 오버레이를 표시
 ModUi/&MultiplayerSpreadOverlappedCharacters=같은 칸에 있는 캐릭터를 조금 떨어뜨려 그려 각각 가리킬 수 있게 함 <i><color=#F0DAA0>[시각 효과만: 둘은 나란히, 셋은 삼각형, 그 이상은 더 넓은 원. 이동하면 중앙으로 돌아옴]</color></i>

@@ -572,6 +572,7 @@ ModUi/&EnableAdditionalLogging=启用额外日志
 ModUi/&LogObjectIdRecords=对象ID记录 <i><color=#F0DAA0>[新游戏对象、光照状态变化以及能力或法术的结果，保存到文件以便比较各台电脑]</color></i>
 ModUi/&LogStaleEffectChecks=过期的能力和法术效果 <i><color=#F0DAA0>[当生效的效果不再符合当前情况时记入日志；会重新检查生效的效果，因此略微影响性能]</color></i>
 ModUi/&LogPerception=察觉 <i><color=#F0DAA0>[在日志中记录察觉请求和检定]</color></i>
+ModUi/&LogAiMoves=AI 移动 <i><color=#F0DAA0>[多人游戏：每个 AI 控制角色的移动目标或指定的格子，以及其选择的停止格子；每场战斗最多 200 行]</color></i>
 ModUi/&LogEncounterPopup=旅途遭遇窗口 <i><color=#F0DAA0>[打开、关闭和点击时，以及窗口打开期间的读档、退出或断线]</color></i>
 ModUi/&MultiplayerMenu=多人游戏
 ModUi/&MultiplayerMinimumTickBuffer=<color=white>最小行动延迟（帧刻）</color> <i><color=#F0DAA0>[游戏默认4，只在所有人的延迟都允许时使用]</color></i>
@@ -586,7 +587,6 @@ ModUi/&MultiplayerPingBasedTickBuffer=根据每位玩家的延迟设定行动延
 ModUi/&MultiplayerPingVisibleToHostOnly=只有主机能看到玩家的延迟和行动延迟 <i><color=#F0DAA0>[否则每位玩家都会在此标签页和玩家名牌上看到]</color></i>
 ModUi/&MultiplayerPlayersVersions=<color=white>此房间中的版本：</color>
 ModUi/&MultiplayerRequireApprovalForTimeConsumingActions=让每位玩家批准会经过游戏时间的行动：短休和长休、从卷轴学习或抄写法术、神祇标记、仪式，以及需要一分钟或更长时间的法术或能力 <i><color=#F0DAA0>[弹窗会说明要做什么以及需要多久；角色处于战斗或过场动画时不会询问任何人，发起的玩家会被告知是哪个角色]</color></i>
-ModUi/&MultiplayerResolveOverlapsOnBattleStart=战斗开始时，将共享格子的角色移到最近的安全格子 <i><color=#F0DAA0>[免费、无伤害，潜行时不会被敌人发现。没有敌人看到的格子里若只有一名潜行者则由其保留；否则由最先创建的角色保留]</color></i>
 ModUi/&MultiplayerSecondsBeforeLowerTickBuffer=<color=white>无需等待多少秒后降低延迟</color> <i><color=#F0DAA0>[游戏默认10]</color></i>
 ModUi/&MultiplayerShowFpsOverlay=多人游戏会话期间，在左上角显示一个小叠加层，列出你能看到的帧率和延迟
 ModUi/&MultiplayerSpreadOverlappedCharacters=将共享格子的角色稍微分开绘制，以便每个都能被指向 <i><color=#F0DAA0>[仅视觉效果：两个并排，三个呈三角形，更多则围成更大的环；移动时回到中心]</color></i>

@@ -38,6 +38,8 @@ public static class GameManagerPatcher
             PowerBundle.ClearLiveEffects();
             MultiplayerDesyncContext.GameDestroyed();
             ActiveCharacterPanelPatcher.ForgetDestroyedPanels();
+            AiMoveLogContext.ForgetGame();
+            PowerBundleContext.ForgetGame();
         }
     }
 
