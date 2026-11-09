@@ -20,7 +20,7 @@ internal static class PowerBundleContext
         ServiceRepository.GetService<IFunctorService>()
             .RegisterFunctor(UseCustomRestPowerFunctorName, new FunctorUseCustomRestPower());
         RestCommandContext.Register(nameof(UseCustomRestPowerTravelling), UseCustomRestPowerTravelling);
-        RestCommandContext.Register(nameof(UseCustomRestPowerRetargeted), UseCustomRestPowerRetargeted);
+        RestCommandContext.Register(nameof(UseCustomRestPowerEverywhere), UseCustomRestPowerEverywhere);
     }
 
     // the action a self power from the rest screen runs as: used by the actor on itself, without animations
@@ -38,23 +38,41 @@ internal static class PowerBundleContext
         };
     }
 
-    // retargeted rest powers finished, per hero and power: counted on every computer alike, so the clicker can wait
-    // for the one it started
-    private static readonly Dictionary<(ulong, string), int> RetargetedFinished = new();
+    // rest powers run by command finished, per hero and power: counted on every computer alike, so the clicker can
+    // wait for the one it started
+    private static readonly Dictionary<(ulong, string), int> CommandPowersFinished = new();
 
-    // runs on every computer at the same tick (RestCommandContext): a rest power the hero owns but another character
-    // uses (IRetargetCustomRestPower, the Innovation Weapon's Steel Defender). The game's networked action can't carry
-    // it: it sends the power as an index into the acting character's own powers, and the power is the hero's, so the
-    // other computers would get none (Codex's review of PR #28). Instead every computer starts the same action itself,
-    // as the clicker alone used to, on the character the clicker chose (by ID), and only if that is still the power's
-    // target here.
-    private static bool UseCustomRestPowerRetargeted(RulesetCharacterHero ruleChar, string argument)
+    // the character a self rest power is used by: its retarget (IRetargetCustomRestPower, the Innovation Weapon's Steel
+    // Defender), or else the hero on the map
+    private static GameLocationCharacter RestPowerActor(FeatureDefinitionPower power, RulesetCharacterHero ruleChar)
+    {
+        return power.GetFirstSubFeatureOfType<IRetargetCustomRestPower>()?.GetTarget(ruleChar) ??
+               GameLocationCharacter.GetFromActor(ruleChar);
+    }
+
+    // The game's networked action sends the power as an index into the acting character's own powers, so it can only
+    // carry a power that character has. Two kinds of rest power aren't: one another character uses (the Steel
+    // Defender's), and one the hero doesn't own at all, which PowerProvider makes up for the moment (Identify after a
+    // rest); both would reach the other computers as no power (Codex's reviews of PR #28).
+    private static bool NeedsCommand(
+        FeatureDefinitionPower power, RulesetCharacterHero ruleChar, RulesetUsablePower usablePower,
+        GameLocationCharacter actor)
+    {
+        return actor.RulesetCharacter != ruleChar ||
+               !ruleChar.UsablePowers.Contains(usablePower) ||
+               power.GetFirstSubFeatureOfType<IRetargetCustomRestPower>()?.GetTarget(ruleChar) != null;
+    }
+
+    // runs on every computer at the same tick (RestCommandContext): a rest power the networked action can't carry
+    // (NeedsCommand). Every computer starts the same action itself, as the clicker alone used to, on the character the
+    // clicker chose (by ID), and only if that is still the power's user here.
+    private static bool UseCustomRestPowerEverywhere(RulesetCharacterHero ruleChar, string argument)
     {
         var parts = argument.Split('|');
 
         if (parts.Length != 2 || !ulong.TryParse(parts[1], out var actorGuid) ||
             !TryGetCustomRestPower(parts[0], out var power) ||
-            power.GetFirstSubFeatureOfType<IRetargetCustomRestPower>()?.GetTarget(ruleChar) is not { } actor ||
+            RestPowerActor(power, ruleChar) is not { } actor ||
             actor.Guid != actorGuid)
         {
             Main.Error($"[RestCommand] {argument} for {ruleChar.Name}: not its target any more, power not used");
@@ -67,8 +85,8 @@ internal static class PowerBundleContext
         ServiceRepository.GetService<IGameLocationActionService>()
             .ExecuteAction(BuildRestPowerAction(actor, PowerProvider.Get(power, ruleChar)), _ =>
             {
-                RetargetedFinished.TryGetValue(key, out var count);
-                RetargetedFinished[key] = count + 1;
+                CommandPowersFinished.TryGetValue(key, out var count);
+                CommandPowersFinished[key] = count + 1;
             }, false);
 
         return true;
@@ -125,32 +143,30 @@ internal static class PowerBundleContext
 
             if (power.EffectDescription.TargetType == TargetType.Self)
             {
-                var retarget = power.GetFirstSubFeatureOfType<IRetargetCustomRestPower>();
+                var fromActor = RestPowerActor(power, ruleChar);
 
-                if (retarget?.GetTarget(ruleChar) is { } target)
+                if (fromActor != null && NeedsCommand(power, ruleChar, usablePower, fromActor))
                 {
                     // like the action path below, the rest screen carries on only once the power has been used
                     var key = (ruleChar.Guid, power.Name);
-                    var finishedBefore = RetargetedFinished.TryGetValue(key, out var count) ? count : 0;
+                    var finishedBefore = CommandPowersFinished.TryGetValue(key, out var count) ? count : 0;
                     var outcome = RestCommandContext.Outcome.Failed;
 
-                    yield return RestCommandContext.Send(ruleChar, nameof(UseCustomRestPowerRetargeted),
-                        $"{power.Name}|{target.Guid}", x => outcome = x);
+                    yield return RestCommandContext.Send(ruleChar, nameof(UseCustomRestPowerEverywhere),
+                        $"{power.Name}|{fromActor.Guid}", x => outcome = x);
 
                     // bounded, like the command itself, so an action that never reports back can't hold the screen
                     var deadline = UnityEngine.Time.realtimeSinceStartup + 30f;
 
                     while (outcome == RestCommandContext.Outcome.Ran &&
                            UnityEngine.Time.realtimeSinceStartup < deadline &&
-                           (RetargetedFinished.TryGetValue(key, out count) ? count : 0) == finishedBefore)
+                           (CommandPowersFinished.TryGetValue(key, out count) ? count : 0) == finishedBefore)
                     {
                         yield return null;
                     }
 
                     yield break;
                 }
-
-                var fromActor = GameLocationCharacter.GetFromActor(ruleChar);
 
                 if (fromActor != null)
                 {
