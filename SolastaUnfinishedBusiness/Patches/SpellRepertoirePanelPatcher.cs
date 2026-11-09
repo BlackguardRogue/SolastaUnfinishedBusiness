@@ -77,10 +77,14 @@ public static class SpellRepertoirePanelPatcher
         [UsedImplicitly]
         public static bool Prefix(SpellRepertoirePanel __instance)
         {
-            // a repeat press while this panel's Prepare is on its way does nothing (a shortcut gets here too)
-            if (SpellPreparationScreen.IsPendingOn(__instance))
+            // another Prepare of these features while one is on its way only warns (a shortcut gets here too)
+            if (Tabletop2024Context.IsMemorizeSpellPreparation(__instance.GuiCharacter?.RulesetCharacter,
+                    __instance.SpellRepertoire) || TaggedSpellPreparation.IsInMode(__instance))
             {
-                return false;
+                if (SpellPreparationScreen.WarnIfPending())
+                {
+                    return false;
+                }
             }
 
             return !Tabletop2024Context.TryPrepareMemorizeSpell(__instance) &&
@@ -95,10 +99,18 @@ public static class SpellRepertoirePanelPatcher
     [UsedImplicitly]
     public static class OnValidatePreparationCb_Patch
     {
+        // before the game's too-few-spells question: another Prepare of these features while one is on its way only
+        // warns that the previous changes haven't been synced yet (SpellPreparationScreen)
         [UsedImplicitly]
         public static bool Prefix(SpellRepertoirePanel __instance)
         {
-            return !SpellPreparationScreen.IsPendingOn(__instance);
+            if (!Tabletop2024Context.IsMemorizeSpellPreparation(__instance.GuiCharacter?.RulesetCharacter,
+                    __instance.SpellRepertoire) && !TaggedSpellPreparation.IsInMode(__instance))
+            {
+                return true;
+            }
+
+            return !SpellPreparationScreen.WarnIfPending();
         }
     }
 

@@ -773,6 +773,7 @@ Message/&MultiplayerDesyncFacing=向き
 Message/&MultiplayerDesyncTurnEnd={0}のターン終了時（ラウンド{1}）：
 Message/&MultiplayerDesyncTurnPlayerLeft=ターン終了時にゲームが一致しなかった{0}が退出しました。その報告だけでは、残りのパーティーに再同期が必要とは限りません。
 Message/&MultiplayerDesyncResyncSaveLater=現在は再同期できません。セーブできるようになったら、セーブしてそのデータをロードし、パーティーを再同期してください。
+Message/&SpellPreparationNotSynced=前回の変更はまだ他のプレイヤーと同期されていません。しばらくお待ちください。
 Message/&MultiplayerDesyncTemporaryHitPoints=一時的HP
 Message/&MultiplayerHostSettingsRestartAccept=次回の起動
 Message/&MultiplayerHostSettingsRestartDecline=今はしない

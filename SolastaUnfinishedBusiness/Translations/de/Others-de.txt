@@ -773,6 +773,7 @@ Message/&MultiplayerDesyncFacing=Blickrichtung
 Message/&MultiplayerDesyncTurnEnd=Am Ende des Zuges von {0} (Runde {1}):
 Message/&MultiplayerDesyncTurnPlayerLeft={0}, dessen Spiel am Ende eines Zuges abwich, hat das Spiel verlassen. Diese Meldung allein bedeutet nicht, dass der Rest der Gruppe eine Resynchronisierung braucht.
 Message/&MultiplayerDesyncResyncSaveLater=Resynchronisierung ist gerade nicht möglich. Sobald Speichern möglich ist, speichere und lade diesen Spielstand, um die Gruppe zu resynchronisieren.
+Message/&SpellPreparationNotSynced=Deine vorherigen Änderungen wurden noch nicht mit den anderen Spielern abgeglichen. Bitte warte einen Moment.
 Message/&MultiplayerDesyncTemporaryHitPoints=temporäre TP
 Message/&MultiplayerHostSettingsRestartAccept=Nächster Start
 Message/&MultiplayerHostSettingsRestartDecline=Nicht jetzt

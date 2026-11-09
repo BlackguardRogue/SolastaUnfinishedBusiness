@@ -63,7 +63,9 @@ internal static class RestCommandContext
 
     // runs the command on every computer and waits (as a coroutine step) until it has run on this one; the outcome
     // tells the caller whether to carry on
-    internal static IEnumerator Send(RulesetCharacterHero hero, string verb, string argument, Action<Outcome> done)
+    // waitSeconds: how long to wait for it here (WaitSeconds unless the caller needs less)
+    internal static IEnumerator Send(
+        RulesetCharacterHero hero, string verb, string argument, Action<Outcome> done, float waitSeconds = WaitSeconds)
     {
         if (!Handlers.TryGetValue(verb, out var handler))
         {
@@ -98,7 +100,7 @@ internal static class RestCommandContext
             networking.CommandTick, (long)hero.Guid, $"{Marker}{nonce}:{verb}:{argument}", false);
         PhotonNetwork.SendAllOutgoingCommands();
 
-        var deadline = Time.realtimeSinceStartup + WaitSeconds;
+        var deadline = Time.realtimeSinceStartup + waitSeconds;
         bool? ran = null;
 
         while (Global.IsMultiplayer && Time.realtimeSinceStartup < deadline &&
@@ -115,7 +117,7 @@ internal static class RestCommandContext
         if (ran == null)
         {
             outcome = Outcome.TimedOut;
-            Main.Error($"[RestCommand] {verb} for {hero.Name} hasn't run here after {WaitSeconds} s; not carrying on");
+            Main.Error($"[RestCommand] {verb} for {hero.Name} hasn't run here after {waitSeconds} s; not carrying on");
         }
         else if (ran == false)
         {

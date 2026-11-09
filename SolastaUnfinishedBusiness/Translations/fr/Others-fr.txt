@@ -773,6 +773,7 @@ Message/&MultiplayerDesyncFacing=orientation
 Message/&MultiplayerDesyncTurnEnd=À la fin du tour de {0} (round {1}) :
 Message/&MultiplayerDesyncTurnPlayerLeft={0}, dont la partie différait à la fin d'un tour, est parti. Ce signalement seul ne veut pas dire que le reste du groupe a besoin d'une resynchronisation.
 Message/&MultiplayerDesyncResyncSaveLater=La resynchronisation n'est pas disponible pour le moment. Quand la sauvegarde sera possible, sauvegardez puis rechargez cette sauvegarde pour resynchroniser le groupe.
+Message/&SpellPreparationNotSynced=Vos modifications précédentes n'ont pas encore été synchronisées avec les autres joueurs. Veuillez patienter un instant.
 Message/&MultiplayerDesyncTemporaryHitPoints=PV temporaires
 Message/&MultiplayerHostSettingsRestartAccept=Prochain lancement
 Message/&MultiplayerHostSettingsRestartDecline=Pas maintenant

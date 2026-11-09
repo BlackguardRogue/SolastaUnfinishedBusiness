@@ -773,6 +773,7 @@ Message/&MultiplayerDesyncFacing=направление
 Message/&MultiplayerDesyncTurnEnd=В конце хода {0} (раунд {1}):
 Message/&MultiplayerDesyncTurnPlayerLeft={0}, чья игра расходилась в конце хода, вышел. Одно это сообщение не значит, что остальной группе нужна повторная синхронизация.
 Message/&MultiplayerDesyncResyncSaveLater=Повторная синхронизация сейчас недоступна. Когда сохранение станет возможным, сохранитесь и загрузите это сохранение, чтобы синхронизировать группу.
+Message/&SpellPreparationNotSynced=Ваши предыдущие изменения ещё не синхронизированы с другими игроками. Подождите немного.
 Message/&MultiplayerDesyncTemporaryHitPoints=временные ОЗ
 Message/&MultiplayerHostSettingsRestartAccept=При следующем запуске
 Message/&MultiplayerHostSettingsRestartDecline=Не сейчас

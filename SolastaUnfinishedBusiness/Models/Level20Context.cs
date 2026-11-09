@@ -678,6 +678,12 @@ internal static class Level20Context
                 : "-";
         }
 
+        // whether this panel is the screen in either feature's mode
+        internal static bool IsInMode(SpellRepertoirePanel panel)
+        {
+            return Mode is { } mode && panel && panel.SpellRepertoire == mode.Repertoire;
+        }
+
         internal static bool IsMode(RulesetSpellRepertoire repertoire, string tag)
         {
             return repertoire != null && Mode is { } mode && mode.Repertoire == repertoire && mode.Tag == tag;
