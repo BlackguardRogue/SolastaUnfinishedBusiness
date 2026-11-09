@@ -1,3 +1,6 @@
+using System;
+using UnityEngine;
+
 namespace SolastaUnfinishedBusiness.Models;
 
 // Opens the spell preparation screen on a given repertoire. The game's CharacterInspectionScreen.ShowSpellPreparation
@@ -32,5 +35,50 @@ internal static class SpellPreparationScreen
 
         screen.ToggleValueChanged(toggle);
         wanted.OnPrepareSpellsCb();
+    }
+
+    // A Prepare press of these features is a rest command that may take a moment to come back. Until it has, the
+    // feature's after-rest button stays off (user, 2026-11-09: "Use the button"): the feature's functor waits for it
+    // (IsPending) after the screen closes, and the game keeps an after-rest button off while its functor runs
+    // (AfterRestActionItem). So the screen can't be reopened to send another choice while one is on its way; the
+    // screen itself isn't locked, and a second press on the same screen is refused by the command (see the features).
+    // The command runs on the game's networking object rather than the panel, so closing the screen doesn't stop it.
+    // A press that hasn't come back after RestCommandContext's wait frees the button again; it may still apply later,
+    // alike on every computer.
+    private static float _pendingUntil = -1f;
+
+    // whether a Prepare press is on its way
+    internal static bool IsPending => Time.realtimeSinceStartup < _pendingUntil;
+
+    internal static void Submit(
+        SpellRepertoirePanel panel, RulesetCharacterHero hero, string verb, string argument, Action ran)
+    {
+        // a little longer than the command's own wait, in case its coroutine stopped
+        _pendingUntil = Time.realtimeSinceStartup + 35f;
+
+        MonoBehaviour runner = ServiceRepository.GetService<INetworkingService>() as NetworkingManager;
+
+        if (!runner)
+        {
+            runner = panel;
+        }
+
+        runner.StartCoroutine(RestCommandContext.Send(hero, verb, argument, outcome =>
+        {
+            _pendingUntil = -1f;
+
+            if (outcome != RestCommandContext.Outcome.Ran)
+            {
+                return;
+            }
+
+            ran?.Invoke();
+
+            // as the game's own Prepare closes the screen, if it's still open
+            if (panel && panel.isActiveAndEnabled)
+            {
+                panel.SpellPreparationValidated();
+            }
+        }));
     }
 }

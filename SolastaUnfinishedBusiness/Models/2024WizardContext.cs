@@ -206,16 +206,9 @@ public static partial class Tabletop2024Context
             $"{session.Amount},{session.SpellIndex}",
             string.Join(";", panel.preparedSpells.Select(x => x.Name)));
 
-        panel.StartCoroutine(RestCommandContext.Send(hero, nameof(MemorizeSpellPrepare), argument, outcome =>
-        {
-            if (outcome != RestCommandContext.Outcome.Ran || !panel)
-            {
-                return;
-            }
-
-            _memorizeSession = null;
-            panel.SpellPreparationValidated();
-        }));
+        // the after-rest button stays off until this has come back (SpellPreparationScreen)
+        SpellPreparationScreen.Submit(panel, hero, nameof(MemorizeSpellPrepare), argument,
+            () => _memorizeSession = null);
 
         return true;
     }
@@ -349,6 +342,12 @@ public static partial class Tabletop2024Context
                 inspectionScreen, hero, Gui.GuiService.GetScreen<RestModal>(), spellRepertoire);
 
             while (context.Async && inspectionScreen.Visible)
+            {
+                yield return null;
+            }
+
+            // a Prepare press still on its way keeps Memorize Spell running, and so its after-rest button off
+            while (SpellPreparationScreen.IsPending)
             {
                 yield return null;
             }

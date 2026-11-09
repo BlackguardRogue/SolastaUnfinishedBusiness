@@ -747,13 +747,8 @@ internal static class Level20Context
             var argument = mode.Repertoire.SpellCastingFeature.Name + "|" + _openedWithPicks + "|" +
                            string.Join(";", panel.preparedSpells.Select(x => x.Name));
 
-            panel.StartCoroutine(RestCommandContext.Send(hero, $"Set{mode.Tag}", argument, outcome =>
-            {
-                if (outcome == RestCommandContext.Outcome.Ran && panel)
-                {
-                    panel.SpellPreparationValidated();
-                }
-            }));
+            // the after-rest button stays off until this has come back (SpellPreparationScreen)
+            SpellPreparationScreen.Submit(panel, hero, $"Set{mode.Tag}", argument, null);
 
             return true;
         }
@@ -831,6 +826,12 @@ internal static class Level20Context
                 SpellPreparationScreen.Show(inspectionScreen, hero, Gui.GuiService.GetScreen<RestModal>(), spellRepertoire);
 
                 while (context.Async && inspectionScreen.Visible)
+                {
+                    yield return null;
+                }
+
+                // a Prepare press still on its way keeps this feature running, and so its after-rest button off
+                while (SpellPreparationScreen.IsPending)
                 {
                     yield return null;
                 }
