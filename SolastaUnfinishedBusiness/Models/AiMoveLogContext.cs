@@ -22,6 +22,13 @@ internal static class AiMoveLogContext
     private static GameLocationBattle _battle;
     private static int _lines;
 
+    // GameDestroyed (GameManagerPatcher): the battle belongs to the game that's gone
+    internal static void ForgetGame()
+    {
+        _battle = null;
+        _lines = 0;
+    }
+
     private static bool IsOn =>
         Global.IsMultiplayer && Main.Settings is { EnableAdditionalLogging: true, LogAiMoves: true };
 

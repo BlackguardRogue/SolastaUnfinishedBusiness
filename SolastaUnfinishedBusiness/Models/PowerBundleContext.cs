@@ -42,6 +42,12 @@ internal static class PowerBundleContext
     // wait for the one it started
     private static readonly Dictionary<(ulong, string), int> CommandPowersFinished = new();
 
+    // GameDestroyed (GameManagerPatcher): the counts belong to the game that's gone
+    internal static void ForgetGame()
+    {
+        CommandPowersFinished.Clear();
+    }
+
     // the character a self rest power is used by: its retarget (IRetargetCustomRestPower, the Innovation Weapon's Steel
     // Defender), or else the hero on the map
     private static GameLocationCharacter RestPowerActor(FeatureDefinitionPower power, RulesetCharacterHero ruleChar)
