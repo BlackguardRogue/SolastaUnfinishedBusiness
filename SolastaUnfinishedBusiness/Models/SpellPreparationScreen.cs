@@ -42,7 +42,7 @@ internal static class SpellPreparationScreen
     // - the feature's after-rest button stays off (user: "Use the button"): the feature's functor waits for it
     //   (IsPending) after the screen closes, and the game keeps an after-rest button off while its functor runs
     //   (AfterRestActionItem);
-    // - on the screen that sent it, the spells, Prepare, Revert, Clear and Auto are off (user: "Yes, please do";
+    // - on the screen that sent it, the spells, Revert, Clear and Auto are off (user: "Yes, please do";
     //   IsPendingOn, SpellRepertoirePanelPatcher), and they come back with the choice still there if it's refused or
     //   gets no answer; the screen can still be closed;
     // - any other Prepare, from that screen or another one, does nothing but warn the player that their previous
@@ -114,7 +114,9 @@ internal static class SpellPreparationScreen
     // RefreshPreparation postfix: the panel's selection buttons off while its press is out (Cancel stays, so the
     // screen can still be closed). Only the buttons the game's own refresh turns back on: the gamepad Clear and Auto
     // buttons only have their visibility set there, so turning them off would leave them off; their actions are
-    // blocked by the Prepare hooks instead (Codex's review of 8e6b4bbd)
+    // blocked by the Prepare hooks instead (Codex's review of 8e6b4bbd). Prepare itself stays clickable: a button that
+    // isn't interactable never calls its callback, so a second click would be silent; it reaches the callback, which
+    // shows the not-synced warning instead (Codex's review of 97e37073)
     internal static void RefreshButtons(SpellRepertoirePanel panel)
     {
         if (!IsPendingOn(panel))
@@ -124,8 +126,7 @@ internal static class SpellPreparationScreen
 
         foreach (var button in new[]
                  {
-                     panel.validatePreparationButton, panel.revertPreparationButton, panel.clearPreparationButton,
-                     panel.automatePreparationButton
+                     panel.revertPreparationButton, panel.clearPreparationButton, panel.automatePreparationButton
                  })
         {
             if (button)
