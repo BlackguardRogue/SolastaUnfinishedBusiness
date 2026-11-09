@@ -667,6 +667,17 @@ internal static class Level20Context
         // compares with
         private static List<SpellDefinition> _initialPicks = [];
 
+        // the feature's stored picks when the screen opened, as sent with Prepare (see SetPicks)
+        private static string _openedWithPicks = string.Empty;
+
+        // the stored picks as text: their names in order, or "-" when the feature has none yet
+        private static string StoredPicks(RulesetSpellRepertoire repertoire, string tag)
+        {
+            return repertoire.ExtraSpellsByTag.TryGetValue(tag, out var picks)
+                ? string.Join(";", picks.Select(x => x.Name))
+                : "-";
+        }
+
         internal static bool IsMode(RulesetSpellRepertoire repertoire, string tag)
         {
             return repertoire != null && Mode is { } mode && mode.Repertoire == repertoire && mode.Tag == tag;
@@ -704,6 +715,7 @@ internal static class Level20Context
             }
 
             _initialPicks = [.. panel.preparedSpells];
+            _openedWithPicks = StoredPicks(repertoire, mode.Tag);
             panel.RefreshPreparation(false);
         }
 
@@ -732,7 +744,7 @@ internal static class Level20Context
             }
 
             // the repertoire by its spellcasting feature, so every computer changes the same one
-            var argument = mode.Repertoire.SpellCastingFeature.Name + "|" +
+            var argument = mode.Repertoire.SpellCastingFeature.Name + "|" + _openedWithPicks + "|" +
                            string.Join(";", panel.preparedSpells.Select(x => x.Name));
 
             panel.StartCoroutine(RestCommandContext.Send(hero, $"Set{mode.Tag}", argument, outcome =>
@@ -748,23 +760,33 @@ internal static class Level20Context
 
         // runs on every computer at the same tick (RestCommandContext): the chosen spells, less the auto-prepared
         // ones, become the picks and leave the prepared spells. Nothing changes unless the repertoire named is the
-        // hero's Wizard repertoire and every spell is found.
-        // spellcasting feature|spell;spell...
+        // hero's Wizard repertoire, the stored picks are still the ones the screen opened with, and every spell is
+        // found. The second check stops a second Prepare pressed before the first came back: each press takes its
+        // picks out of the prepared spells, so the first press's picks would stay out even if the second didn't keep
+        // them (Codex's review of 3d896da5). Only the first press of a screen can apply, alike on every computer.
+        // spellcasting feature|stored picks when the screen opened|spell;spell...
         private static bool SetPicks(RulesetCharacterHero hero, string tag, string argument)
         {
-            var parts = argument.Split(['|'], 2);
+            var parts = argument.Split(['|'], 3);
             var repertoire = GetRepertoire(hero);
             var database = DatabaseRepository.GetDatabase<SpellDefinition>();
             var chosen = new List<SpellDefinition>();
 
-            if (parts.Length != 2 || repertoire == null || repertoire.SpellCastingFeature.Name != parts[0])
+            if (parts.Length != 3 || repertoire == null || repertoire.SpellCastingFeature.Name != parts[0])
             {
                 Main.Error($"[RestCommand] {tag} for {hero.Name}: not the Wizard repertoire ({argument}); nothing changed");
 
                 return false;
             }
 
-            foreach (var name in parts[1].Split([';'], StringSplitOptions.RemoveEmptyEntries))
+            if (StoredPicks(repertoire, tag) != parts[1])
+            {
+                Main.Info($"[RestCommand] {tag} for {hero.Name}: the picks changed since that screen opened; not applied");
+
+                return false;
+            }
+
+            foreach (var name in parts[2].Split([';'], StringSplitOptions.RemoveEmptyEntries))
             {
                 if (!database.TryGetElement(name, out var spell))
                 {
