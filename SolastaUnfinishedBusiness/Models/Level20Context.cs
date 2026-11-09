@@ -801,6 +801,16 @@ internal static class Level20Context
 
             var picks = chosen.Except(repertoire.AutoPreparedSpells).ToList();
 
+            // the feature's own limits, checked here too, so no screen path can store picks the screen wouldn't allow
+            // (a controller's Auto button reached the game's usual preparation; Codex's review of 06f6adbe): at most 2,
+            // Spell Mastery levels 1 and 2, Signature Spells level 3. Alike on every computer
+            if (picks.Count > 2 || picks.Any(x => tag == "SignatureSpells" ? x.SpellLevel != 3 : x.SpellLevel is not (1 or 2)))
+            {
+                Main.Error($"[RestCommand] {tag} for {hero.Name}: picks outside the feature's limits; nothing changed");
+
+                return false;
+            }
+
             repertoire.ExtraSpellsByTag[tag] = picks;
             repertoire.PreparedSpells.RemoveAll(x => picks.Contains(x));
 

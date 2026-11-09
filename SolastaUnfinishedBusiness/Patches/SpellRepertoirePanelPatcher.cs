@@ -131,10 +131,16 @@ public static class SpellRepertoirePanelPatcher
     [UsedImplicitly]
     public static class OnAutomatePreparationCb_Patch
     {
+        // Auto never runs in Memorize Spell, Spell Mastery or Signature Spells mode: it prepares the repertoire's usual
+        // spells, bypassing the mode's limits. The mouse button is moved off screen there (RepaintPanel), but the game
+        // shows a separate controller button, which reached it (Codex's review of 06f6adbe)
         [UsedImplicitly]
         public static bool Prefix(SpellRepertoirePanel __instance)
         {
-            return !SpellPreparationScreen.IsPendingOn(__instance);
+            return !SpellPreparationScreen.IsPendingOn(__instance) &&
+                   !TaggedSpellPreparation.IsInMode(__instance) &&
+                   !Tabletop2024Context.IsMemorizeSpellPreparation(__instance.GuiCharacter?.RulesetCharacter,
+                       __instance.SpellRepertoire);
         }
     }
 
