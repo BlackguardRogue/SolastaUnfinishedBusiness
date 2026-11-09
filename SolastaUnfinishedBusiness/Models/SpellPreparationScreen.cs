@@ -41,20 +41,55 @@ internal static class SpellPreparationScreen
     // feature's after-rest button stays off (user, 2026-11-09: "Use the button"): the feature's functor waits for it
     // (IsPending) after the screen closes, and the game keeps an after-rest button off while its functor runs
     // (AfterRestActionItem). So the screen can't be reopened to send another choice while one is on its way; the
-    // screen itself isn't locked, and a second press on the same screen is refused by the command (see the features).
+    // screen can still be closed. On the screen, the spells, Prepare, Revert, Clear and Auto are off meanwhile and a
+    // repeat press is ignored (user, 2026-11-09: "Yes, please do"; IsPendingOn, SpellRepertoirePanelPatcher); they come
+    // back with the choice still there if the press is refused or gets no answer. A second press that gets through
+    // anyway is refused by the command (see the features).
     // The command runs on the game's networking object rather than the panel, so closing the screen doesn't stop it.
     // A press that hasn't come back after RestCommandContext's wait frees the button again; it may still apply later,
     // alike on every computer.
     private static float _pendingUntil = -1f;
+    private static SpellRepertoirePanel _pendingPanel;
 
     // whether a Prepare press is on its way
     internal static bool IsPending => Time.realtimeSinceStartup < _pendingUntil;
+
+    // whether this panel sent the press on its way, so its spells and buttons are off
+    internal static bool IsPendingOn(SpellRepertoirePanel panel)
+    {
+        return IsPending && panel && panel == _pendingPanel;
+    }
+
+    // RefreshPreparation postfix: the panel's selection buttons off while its press is out (Cancel stays, so the
+    // screen can still be closed)
+    internal static void RefreshButtons(SpellRepertoirePanel panel)
+    {
+        if (!IsPendingOn(panel))
+        {
+            return;
+        }
+
+        foreach (var button in new[]
+                 {
+                     panel.validatePreparationButton, panel.revertPreparationButton, panel.clearPreparationButton,
+                     panel.clearPreparationButtonGamepad, panel.automatePreparationButton,
+                     panel.automatePreparationButtonGamepad
+                 })
+        {
+            if (button)
+            {
+                button.interactable = false;
+            }
+        }
+    }
 
     internal static void Submit(
         SpellRepertoirePanel panel, RulesetCharacterHero hero, string verb, string argument, Action ran)
     {
         // a little longer than the command's own wait, in case its coroutine stopped
         _pendingUntil = Time.realtimeSinceStartup + 35f;
+        _pendingPanel = panel;
+        panel.RefreshPreparation(false);
 
         MonoBehaviour runner = ServiceRepository.GetService<INetworkingService>() as NetworkingManager;
 
@@ -66,9 +101,16 @@ internal static class SpellPreparationScreen
         runner.StartCoroutine(RestCommandContext.Send(hero, verb, argument, outcome =>
         {
             _pendingUntil = -1f;
+            _pendingPanel = null;
 
             if (outcome != RestCommandContext.Outcome.Ran)
             {
+                // the spells and buttons come back, with the choice still on screen
+                if (panel && panel.isActiveAndEnabled)
+                {
+                    panel.RefreshPreparation(false);
+                }
+
                 return;
             }
 

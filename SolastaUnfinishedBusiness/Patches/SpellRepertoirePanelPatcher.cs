@@ -51,6 +51,12 @@ public static class SpellRepertoirePanelPatcher
         [UsedImplicitly]
         public static bool Prefix(SpellRepertoirePanel __instance, SpellBox spellBox)
         {
+            // nothing can be picked while this panel's Prepare is on its way (SpellPreparationScreen)
+            if (SpellPreparationScreen.IsPendingOn(__instance))
+            {
+                return false;
+            }
+
             var rulesetCharacter = __instance.GuiCharacter.RulesetCharacter;
             var spellDefinition = spellBox.SpellDefinition;
 
@@ -71,8 +77,52 @@ public static class SpellRepertoirePanelPatcher
         [UsedImplicitly]
         public static bool Prefix(SpellRepertoirePanel __instance)
         {
+            // a repeat press while this panel's Prepare is on its way does nothing (a shortcut gets here too)
+            if (SpellPreparationScreen.IsPendingOn(__instance))
+            {
+                return false;
+            }
+
             return !Tabletop2024Context.TryPrepareMemorizeSpell(__instance) &&
                    !TaggedSpellPreparation.TryPrepare(__instance);
+        }
+    }
+
+    //PATCH: while a Prepare of the mod's Wizard features is on its way, Prepare (with its too-few-spells question),
+    //Revert, Clear and Auto do nothing on that panel (SpellPreparationScreen); the buttons are also off
+    [HarmonyPatch(typeof(SpellRepertoirePanel), nameof(SpellRepertoirePanel.OnValidatePreparationCb))]
+    [SuppressMessage("Minor Code Smell", "S101:Types should be named in PascalCase", Justification = "Patch")]
+    [UsedImplicitly]
+    public static class OnValidatePreparationCb_Patch
+    {
+        [UsedImplicitly]
+        public static bool Prefix(SpellRepertoirePanel __instance)
+        {
+            return !SpellPreparationScreen.IsPendingOn(__instance);
+        }
+    }
+
+    [HarmonyPatch(typeof(SpellRepertoirePanel), nameof(SpellRepertoirePanel.OnClearPreparationCb))]
+    [SuppressMessage("Minor Code Smell", "S101:Types should be named in PascalCase", Justification = "Patch")]
+    [UsedImplicitly]
+    public static class OnClearPreparationCb_Patch
+    {
+        [UsedImplicitly]
+        public static bool Prefix(SpellRepertoirePanel __instance)
+        {
+            return !SpellPreparationScreen.IsPendingOn(__instance);
+        }
+    }
+
+    [HarmonyPatch(typeof(SpellRepertoirePanel), nameof(SpellRepertoirePanel.OnAutomatePreparationCb))]
+    [SuppressMessage("Minor Code Smell", "S101:Types should be named in PascalCase", Justification = "Patch")]
+    [UsedImplicitly]
+    public static class OnAutomatePreparationCb_Patch
+    {
+        [UsedImplicitly]
+        public static bool Prefix(SpellRepertoirePanel __instance)
+        {
+            return !SpellPreparationScreen.IsPendingOn(__instance);
         }
     }
 
@@ -95,10 +145,20 @@ public static class SpellRepertoirePanelPatcher
     [UsedImplicitly]
     public static class OnRevertPreparationCb_Patch
     {
+        // Revert does nothing while this panel's Prepare is on its way (SpellPreparationScreen)
+        [UsedImplicitly]
+        public static bool Prefix(SpellRepertoirePanel __instance)
+        {
+            return !SpellPreparationScreen.IsPendingOn(__instance);
+        }
+
         [UsedImplicitly]
         public static void Postfix(SpellRepertoirePanel __instance)
         {
-            TaggedSpellPreparation.ShowPicks(__instance);
+            if (!SpellPreparationScreen.IsPendingOn(__instance))
+            {
+                TaggedSpellPreparation.ShowPicks(__instance);
+            }
         }
     }
 
@@ -114,6 +174,9 @@ public static class SpellRepertoirePanelPatcher
         public static void Postfix(SpellRepertoirePanel __instance)
         {
             TaggedSpellPreparation.RefreshRevert(__instance);
+
+            // and every selection button off while this panel's Prepare is on its way (SpellPreparationScreen)
+            SpellPreparationScreen.RefreshButtons(__instance);
         }
 
         [UsedImplicitly]
@@ -200,6 +263,12 @@ public static class SpellRepertoirePanelPatcher
                     spellRepertoirePanel,
                     Gui.Localize("Screen/&PreparePanelTitle"),
                     true, true, true);
+            }
+
+            // no spell can be picked while this panel's Prepare is on its way (SpellPreparationScreen)
+            if (SpellPreparationScreen.IsPendingOn(spellRepertoirePanel))
+            {
+                canSelectSpells = false;
             }
 
             spellsByLevelGroup.RefreshInteractivePreparation(canSelectSpells, maxReached, preparedSpells);
